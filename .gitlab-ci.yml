@@ -18,7 +18,7 @@ stages:
 
 checkstyle:
   stage: check
-  image: maven:3.9-eclipse-temurin-17
+  image: maven:3.9-eclipse-temurin-21
   script:
     - mvn checkstyle:check $MAVEN_CLI_OPTS || true
   allow_failure: true
@@ -28,7 +28,7 @@ checkstyle:
 
 unit-test:
   stage: test
-  image: maven:3.9-eclipse-temurin-17
+  image: maven:3.9-eclipse-temurin-21
   services:
     - name: mysql:8.0.35
       alias: mysql
