@@ -25,6 +25,24 @@
         <module>super-market-common/common-security</module>
         <module>super-market-common/common-web</module>
         <module>super-market-common/common-mybatis</module>
+        <module>super-market-services/service-user</module>
+        <module>super-market-services/service-auth</module>
+        <module>super-market-services/service-member</module>
+        <module>super-market-services/service-address</module>
+        <module>super-market-services/service-product</module>
+        <module>super-market-services/service-category</module>
+        <module>super-market-services/service-inventory</module>
+        <module>super-market-services/service-review</module>
+        <module>super-market-services/service-cart</module>
+        <module>super-market-services/service-order</module>
+        <module>super-market-services/service-payment</module>
+        <module>super-market-services/service-coupon</module>
+        <module>super-market-services/service-seckill</module>
+        <module>super-market-services/service-search</module>
+        <module>super-market-services/service-shop</module>
+        <module>super-market-services/service-platform</module>
+        <module>super-market-services/service-file</module>
+        <module>super-market-services/service-notify</module>
     </modules>
 
     <properties>

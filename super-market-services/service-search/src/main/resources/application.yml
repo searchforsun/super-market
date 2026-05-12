@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: search-service
+  profiles:
+    active: dev
+  main:
+    allow-bean-definition-overriding: true
+
+server:
+  port: ${SERVER_PORT:9061}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true

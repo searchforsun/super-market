@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BizException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleBizException(BizException e) {
         log.warn("Business exception: code={}, message={}", e.getCode(), e.getMessage());
         return R.fail(e.getCode(), e.getMessage());
