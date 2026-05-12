@@ -43,6 +43,7 @@
         <module>super-market-services/service-platform</module>
         <module>super-market-services/service-file</module>
         <module>super-market-services/service-notify</module>
+        <module>super-market-gateway</module>
     </modules>
 
     <properties>

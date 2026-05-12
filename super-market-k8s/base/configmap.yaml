@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: super-market-config
+  namespace: super-market
+data:
+  NACOS_ADDR: "nacos-0.nacos-headless.super-market.svc.cluster.local:8848"
+  MYSQL_HOST: "mysql-0.mysql-headless.super-market.svc.cluster.local"
+  REDIS_HOST: "redis-0.redis-headless.super-market.svc.cluster.local"
+  ROCKETMQ_NAMESRV: "rocketmq-namesrv-0.rocketmq-headless.super-market.svc.cluster.local:9876"
+  ES_HOST: "elasticsearch-0.es-headless.super-market.svc.cluster.local:9200"
+  MINIO_ENDPOINT: "http://minio-0.minio-headless.super-market.svc.cluster.local:9000"

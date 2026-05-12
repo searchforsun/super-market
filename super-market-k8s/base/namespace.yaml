@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: super-market
+  labels:
+    name: super-market
+    environment: production
