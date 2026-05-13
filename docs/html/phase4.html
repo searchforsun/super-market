@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 4 — 搜索域 + 营销域 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 4</span>
+    <span class="phase-period">W11-W13</span>
+    <p>4 个微服务 · Canal ES 索引同步 · 优惠券(模板+发放+核销) · 秒杀(Redis Lua + MQ异步下单) · 商品评价</p>
+  </div>
+<h1>Phase 4 — 搜索域 + 营销域 方案设计</h1>
+<blockquote>
+2026-05-13 | 基于 solution-design.md + PRD v1.0
+</blockquote>
+<h2>一、总览</h2>
+<h3>1.1 服务清单</h3>
+<table>
+<tr>
+  <th>服务</th>
+  <th>中文名称</th>
+  <th>端口</th>
+  <th>数据库</th>
+  <th>核心职责</th>
+</tr>
+<tr>
+  <td>search-service</td>
+  <td>搜索服务</td>
+  <td>9361</td>
+  <td>ES + db_product</td>
+  <td>商品全文检索、多条件筛选排序、Canal 索引同步</td>
+</tr>
+<tr>
+  <td>coupon-service</td>
+  <td>优惠券服务</td>
+  <td>9351</td>
+  <td>db_marketing</td>
+  <td>优惠券模板管理、批次发放、用户领取、下单核销</td>
+</tr>
+<tr>
+  <td>seckill-service</td>
+  <td>秒杀服务</td>
+  <td>9352</td>
+  <td>db_marketing</td>
+  <td>秒杀场次管理、Redis 预减 + Lua 原子扣减、MQ 异步下单</td>
+</tr>
+<tr>
+  <td>review-service</td>
+  <td>评价服务</td>
+  <td>9314</td>
+  <td>db_product</td>
+  <td>商品星级评分、图文评价、追评</td>
+</tr>
+</table>
+<h3>1.2 集成架构</h3>
+<div class="diagram flow"><div class="flow-node event">T-1h 秒杀商品预热
+库存加载到Redis
+商品信息加载到本地缓存</div><span class="flow-arrow">→</span><div class="flow-node event">T-5min 倒计时
+WebSocket推送</div><span class="flow-arrow">→</span><div class="flow-node start">T-0 秒杀开始
+用户点击秒杀</div><span class="flow-arrow">→</span><div class="flow-node ">Gateway限流
+Sentinel 令牌桶
+10000 QPS</div><span class="flow-arrow">→</span><div class="flow-node ">Redisson
+分布式锁</div><span class="flow-arrow">→</span><div class="flow-node event">Redis Lua脚本
+原子扣减秒杀库存</div><span class="flow-arrow">→</span><div class="flow-node decision">抢到?</div><span class="flow-arrow">→</span><div class="flow-node end">已抢光</div><span class="flow-arrow">→</span><div class="flow-node ">发送RocketMQ
+异步创建订单</div><span class="flow-arrow">→</span><div class="flow-node success">WebSocket
+推送结果 ✓</div></div>
+<h3>1.3 基础设施新增</h3>
+<table>
+<tr>
+  <th>组件</th>
+  <th>新增内容</th>
+</tr>
+<tr>
+  <td><strong>MySQL</strong></td>
+  <td>6 张新表（coupon_templates, coupon_batches, user_coupons, seckill_sessions, seckill_products, reviews）</td>
+</tr>
+<tr>
+  <td><strong>ES 索引</strong></td>
+  <td><code>smt_product</code> — 商品搜索索引（spu + sku + 类目 + 库存 + 评分聚合）</td>
+</tr>
+<tr>
+  <td><strong>RocketMQ</strong></td>
+  <td><code>seckill-order-topic</code> — 秒杀异步下单</td>
+</tr>
+<tr>
+  <td><strong>Redis Key</strong></td>
+  <td><code>smt:seckill:stock:{id}</code>, <code>smt:seckill:product:{id}</code>, <code>smt:coupon:stock:{id}</code></td>
+</tr>
+</table>
+<hr>
+<h2>二、数据库 DDL</h2>
+<h3>2.1 优惠券相关表 (db_marketing)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-cmt">-- 优惠券模板表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> coupon_templates (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠券名称'</span>,
+    type            <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1满减券 2折扣券 3直减券'</span>,
+    discount_value  <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠值(满减金额/折扣率/直减金额)'</span>,
+    min_amount      <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'最低消费金额门槛'</span>,
+    total_stock     <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'总发放量'</span>,
+    remaining_stock <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'剩余数量'</span>,
+    per_user_limit  <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'每人限领数量'</span>,
+    valid_days      <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'有效天数(自领取起)'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1启用 0停用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_status (status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'优惠券模板表'</span>;
+
+<span class="tok-cmt">-- 优惠券批次表（平台发放记录）</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> coupon_batches (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    template_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠券模板ID'</span>,
+    batch_name      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'批次名称'</span>,
+    quantity        <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'本批次发放数量'</span>,
+    distribute_type <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1平台发放 2用户领取 3活动赠送'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_template (template_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'优惠券批次表'</span>;
+
+<span class="tok-cmt">-- 用户优惠券表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> user_coupons (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    template_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠券模板ID'</span>,
+    batch_id        <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'发放批次ID'</span>,
+    coupon_code     <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'券码'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1未使用 2已使用 3已过期'</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'使用的订单号'</span>,
+    used_at         <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'使用时间'</span>,
+    expire_time     <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'过期时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user_status (user_id, status),
+    <span class="tok-kw">INDEX</span> idx_code (coupon_code)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'用户优惠券表'</span>;</code></pre>
+<h3>2.2 秒杀相关表 (db_marketing)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-cmt">-- 秒杀场次表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> seckill_sessions (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'秒杀场次名称'</span>,
+    start_time      <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'开始时间'</span>,
+    end_time        <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'结束时间'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0未开始 1进行中 2已结束'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_time (start_time, end_time)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'秒杀场次表'</span>;
+
+<span class="tok-cmt">-- 秒杀商品表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> seckill_products (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    session_id      <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'秒杀场次ID'</span>,
+    spu_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU ID'</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    seckill_price   <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'秒杀价格'</span>,
+    seckill_stock   <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'秒杀库存'</span>,
+    limit_per_user  <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'每人限购数量'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0未开始 1进行中 2已售罄 3已结束'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_session (session_id),
+    <span class="tok-kw">INDEX</span> idx_sku (sku_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'秒杀商品表'</span>;</code></pre>
+<h3>2.3 评价表 (db_product)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-cmt">-- 商品评价表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> reviews (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    spu_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU ID'</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    rating          <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'星级 1-5'</span>,
+    content         <span class="tok-kw">TEXT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'评价内容'</span>,
+    images          <span class="tok-kw">JSON</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'评价图片列表'</span>,
+    is_anonymous    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'是否匿名 0否 1是'</span>,
+    reply_content   <span class="tok-kw">TEXT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'商家回复'</span>,
+    reply_at        <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'回复时间'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0隐藏'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_spu (spu_id),
+    <span class="tok-kw">INDEX</span> idx_user (user_id),
+    <span class="tok-kw">INDEX</span> idx_rating (rating)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'商品评价表'</span>;</code></pre>
+<hr>
+<h2>三、search-service — 搜索引擎服务</h2>
+<h3>3.1 ES 索引设计</h3>
+<pre data-lang="json"><code class="language-json">// smt_product 索引 Mapping
+{
+  <span class="tok-str">&quot;properties&quot;</span>: {
+    <span class="tok-str">&quot;spuId&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;long&quot;</span> },
+    <span class="tok-str">&quot;spuNo&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span> },
+    <span class="tok-str">&quot;shopId&quot;</span>:   { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;long&quot;</span> },
+    <span class="tok-str">&quot;shopName&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span> },
+    <span class="tok-str">&quot;categoryId&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;long&quot;</span> },
+    <span class="tok-str">&quot;categoryName&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span> },
+    <span class="tok-str">&quot;brandName&quot;</span>:   { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span> },
+    <span class="tok-str">&quot;name&quot;</span>:     { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;text&quot;</span>, <span class="tok-str">&quot;analyzer&quot;</span>: <span class="tok-str">&quot;ik_max_word&quot;</span>, <span class="tok-str">&quot;fields&quot;</span>: {<span class="tok-str">&quot;raw&quot;</span>: {<span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span>}} },
+    <span class="tok-str">&quot;subtitle&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;text&quot;</span>, <span class="tok-str">&quot;analyzer&quot;</span>: <span class="tok-str">&quot;ik_max_word&quot;</span> },
+    <span class="tok-str">&quot;mainImage&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span>, <span class="tok-str">&quot;index&quot;</span>: <span class="tok-kw">false</span> },
+    <span class="tok-str">&quot;minPrice&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;double&quot;</span> },
+    <span class="tok-str">&quot;maxPrice&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;double&quot;</span> },
+    <span class="tok-str">&quot;totalStock&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;integer&quot;</span> },
+    <span class="tok-str">&quot;salesCount&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;integer&quot;</span> },
+    <span class="tok-str">&quot;avgRating&quot;</span>:  { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;double&quot;</span> },
+    <span class="tok-str">&quot;reviewCount&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;integer&quot;</span> },
+    <span class="tok-str">&quot;skuList&quot;</span>: {
+      <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;nested&quot;</span>,
+      <span class="tok-str">&quot;properties&quot;</span>: {
+        <span class="tok-str">&quot;skuId&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;long&quot;</span> },
+        <span class="tok-str">&quot;specName&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span> },
+        <span class="tok-str">&quot;price&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;double&quot;</span> },
+        <span class="tok-str">&quot;stock&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;integer&quot;</span> },
+        <span class="tok-str">&quot;image&quot;</span>:    { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;keyword&quot;</span>, <span class="tok-str">&quot;index&quot;</span>: <span class="tok-kw">false</span> }
+      }
+    },
+    <span class="tok-str">&quot;shelfStatus&quot;</span>: { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;integer&quot;</span> },
+    <span class="tok-str">&quot;createdAt&quot;</span>:   { <span class="tok-str">&quot;type&quot;</span>: <span class="tok-str">&quot;date&quot;</span> }
+  }
+}</code></pre>
+<h3>3.2 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 商品搜索</span>
+GET /api/search/product?keyword=xxx&amp;categoryId=xxx&amp;brand=xxx
+                        &amp;minPrice=xxx&amp;maxPrice=xxx
+                        &amp;sort=price_asc|price_desc|sales_desc|rating_desc|newest
+                        &amp;page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">20</span>
+
+<span class="tok-cmt">// 响应</span>
+{ <span class="tok-str">&quot;total&quot;</span>: <span class="tok-num">1000</span>, <span class="tok-str">&quot;records&quot;</span>: [ProductSearchVO...], <span class="tok-str">&quot;aggregations&quot;</span>: {
+    <span class="tok-str">&quot;categories&quot;</span>: [{id, name, count}...],
+    <span class="tok-str">&quot;brands&quot;</span>:     [{name, count}...],
+    <span class="tok-str">&quot;priceRange&quot;</span>: {min, max}
+}}
+
+<span class="tok-cmt">// Canal 索引同步 (内部)</span>
+POST /api/search/internal/sync
+Request: { type: PRODUCT_UPDATED|PRODUCT_DELETED|STOCK_CHANGED|REVIEW_UPDATED, spuId, data }</code></pre>
+<h3>3.3 Canal 同步链路</h3>
+<pre data-lang="text"><code class="language-">MySQL db_product.spu/sku/inventory 变更
+  → Canal Server 监听 binlog
+  → Canal Client (search-service 内) 消费事件
+  → 构建 ES 文档 (聚合 spu + min(sku.price) + sum(inventory.total_stock) + avg(reviews.rating))
+  → ES bulk index</code></pre>
+<h3>3.4 搜索查询策略</h3>
+<ul>
+<li><strong>分词</strong>: IK Analyzer (ik_max_word 索引, ik_smart 搜索)</li>
+<li><strong>排序</strong>: 综合评分 <code>_score</code> + 销量权重 + 价格因子</li>
+<li><strong>高亮</strong>: 商品名称 <code>name</code> 字段高亮</li>
+<li><strong>分页</strong>: <code>from + size</code>（深度分页 < 1000 条）</li>
+<li><strong>聚合</strong>: 类目聚合 + 品牌聚合 + 价格区间聚合</li>
+</ul>
+<hr>
+<h2>四、coupon-service — 优惠券服务</h2>
+<h3>4.1 核心业务流程</h3>
+<pre data-lang="text"><code class="language-">平台/运营:
+  创建优惠券模板 → 生成批次 → 用户可见
+
+用户:
+  浏览可用优惠券列表 → 领取(幂等, 库存扣减) → 下单页选择优惠券
+  → 订单创建时 Seata AT 核销(user_coupon status=USED)</code></pre>
+<h3>4.2 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// ===== 管理端 =====</span>
+<span class="tok-cmt">// 创建优惠券模板</span>
+POST /api/coupon/admin/template
+Request: { name, type, discountValue, minAmount, totalStock, perUserLimit, validDays }
+Response: { templateId }
+
+<span class="tok-cmt">// 发放优惠券（批量派发）</span>
+POST /api/coupon/admin/distribute
+Request: { templateId, userIds:[], quantity }
+Response: { batchId, successCount }
+
+<span class="tok-cmt">// ===== 用户端 =====</span>
+<span class="tok-cmt">// 可领取优惠券列表</span>
+GET /api/coupon/available?userId=xxx
+Response: [ { templateId, name, type, discountValue, minAmount, remainingStock, validDays } ]
+
+<span class="tok-cmt">// 用户领取优惠券</span>
+POST /api/coupon/claim
+Request: { userId, templateId }
+Response: { couponId, couponCode, expireTime }
+(Redisson分布式锁防超发 + 幂等: userId+templateId唯一约束)
+
+<span class="tok-cmt">// 我的优惠券</span>
+GET /api/coupon/my?userId=xxx&amp;status=<span class="tok-num">1</span>
+Response: [ { couponId, couponCode, name, discountValue, minAmount, expireTime, status } ]
+
+<span class="tok-cmt">// ===== 内部 Dubbo 接口 =====</span>
+<span class="tok-cmt">// 核销优惠券（Seata AT RM 参与者）</span>
+Dubbo: CouponDubboService.useCoupon(userId, couponId, orderNo) → <span class="tok-kw">boolean</span>
+<span class="tok-cmt">// 退回优惠券（订单取消）</span>
+Dubbo: CouponDubboService.returnCoupon(couponId) → <span class="tok-kw">boolean</span></code></pre>
+<h3>4.3 防超发设计</h3>
+<ul>
+<li><strong>领取</strong>: Redisson 分布式锁 <code>smt:lock:coupon:claim:{userId}:{templateId}</code> + Redis 库存预减 <code>smt:coupon:stock:{templateId}</code></li>
+<li><strong>核销</strong>: Seata AT undo_log 保证全局事务一致性</li>
+<li><strong>幂等</strong>: <code>user_coupons</code> 表 <code>UNIQUE(user_id, template_id)</code> 防止重复领取</li>
+</ul>
+<hr>
+<h2>五、seckill-service — 秒杀服务</h2>
+<h3>5.1 秒杀时间线</h3>
+<pre data-lang="text"><code class="language-">T-1h    秒杀商品预热: Redis加载库存、本地Caffeine缓存商品信息
+T-5min  用户进入秒杀页: WebSocket推送倒计时
+T-0     秒杀开始
+  → Gateway Sentinel限流 (令牌桶 10000 QPS)
+  → Redisson分布式锁 (用户+商品粒度)
+  → Redis Lua脚本原子扣减
+  → 抢到: 发送RocketMQ消息 → order-service异步创建订单
+  → 未抢到: 返回&quot;已抢光&quot;
+  → WebSocket推送抢购结果给用户</code></pre>
+<h3>5.2 Lua 脚本</h3>
+<pre data-lang="lua"><code class="language-lua">-- 原子扣减秒杀库存
+-- KEYS[1] = smt:seckill:stock:{seckillProductId}
+-- ARGV[1] = quantity
+local stock = redis.call('get', KEYS[1])
+if not stock or tonumber(stock) &lt; tonumber(ARGV[1]) then
+    return 0  -- 库存不足
+end
+redis.call('decrby', KEYS[1], ARGV[1])
+return 1  -- 扣减成功</code></pre>
+<h3>5.3 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// ===== 管理端 =====</span>
+<span class="tok-cmt">// 创建秒杀场次</span>
+POST /api/seckill/admin/session
+Request: { name, startTime, endTime }
+Response: { sessionId }
+
+<span class="tok-cmt">// 配置秒杀商品</span>
+POST /api/seckill/admin/product
+Request: { sessionId, spuId, skuId, seckillPrice, seckillStock, limitPerUser }
+Response: { seckillProductId }
+
+<span class="tok-cmt">// ===== 用户端 =====</span>
+<span class="tok-cmt">// 秒杀场次列表</span>
+GET /api/seckill/sessions
+Response: [ { sessionId, name, startTime, endTime, status } ]
+
+<span class="tok-cmt">// 秒杀商品列表</span>
+GET /api/seckill/products?sessionId=xxx
+Response: [ { seckillProductId, spuName, skuSpec, seckillPrice, seckillStock, originalPrice } ]
+
+<span class="tok-cmt">// 执行秒杀</span>
+POST /api/seckill/execute
+Request: { userId, seckillProductId, quantity }
+Response: { success, orderNo?, message }
+
+<span class="tok-cmt">// ===== 内部 =====</span>
+<span class="tok-cmt">// 秒杀商品预热 (定时任务)</span>
+POST /api/seckill/internal/preheat
+<span class="tok-cmt">// 秒杀结束清理 (定时任务)</span>
+POST /api/seckill/internal/cleanup</code></pre>
+<h3>5.4 异步下单链路</h3>
+<pre data-lang="text"><code class="language-">Redis Lua扣减成功
+  → 发送 RocketMQ seckill-order-topic 消息
+  → order-service 消费: 创建预订单 + 扣减真实库存
+  → WebSocket推送结果: { orderNo, status: SUCCESS }
+  → 失败重试(最多3次) → 最终失败: Redis库存补偿 + 告警</code></pre>
+<hr>
+<h2>六、review-service — 评价服务</h2>
+<h3>6.1 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 发表评价</span>
+POST /api/review
+Request: { userId, spuId, skuId, orderNo, rating, content, images, isAnonymous }
+Response: { reviewId }
+
+<span class="tok-cmt">// 追加评价</span>
+POST /api/review/{reviewId}/append
+Request: { content, images }
+
+<span class="tok-cmt">// 商家回复</span>
+POST /api/review/{reviewId}/reply
+Request: { content }
+
+<span class="tok-cmt">// SPU评价列表</span>
+GET /api/review/list/spu/{spuId}?page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">10</span>&amp;rating=<span class="tok-num">5</span>
+Response: { total, avgRating, ratingDistribution: {<span class="tok-num">1</span>:<span class="tok-num">0</span>,<span class="tok-num">2</span>:<span class="tok-num">0</span>,<span class="tok-num">3</span>:<span class="tok-num">5</span>,<span class="tok-num">4</span>:<span class="tok-num">20</span>,<span class="tok-num">5</span>:<span class="tok-num">75</span>}, records: [...] }
+
+<span class="tok-cmt">// 用户评价列表</span>
+GET /api/review/list/user/{userId}?page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">10</span></code></pre>
+<h3>6.2 评分聚合缓存</h3>
+<ul>
+<li>Redis Key <code>smt:product:rating:{spuId}</code>: Hash <code>{ avgRating, reviewCount, r1, r2, r3, r4, r5 }</code></li>
+<li>评价发表/修改后异步更新缓存 + 发送 <code>product-event-topic:REVIEW_UPDATED</code> 更新 ES</li>
+</ul>
+<hr>
+<h2>七、Gateway 路由更新</h2>
+<pre data-lang="yaml"><code class="language-yaml">- id: search-service
+<span class="tok-prop">  uri:</span> lb://search-service
+<span class="tok-prop">  predicates:</span> - Path=/api/search/**
+- id: coupon-service
+<span class="tok-prop">  uri:</span> lb://coupon-service
+<span class="tok-prop">  predicates:</span> - Path=/api/coupon/**
+- id: seckill-service
+<span class="tok-prop">  uri:</span> lb://seckill-service
+<span class="tok-prop">  predicates:</span> - Path=/api/seckill/**
+- id: review-service
+<span class="tok-prop">  uri:</span> lb://review-service
+<span class="tok-prop">  predicates:</span> - Path=/api/review/**</code></pre>
+<h3>鉴权白名单更新</h3>
+<p><code>/api/search/**</code> 加入白名单（商品搜索无需登录）</p>
+<hr>
+<h2>八、验收标准</h2>
+<ul>
+<li>[ ] <code>mvn clean install -DskipTests</code> BUILD SUCCESS（新增 4 个服务）</li>
+<li>[ ] 所有单元测试通过（目标 20+ 测试用例）</li>
+<li>[ ] ES 商品搜索：关键字检索 + 类目筛选 + 排序，响应时间 P99 < 200ms</li>
+<li>[ ] Canal 数据同步：商品上架 → 1s 内 ES 可搜索</li>
+<li>[ ] 优惠券完整流程：创建模板 → 用户领取 → 下单核销（Seata AT）</li>
+<li>[ ] 优惠券防超发：100 并发领取同一优惠券，实际发放数 ≤ total_stock</li>
+<li>[ ] 秒杀 Redis Lua 原子扣减：1000 并发抢 100 库存，不超卖</li>
+<li>[ ] 秒杀异步下单：MQ → order-service 创建订单 → WebSocket 推送结果</li>
+<li>[ ] 评价发表+追评+商家回复+评分聚合</li>
+</ul>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

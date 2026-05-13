@@ -11,7 +11,7 @@
     </parent>
     <artifactId>service-seckill</artifactId>
     <packaging>jar</packaging>
-    <description>seckill服务 — 用户注册、登录、信息管理</description>
+    <description>秒杀服务 — 限时秒杀、Redis预减、MQ异步下单</description>
 
     <dependencies>
         <dependency>
@@ -71,6 +71,11 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+            <version>2.2.3</version>
         </dependency>
     </dependencies>
 

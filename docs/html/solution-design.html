@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution Design — 方案设计 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html" class="active">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<h1>京东式商城系统 — 需求分析与方案设计</h1>
+<blockquote>
+基于 PRD v1.0 | 2026-05-12
+</blockquote>
+<hr>
+<h2>第一部分：需求分析</h2>
+<h3>1. 业务目标与范围</h3>
+<table>
+<tr>
+  <th>维度</th>
+  <th>指标</th>
+</tr>
+<tr>
+  <td>注册用户</td>
+  <td>100万 ~ 1000万</td>
+</tr>
+<tr>
+  <td>日活用户</td>
+  <td>10万 ~ 100万</td>
+</tr>
+<tr>
+  <td>峰值 QPS</td>
+  <td>5,000 ~ 20,000</td>
+</tr>
+<tr>
+  <td>订单峰值</td>
+  <td>1,000 ~ 5,000 单/秒</td>
+</tr>
+<tr>
+  <td>终端</td>
+  <td>PC Web（用户前台 + 商家后台 + 运营后台）</td>
+</tr>
+</table>
+<h3>2. 用户角色分析</h3>
+<div class="diagram tree"><div class="tree-root">系统用户体系</div><div class="tree-branches"><div class="tree-branch"><div class="tree-label">C端用户</div><div class="tree-leaf">注册/登录</div><div class="tree-leaf">浏览商品</div><div class="tree-leaf">下单支付</div><div class="tree-leaf">评价商品</div><div class="tree-leaf">售后申请</div></div><div class="tree-branch"><div class="tree-label">B端商家</div><div class="tree-leaf">店铺管理</div><div class="tree-leaf">商品上架</div><div class="tree-leaf">订单处理</div><div class="tree-leaf">营销活动</div><div class="tree-leaf">财务结算</div></div><div class="tree-branch"><div class="tree-label">平台运营</div><div class="tree-leaf">商家审核</div><div class="tree-leaf">类目管理</div><div class="tree-leaf">活动配置</div><div class="tree-leaf">风控审核</div><div class="tree-leaf">数据分析</div></div></div></div>
+<h3>3. 功能性需求（按业务域拆分）</h3>
+<h4>3.1 用户域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>U-01</td>
+  <td>用户注册</td>
+  <td>P0</td>
+  <td>手机号/邮箱注册，验证码校验</td>
+</tr>
+<tr>
+  <td>U-02</td>
+  <td>用户登录</td>
+  <td>P0</td>
+  <td>账号密码登录 + JWT Token 签发</td>
+</tr>
+<tr>
+  <td>U-03</td>
+  <td>第三方登录</td>
+  <td>P2</td>
+  <td>微信/QQ OAuth 2.0 登录</td>
+</tr>
+<tr>
+  <td>U-04</td>
+  <td>会员等级</td>
+  <td>P1</td>
+  <td>青铜/白银/黄金/钻石，按消费累计升级</td>
+</tr>
+<tr>
+  <td>U-05</td>
+  <td>会员权益</td>
+  <td>P1</td>
+  <td>折扣、包邮、专属客服、积分倍率</td>
+</tr>
+<tr>
+  <td>U-06</td>
+  <td>收货地址 CRUD</td>
+  <td>P0</td>
+  <td>最多 20 个地址，支持默认地址</td>
+</tr>
+<tr>
+  <td>U-07</td>
+  <td>实名认证</td>
+  <td>P1</td>
+  <td>身份证 + 人脸识别</td>
+</tr>
+</table>
+<h4>3.2 商品域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>P-01</td>
+  <td>SPU/SKU 管理</td>
+  <td>P0</td>
+  <td>商品基础信息 CRUD，支持多规格</td>
+</tr>
+<tr>
+  <td>P-02</td>
+  <td>类目管理</td>
+  <td>P0</td>
+  <td>三级类目树，属性模板绑定</td>
+</tr>
+<tr>
+  <td>P-03</td>
+  <td>商品审核</td>
+  <td>P0</td>
+  <td>商家提交 → 平台审核 → 上架/驳回</td>
+</tr>
+<tr>
+  <td>P-04</td>
+  <td>库存管理</td>
+  <td>P0</td>
+  <td>库存扣减/回补/预警，支持安全库存</td>
+</tr>
+<tr>
+  <td>P-05</td>
+  <td>商品评价</td>
+  <td>P1</td>
+  <td>星级评分 + 图文评价 + 追评</td>
+</tr>
+<tr>
+  <td>P-06</td>
+  <td>商品搜索</td>
+  <td>P1</td>
+  <td>全文检索、多条件筛选、排序</td>
+</tr>
+<tr>
+  <td>P-07</td>
+  <td>商品推荐</td>
+  <td>P2</td>
+  <td>基于用户行为的个性化推荐</td>
+</tr>
+</table>
+<h4>3.3 交易域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>T-01</td>
+  <td>购物车</td>
+  <td>P0</td>
+  <td>添加/删除/修改数量，支持选中结算</td>
+</tr>
+<tr>
+  <td>T-02</td>
+  <td>下单</td>
+  <td>P0</td>
+  <td>购物车 → 确认订单 → 提交订单</td>
+</tr>
+<tr>
+  <td>T-03</td>
+  <td>订单状态流转</td>
+  <td>P0</td>
+  <td>待付款→待发货→待收货→已完成→已取消</td>
+</tr>
+<tr>
+  <td>T-04</td>
+  <td>订单查询</td>
+  <td>P0</td>
+  <td>按状态/时间筛选，分页查询</td>
+</tr>
+<tr>
+  <td>T-05</td>
+  <td>取消订单</td>
+  <td>P1</td>
+  <td>未付款自动取消(30min)，已付款需审核</td>
+</tr>
+<tr>
+  <td>T-06</td>
+  <td>售后退款</td>
+  <td>P1</td>
+  <td>申请→审核→退货→退款 完整流程</td>
+</tr>
+<tr>
+  <td>T-07</td>
+  <td>结算计算</td>
+  <td>P0</td>
+  <td>商品金额+运费+优惠-折扣=实付金额</td>
+</tr>
+</table>
+<h4>3.4 支付域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>PAY-01</td>
+  <td>支付发起</td>
+  <td>P0</td>
+  <td>对接支付宝/微信支付，生成支付单</td>
+</tr>
+<tr>
+  <td>PAY-02</td>
+  <td>支付回调</td>
+  <td>P0</td>
+  <td>异步回调处理，幂等校验，状态同步</td>
+</tr>
+<tr>
+  <td>PAY-03</td>
+  <td>账户管理</td>
+  <td>P1</td>
+  <td>钱包余额、充值、提现</td>
+</tr>
+<tr>
+  <td>PAY-04</td>
+  <td>对账</td>
+  <td>P1</td>
+  <td>日终对账，差异处理，对账报表</td>
+</tr>
+<tr>
+  <td>PAY-05</td>
+  <td>退款</td>
+  <td>P1</td>
+  <td>原路退回/余额退回</td>
+</tr>
+</table>
+<h4>3.5 营销域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>M-01</td>
+  <td>优惠券</td>
+  <td>P1</td>
+  <td>满减券/折扣券，发放/领取/核销</td>
+</tr>
+<tr>
+  <td>M-02</td>
+  <td>秒杀</td>
+  <td>P1</td>
+  <td>限时限量，独立秒杀库存，预热+削峰</td>
+</tr>
+<tr>
+  <td>M-03</td>
+  <td>积分体系</td>
+  <td>P1</td>
+  <td>签到得积分，消费返积分，积分兑换</td>
+</tr>
+<tr>
+  <td>M-04</td>
+  <td>满减活动</td>
+  <td>P1</td>
+  <td>阶梯满减，多级优惠叠加规则</td>
+</tr>
+</table>
+<h4>3.6 商家域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>S-01</td>
+  <td>商家入驻</td>
+  <td>P0</td>
+  <td>提交资质 → 平台审核 → 开通店铺</td>
+</tr>
+<tr>
+  <td>S-02</td>
+  <td>店铺管理</td>
+  <td>P0</td>
+  <td>店铺信息、装修、公告管理</td>
+</tr>
+<tr>
+  <td>S-03</td>
+  <td>订单处理</td>
+  <td>P0</td>
+  <td>查看订单、发货、处理退款申请</td>
+</tr>
+<tr>
+  <td>S-04</td>
+  <td>商家结算</td>
+  <td>P1</td>
+  <td>结算单生成、对账、打款</td>
+</tr>
+</table>
+<h4>3.7 平台域</h4>
+<table>
+<tr>
+  <th>编号</th>
+  <th>功能</th>
+  <th>优先级</th>
+  <th>描述</th>
+</tr>
+<tr>
+  <td>O-01</td>
+  <td>商家审核</td>
+  <td>P0</td>
+  <td>资质审核，入驻审批</td>
+</tr>
+<tr>
+  <td>O-02</td>
+  <td>商品审核</td>
+  <td>P0</td>
+  <td>违规商品下架，类目调整</td>
+</tr>
+<tr>
+  <td>O-03</td>
+  <td>运营配置</td>
+  <td>P1</td>
+  <td>Banner、广告位、首页推荐配置</td>
+</tr>
+<tr>
+  <td>O-04</td>
+  <td>风控</td>
+  <td>P1</td>
+  <td>刷单检测、恶意退款识别、IP黑名单</td>
+</tr>
+<tr>
+  <td>O-05</td>
+  <td>数据分析</td>
+  <td>P2</td>
+  <td>GMV、订单量、用户增长等报表</td>
+</tr>
+</table>
+<h3>4. 非功能性需求</h3>
+<table>
+<tr>
+  <th>类别</th>
+  <th>需求</th>
+  <th>指标</th>
+</tr>
+<tr>
+  <td><strong>性能</strong></td>
+  <td>接口响应时间</td>
+  <td>P99 < 200ms（核心接口）</td>
+</tr>
+<tr>
+  <td><strong>性能</strong></td>
+  <td>页面加载时间</td>
+  <td>首屏 < 2s</td>
+</tr>
+<tr>
+  <td><strong>可用性</strong></td>
+  <td>核心服务 SLA</td>
+  <td>99.99%（全年宕机 < 53min）</td>
+</tr>
+<tr>
+  <td><strong>可用性</strong></td>
+  <td>非核心服务 SLA</td>
+  <td>99.9%</td>
+</tr>
+<tr>
+  <td><strong>伸缩性</strong></td>
+  <td>弹性伸缩</td>
+  <td>基于 CPU/Memory/QPS 自动扩缩容</td>
+</tr>
+<tr>
+  <td><strong>安全性</strong></td>
+  <td>认证</td>
+  <td>JWT + OAuth 2.0</td>
+</tr>
+<tr>
+  <td><strong>安全性</strong></td>
+  <td>防护</td>
+  <td>XSS/CSRF/SQL注入/WAF</td>
+</tr>
+<tr>
+  <td><strong>安全性</strong></td>
+  <td>数据加密</td>
+  <td>传输层 TLS 1.3，存储层 AES-256</td>
+</tr>
+<tr>
+  <td><strong>可观测性</strong></td>
+  <td>监控</td>
+  <td>Prometheus + Grafana</td>
+</tr>
+<tr>
+  <td><strong>可观测性</strong></td>
+  <td>链路追踪</td>
+  <td>SkyWalking 全链路追踪</td>
+</tr>
+<tr>
+  <td><strong>可观测性</strong></td>
+  <td>日志</td>
+  <td>ELK 集中日志</td>
+</tr>
+</table>
+<h3>5. 核心业务流程分析</h3>
+<h4>5.1 用户下单流程（关键路径）</h4>
+<div class="diagram flow"><div class="flow-node start">用户浏览商品</div><span class="flow-arrow">→</span><div class="flow-node ">加入购物车</div><span class="flow-arrow">→</span><div class="flow-node ">确认订单
+(地址/优惠券/支付方式)</div><span class="flow-arrow">→</span><div class="flow-node ">提交订单
+→ 订单服务预创建</div><span class="flow-arrow">→</span><div class="flow-node event">库存扣减
+优惠券核销
+积分计算
+(Seata AT事务)</div><span class="flow-arrow">→</span><div class="flow-node ">订单→待付款</div><span class="flow-arrow">→</span><div class="flow-node ">支付服务发起支付</div><span class="flow-arrow">→</span><div class="flow-node decision">支付成功?</div><span class="flow-arrow">→</span><div class="flow-node end">已取消
+(30min超时)</div><span class="flow-arrow">→</span><div class="flow-node success">已完成
+通知发货</div></div>
+<h4>5.2 商品上架流程</h4>
+<div class="diagram flow"><div class="flow-node start">商家创建
+商品(草稿)</div><span class="flow-arrow">→</span><div class="flow-node ">填写SPU信息
++ SKU规格
++ 图片上传</div><span class="flow-arrow">→</span><div class="flow-node ">提交审核</div><span class="flow-arrow">→</span><div class="flow-node decision">平台审核</div><span class="flow-arrow">→</span><div class="flow-node end">驳回
+通知商家修改</div><span class="flow-arrow">→</span><div class="flow-node ">商品服务
+持久化SPU/SKU</div><span class="flow-arrow">→</span><div class="flow-node ">库存服务
+初始化库存</div><span class="flow-arrow">→</span><div class="flow-node event">RocketMQ
+事务消息</div><span class="flow-arrow">→</span><div class="flow-node ">Canal监听
+binlog变化</div><span class="flow-arrow">→</span><div class="flow-node ">索引同步
+更新ES</div><span class="flow-arrow">→</span><div class="flow-node success">商品可搜索
+可购买 ✓</div></div>
+<h4>5.3 售后退款流程</h4>
+<div class="diagram flow"><div class="flow-node start">用户申请退款</div><span class="flow-arrow">→</span><div class="flow-node ">退款服务
+创建退款单</div><span class="flow-arrow">→</span><div class="flow-node decision">是否已发货?</div><span class="flow-arrow">→</span><div class="flow-node ">仅退款
+(未发货)</div><span class="flow-arrow">→</span><div class="flow-node ">退货退款
+(已发货)</div><span class="flow-arrow">→</span><div class="flow-node ">商家审核通过</div><span class="flow-arrow">→</span><div class="flow-node ">用户退货
++ 填物流</div><span class="flow-arrow">→</span><div class="flow-node ">退款服务退款</div><span class="flow-arrow">→</span><div class="flow-node ">商家确认收货</div><span class="flow-arrow">→</span><div class="flow-node ">支付回调处理</div><span class="flow-arrow">→</span><div class="flow-node event">订单状态→已退款
+库存回补</div></div>
+<hr>
+<h2>第二部分：方案设计</h2>
+<h3>1. 系统架构总览</h3>
+<div class="diagram arch"><div class="arch-layer" style="background:#dbeafe;border-color:#93c5fd">
+      <div class="arch-label" style="color:#1e40af">客户端层 (Client) — 用户前台 B2C · 商家后台 B2B · 运营后台 Admin</div>
+      <div class="arch-items"><span class="arch-item">用户前台 (B2C)</span><span class="arch-item">商家后台 (B2B)</span><span class="arch-item">运营后台 (Admin)</span></div>
+    </div><div class="arch-layer" style="background:#e0e7ff;border-color:#a5b4fc">
+      <div class="arch-label" style="color:#3730a3">接入层 (Access) — Nginx 反向代理 + 静态资源 + gzip · 生产: MetalLB + Ingress + WAF</div>
+      <div class="arch-items"><span class="arch-item">Nginx</span><span class="arch-item">MetalLB</span><span class="arch-item">ModSecurity WAF</span></div>
+    </div><div class="arch-layer" style="background:#ede9fe;border-color:#c4b5fd">
+      <div class="arch-label" style="color:#6b21a8">网关层 (Gateway) — Spring Cloud Gateway 集群 · JWT验签 · Sentinel限流 · HTTP→Dubbo协议转换 · SkyWalking追踪</div>
+      <div class="arch-items"><span class="arch-item">鉴权认证</span><span class="arch-item">限流熔断</span><span class="arch-item">请求路由</span><span class="arch-item">协议转换</span><span class="arch-item">链路追踪</span></div>
+    </div><div class="arch-layer" style="background:#d1fae5;border-color:#6ee7b7">
+      <div class="arch-label" style="color:#065f46">业务服务层 (Business) — Dubbo 3.x Triple Protocol · Nacos 注册中心 · 18个微服务</div>
+      <div class="arch-items"><span class="arch-item">用户服务</span><span class="arch-item">商品服务</span><span class="arch-item">订单服务</span><span class="arch-item">支付服务</span><span class="arch-item">购物车</span><span class="arch-item">商家店铺</span><span class="arch-item">优惠券</span><span class="arch-item">搜索服务</span><span class="arch-item">文件服务</span><span class="arch-item">通知服务</span><span class="arch-item">运营平台</span></div>
+    </div><div class="arch-layer" style="background:#fef3c7;border-color:#fcd34d">
+      <div class="arch-label" style="color:#92400e">中间件层 (Middleware) — RocketMQ · Redis · ES · Seata · Sentinel · XXL-Job · SkyWalking · Redisson</div>
+      <div class="arch-items"><span class="arch-item">RocketMQ 消息队列</span><span class="arch-item">Redis 分布式缓存</span><span class="arch-item">ES 搜索引擎</span><span class="arch-item">Seata 分布式事务</span><span class="arch-item">Sentinel 熔断降级</span><span class="arch-item">XXL-Job 任务调度</span><span class="arch-item">SkyWalking 链路追踪</span><span class="arch-item">Redisson 分布式锁</span></div>
+    </div><div class="arch-layer" style="background:#ffe4e6;border-color:#fda4af">
+      <div class="arch-label" style="color:#9b2c2c">数据存储层 (Storage) — MySQL · MongoDB · MinIO · ClickHouse · 分库分表: ShardingSphere · 数据同步: Canal → ES/ClickHouse</div>
+      <div class="arch-items"><span class="arch-item">MySQL 8.0</span><span class="arch-item">MongoDB 7.0</span><span class="arch-item">MinIO 对象存储</span><span class="arch-item">ClickHouse 数据仓库</span><span class="arch-item">ShardingSphere 分库分表</span><span class="arch-item">Canal 数据同步</span></div>
+    </div></div>
+<h3>2. 微服务详细设计</h3>
+<h4>2.1 服务清单与接口契约</h4>
+<div class="diagram"><div class="comp-group"><div class="comp-group-title">基础服务 (P0)</div><div class="svc-row"><span class="svc-chip service">用户服务 :9301</span><span class="svc-chip service">认证授权 :9302</span><span class="svc-chip service">会员服务 :9303</span><span class="svc-chip service">地址服务 :9304</span><span class="svc-chip service">商品服务 :9311</span><span class="svc-chip service">类目服务 :9312</span><span class="svc-chip service">库存服务 :9313</span><span class="svc-chip service">评价服务 :9314</span><span class="svc-chip service">购物车 :9321</span><span class="svc-chip service">订单服务 :9322</span><span class="svc-chip service">支付服务 :9331</span><span class="svc-chip service">商家店铺 :9341</span></div></div><div class="comp-group"><div class="comp-group-title">扩展服务 (P1)</div><div class="svc-row"><span class="svc-chip mid">优惠券服务 :9351</span><span class="svc-chip mid">秒杀服务 :9352</span><span class="svc-chip mid">搜索服务 :9361</span></div></div><div class="comp-group"><div class="comp-group-title">支撑服务 (P1)</div><div class="svc-row"><span class="svc-chip store">文件服务 :9371</span><span class="svc-chip store">通知服务 :9372</span><span class="svc-chip store">运营平台 :9381</span></div></div></div>
+<h4>2.2 核心服务接口定义</h4>
+<p><strong>用户服务 (user-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 用户注册</span>
+POST /api/user/register
+Request:  { phone, password, verifyCode }
+Response: { userId, token }
+
+<span class="tok-cmt">// 用户登录</span>
+POST /api/user/login
+Request:  { phone, password }
+Response: { userId, token, refreshToken }
+
+<span class="tok-cmt">// 获取用户信息</span>
+GET /api/user/info?userId={id}
+Response: { userId, nickname, avatar, phone, memberLevel }</code></pre>
+<p><strong>商品服务 (product-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 创建商品(商家)</span>
+POST /api/product/spu
+Request:  { name, categoryId, brandId, images, skus: [...], description }
+Response: { spuId }
+
+<span class="tok-cmt">// 商品详情(SPU + SKU列表)</span>
+GET /api/product/spu/{spuId}
+Response: { spuId, name, category, brand, skus: [...], images, status }
+
+<span class="tok-cmt">// 商品列表(分页+筛选)</span>
+GET /api/product/list?page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">20</span>&amp;categoryId=xxx&amp;keyword=xxx&amp;sort=price_asc
+Response: { total, records: [...], pages }
+
+<span class="tok-cmt">// 商品审核(运营)</span>
+PUT /api/product/spu/{spuId}/audit
+Request:  { status: APPROVED|REJECTED, reason }</code></pre>
+<p><strong>库存服务 (inventory-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 扣减库存(订单创建时)</span>
+Dubbo: InventoryService.deduct(<span class="tok-typ">List</span>&lt;DeductItem&gt; items)
+  DeductItem: { skuId, quantity, orderNo }
+  Response: { success, failedItems: [...] }
+
+<span class="tok-cmt">// 回补库存(取消订单/退款)</span>
+Dubbo: InventoryService.restore(<span class="tok-typ">List</span>&lt;RestoreItem&gt; items)
+
+<span class="tok-cmt">// 查询库存</span>
+GET /api/inventory/sku/{skuId}
+Response: { skuId, totalStock, availableStock, lockedStock }</code></pre>
+<p><strong>订单服务 (order-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 创建订单</span>
+POST /api/order/create
+Request:  { addressId, cartItemIds: [...], couponId, payMethod, remark }
+Response: { orderNo, totalAmount, actualAmount, expireTime }
+
+<span class="tok-cmt">// 订单列表</span>
+GET /api/order/list?status=xxx&amp;page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">10</span>
+Response: { total, records: [OrderVO...] }
+
+<span class="tok-cmt">// 订单详情</span>
+GET /api/order/{orderNo}
+Response: { orderNo, status, items, address, payment, timeline }
+
+<span class="tok-cmt">// 订单状态变更(内部)</span>
+Dubbo: OrderService.updateStatus(orderNo, fromStatus, toStatus)
+
+<span class="tok-cmt">// 取消订单</span>
+PUT /api/order/{orderNo}/cancel
+Request:  { reason }</code></pre>
+<p><strong>支付服务 (payment-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 发起支付</span>
+POST /api/payment/pay
+Request:  { orderNo, payMethod: ALIPAY|WECHAT }
+Response: { payNo, payUrl, qrCode }
+
+<span class="tok-cmt">// 支付回调(第三方)</span>
+POST /api/payment/callback/alipay
+Request:  { ...支付宝回调参数 }
+(验签 + 幂等 + 更新状态 + 通知订单服务)
+
+<span class="tok-cmt">// 退款</span>
+POST /api/payment/refund
+Request:  { orderNo, refundAmount, reason }
+Response: { refundNo, status }</code></pre>
+<p><strong>购物车服务 (cart-service)</strong></p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 加入购物车</span>
+POST /api/cart/add
+Request:  { skuId, quantity }
+
+<span class="tok-cmt">// 购物车列表</span>
+GET /api/cart/list
+Response: [ { cartItemId, skuId, spuName, skuInfo, price, quantity, selected } ]
+
+<span class="tok-cmt">// 修改数量</span>
+PUT /api/cart/item/{cartItemId}
+Request:  { quantity }
+
+<span class="tok-cmt">// 选中/取消选中</span>
+PUT /api/cart/item/{cartItemId}/select
+Request:  { selected: <span class="tok-kw">true</span>|<span class="tok-kw">false</span> }</code></pre>
+<h3>3. 数据库设计</h3>
+<h4>3.1 分库策略</h4>
+<div class="diagram comp-grid"><div class="comp-box client">Nacos 配置中心
+数据源 & 分片规则</div><div class="comp-box service">ShardingSphere
+垂直分库</div><div class="comp-box mid">读写分离
+一主多从</div><div class="comp-box store">分表策略
+哈希取模</div></div>
+<table>
+<tr>
+  <th>数据库</th>
+  <th>所属服务</th>
+  <th>核心表</th>
+  <th>分表策略</th>
+</tr>
+<tr>
+  <td>db_user</td>
+  <td>user/auth/member/address</td>
+  <td>users, members, addresses</td>
+  <td>无(用户量级可控)</td>
+</tr>
+<tr>
+  <td>db_product</td>
+  <td>product/category/inventory/review</td>
+  <td>spu, sku, categories, reviews</td>
+  <td>sku按商品ID哈希 16表</td>
+</tr>
+<tr>
+  <td>db_order</td>
+  <td>order/cart</td>
+  <td>orders, order_items, carts</td>
+  <td>orders按用户ID哈希 16表</td>
+</tr>
+<tr>
+  <td>db_payment</td>
+  <td>payment</td>
+  <td>payments, refunds, accounts</td>
+  <td>payments按支付单号哈希 8表</td>
+</tr>
+<tr>
+  <td>db_marketing</td>
+  <td>coupon/seckill/points</td>
+  <td>coupons, seckill_products, points</td>
+  <td>无</td>
+</tr>
+<tr>
+  <td>db_shop</td>
+  <td>shop</td>
+  <td>shops, merchants, settlements</td>
+  <td>无</td>
+</tr>
+<tr>
+  <td>db_platform</td>
+  <td>platform</td>
+  <td>audits, configs, risks</td>
+  <td>无</td>
+</tr>
+</table>
+<h4>3.2 核心表结构</h4>
+<p><strong>users 表</strong></p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> users (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    phone           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">20</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'手机号'</span>,
+    email           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'邮箱'</span>,
+    password_hash   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">255</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'BCrypt密码'</span>,
+    nickname        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'昵称'</span>,
+    avatar_url      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'头像URL'</span>,
+    real_name       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'实名'</span>,
+    id_card         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">18</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'身份证号'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0禁用 -1注销'</span>,
+    last_login_at   <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'最后登录时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_phone (phone),
+    <span class="tok-kw">INDEX</span> idx_status (status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'用户表'</span>;</code></pre>
+<p><strong>spu / sku 表</strong></p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> spu (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    spu_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU编号'</span>,
+    shop_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺ID'</span>,
+    category_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'三级类目ID'</span>,
+    brand_id        <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'品牌ID'</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品名称'</span>,
+    subtitle        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'副标题'</span>,
+    main_image      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'主图'</span>,
+    images          <span class="tok-kw">JSON</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'图片列表'</span>,
+    description     <span class="tok-kw">TEXT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品描述(富文本)'</span>,
+    audit_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0待审 1通过 2驳回'</span>,
+    shelf_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0下架 1上架'</span>,
+    is_deleted      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'逻辑删除'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_shop (shop_id),
+    <span class="tok-kw">INDEX</span> idx_category (category_id),
+    <span class="tok-kw">INDEX</span> idx_audit (audit_status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'SPU商品表'</span>;
+
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> sku (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    sku_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU编号'</span>,
+    spu_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU ID'</span>,
+    spec_name       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'规格名称(颜色:红色;尺寸:XL)'</span>,
+    spec_code       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'规格编码'</span>,
+    price           <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'售价(分)'</span>,
+    market_price    <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'市场价'</span>,
+    cost_price      <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'成本价'</span>,
+    image           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU图片'</span>,
+    weight          <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'重量(g)'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0停用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_spu (spu_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'SKU商品表'</span>;</code></pre>
+<p><strong>orders 表（分表）</strong></p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> orders (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号(雪花ID)'</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    shop_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺ID'</span>,
+    total_amount    <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单总金额'</span>,
+    discount_amount <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠金额'</span>,
+    freight_amount  <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'运费'</span>,
+    actual_amount   <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'实付金额'</span>,
+    pay_method      <span class="tok-kw">TINYINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付方式 1支付宝 2微信'</span>,
+    pay_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付单号'</span>,
+    order_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1待付款 2待发货 3待收货 4已完成 5已取消 6已退款'</span>,
+    address_snapshot <span class="tok-kw">JSON</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货地址快照'</span>,
+    expire_time     <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付过期时间'</span>,
+    paid_at         <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付时间'</span>,
+    shipped_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'发货时间'</span>,
+    received_at     <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> uk_order_no (order_no),
+    <span class="tok-kw">INDEX</span> idx_user_status (user_id, order_status),
+    <span class="tok-kw">INDEX</span> idx_expire (expire_time)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'订单表'</span>;
+
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> order_items (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    sku_name        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品名称(快照)'</span>,
+    sku_image       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品图片(快照)'</span>,
+    sku_price       <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'购买时单价'</span>,
+    quantity        <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'购买数量'</span>,
+    total_price     <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'小计'</span>,
+    <span class="tok-kw">INDEX</span> idx_order_no (order_no)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'订单明细表'</span>;</code></pre>
+<p><strong>库存表</strong></p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> inventory (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    total_stock     <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'总库存'</span>,
+    available_stock <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'可用库存'</span>,
+    locked_stock    <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'锁定库存(下单未支付)'</span>,
+    safety_stock    <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'安全库存预警阈值'</span>,
+    version         <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'乐观锁版本号'</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_sku (sku_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'库存表'</span>;</code></pre>
+<h3>4. 缓存设计</h3>
+<h4>4.1 多级缓存架构</h4>
+<div class="diagram arch"><div class="arch-layer" style="background:#f0f9ff;border-color:#93c5fd">
+      <div class="arch-label" style="color:#1e40af">请求进入</div>
+      
+    </div><div class="arch-layer" style="background:#d1fae5;border-color:#6ee7b7">
+      <div class="arch-label" style="color:#065f46">L1: 本地缓存 (Caffeine) — 容量1000条 · TTL 60s · 命中率目标 80%+ — 类目树、字典配置、热点商品基础信息</div>
+      <div class="arch-items"><span class="arch-item">Caffeine 本地缓存</span><span class="arch-item">1000条 · 60s TTL</span></div>
+    </div><div class="arch-layer" style="background:#fef3c7;border-color:#fcd34d">
+      <div class="arch-label" style="color:#92400e">L2: 分布式缓存 (Redis 7.2) — 容量32GB · TTL按业务场景 · 命中率目标 95%+ — 用户Session、商品详情、库存、购物车、热点数据</div>
+      <div class="arch-items"><span class="arch-item">Redis 7.2</span><span class="arch-item">32GB · 按场景TTL</span></div>
+    </div><div class="arch-layer" style="background:#ffe4e6;border-color:#fda4af">
+      <div class="arch-label" style="color:#9b2c2c">L3: 数据库 (MySQL) — 最后兜底 · 查询后回写 L1 + L2</div>
+      <div class="arch-items"><span class="arch-item">MySQL 8.0</span><span class="arch-item">回写 L1 + L2</span></div>
+    </div></div>
+<h4>4.2 Redis Key 设计规范</h4>
+<pre data-lang="text"><code class="language-">Key 命名规范: {项目前缀}:{业务域}:{业务含义}:{标识}
+
+# 用户相关
+smt:user:token:{userId}              → JWT Token (TTL: 7d)
+smt:user:info:{userId}               → 用户信息 Hash (TTL: 1h)
+
+# 商品相关
+smt:product:spu:{spuId}              → SPU详情 Hash (TTL: 30min)
+smt:product:sku:{skuId}              → SKU信息 Hash (TTL: 30min)
+smt:product:category:tree            → 类目树 JSON (TTL: 1h)
+
+# 库存相关
+smt:inventory:stock:{skuId}          → 库存数量 (TTL: 永久)
+smt:inventory:stock:lock:{skuId}     → 分布式锁 Key (TTL: 30s)
+
+# 购物车
+smt:cart:{userId}                    → Hash {skuId: quantity} (TTL: 30d)
+
+# 秒杀
+smt:seckill:product:{spuId}          → 秒杀商品信息 (预热加载)
+smt:seckill:stock:{skuId}            → 秒杀库存 (预扣减, TTL: 活动结束)
+
+# 订单
+smt:order:info:{orderNo}             → 订单详情 Hash (TTL: 1h)
+smt:order:repeat:{requestId}         → 幂等Key (TTL: 1h)
+
+# 通用
+smt:lock:{resource}:{id}             → 分布式锁 (TTL: 30s)
+smt:rate:{api}:{ip}                  → 限流计数 (TTL: 1s)</code></pre>
+<h3>5. 消息队列设计</h3>
+<h4>5.1 Topic 规划</h4>
+<pre data-lang="text"><code class="language-">RocketMQ Topic 设计:
+
+Topic: order-event-topic         订单事件
+  Tag: ORDER_CREATED             订单创建 → 通知服务发消息, 营销服务发积分
+  Tag: ORDER_PAID                支付成功 → 通知商家发货, 数据服务统计
+  Tag: ORDER_SHIPPED             已发货 → 通知用户
+  Tag: ORDER_CANCELLED           已取消 → 库存回补, 优惠券退回
+  Tag: ORDER_REFUNDED            已退款 → 库存回补, 数据服务
+
+Topic: product-event-topic       商品事件
+  Tag: PRODUCT_APPROVED          商品审核通过 → 索引同步服务更新ES
+  Tag: PRODUCT_UPDATED           商品更新 → 索引同步, 缓存清理
+  Tag: PRODUCT_SHELF_CHANGE      上下架变更 → 索引同步, 缓存清理
+
+Topic: inventory-event-topic     库存事件
+  Tag: STOCK_CHANGED             库存变更 → 同步ES库存
+  Tag: STOCK_ALARM               库存不足预警 → 通知商家
+
+Topic: delay-order-topic         延迟消息(订单超时)
+  Tag: ORDER_PAYMENT_TIMEOUT     下单后30min未支付 → RocketMQ延迟消息Level 16
+
+Topic: canal-sync-topic          Canal数据同步
+  Tag: BINLOG_CHANGE             DB变更事件 → 更新ES/缓存/ClickHouse</code></pre>
+<h4>5.2 事务消息（商品上架示例）</h4>
+<pre data-lang="text"><code class="language-">商家提交商品审核通过:
+  1. 商品服务发送半消息 (RocketMQ事务消息, Tag: PRODUCT_APPROVED)
+  2. 商品服务执行本地事务:
+     - 更新 spu.audit_status = 1
+     - 写入 spu 和 sku 记录
+  3. 本地事务成功 → 提交消息
+  4. 索引同步服务消费:
+     - 构建ES索引文档
+     - 同步到 ES
+
+如果本地事务失败 → 回滚半消息 → 消费者不会收到</code></pre>
+<h3>6. 安全设计</h3>
+<h4>6.1 认证鉴权流程</h4>
+<div class="diagram flow"><div class="flow-node start">用户登录
+POST /api/auth/login</div><span class="flow-arrow">→</span><div class="flow-node ">auth-service
+校验密码(BCrypt)</div><span class="flow-arrow">→</span><div class="flow-node decision">校验通过?</div><span class="flow-arrow">→</span><div class="flow-node end">返回 401</div><span class="flow-arrow">→</span><div class="flow-node event">生成 Access Token
+(JWT TTL=2h)
++ Refresh Token
+(TTL=7d)</div><span class="flow-arrow">→</span><div class="flow-node ">返回 Tokens</div><span class="flow-arrow">→</span><div class="flow-node ">前端存储
+AccessToken→内存
+RefreshToken→Cookie</div><span class="flow-arrow">→</span><div class="flow-node ">后续请求
+Authorization:
+Bearer {token}</div><span class="flow-arrow">→</span><div class="flow-node ">Gateway 全局过滤器
+JWT验签(RSA256)
+解析 userId+roles</div><span class="flow-arrow">→</span><div class="flow-node ">透传 Header
+X-User-Id
+X-User-Roles</div></div>
+<h4>6.2 权限模型 RBAC</h4>
+<div class="diagram tree"><div class="tree-root">权限模型 RBAC</div><div class="tree-branches"><div class="tree-branch"><div class="tree-label">用户 (User)</div><div class="tree-leaf">ROLE_USER 普通用户</div><div class="tree-leaf">ROLE_MERCHANT 商家</div><div class="tree-leaf">ROLE_ADMIN 运营管理员</div></div><div class="tree-branch"><div class="tree-label">角色 (Role) — N:M 关联</div><div class="tree-leaf">用户角色绑定</div><div class="tree-leaf">角色权限绑定</div><div class="tree-leaf">支持多角色</div></div><div class="tree-branch"><div class="tree-label">权限 (Permission)</div><div class="tree-leaf">product:read 查看商品</div><div class="tree-leaf">product:write 编辑商品</div><div class="tree-leaf">product:audit 审核商品</div><div class="tree-leaf">order:read 查看订单</div><div class="tree-leaf">order:cancel 取消订单</div></div></div></div>
+<h4>6.3 安全防护清单</h4>
+<table>
+<tr>
+  <th>防护项</th>
+  <th>方案</th>
+</tr>
+<tr>
+  <td>XSS</td>
+  <td>Vue3 默认转义 + CSP Header</td>
+</tr>
+<tr>
+  <td>CSRF</td>
+  <td>SameSite Cookie + CSRF Token</td>
+</tr>
+<tr>
+  <td>SQL注入</td>
+  <td>MyBatis-Plus 参数化查询</td>
+</tr>
+<tr>
+  <td>接口限流</td>
+  <td>Sentinel 网关层 + 服务层双层限流</td>
+</tr>
+<tr>
+  <td>敏感数据</td>
+  <td>密码BCrypt, 身份证AES-256加密存储</td>
+</tr>
+<tr>
+  <td>传输安全</td>
+  <td>Nginx TLS 1.3 终止</td>
+</tr>
+<tr>
+  <td>文件上传</td>
+  <td>类型白名单 + 大小限制 + 病毒扫描</td>
+</tr>
+<tr>
+  <td>幂等</td>
+  <td>订单创建/支付使用 requestId 做唯一索引</td>
+</tr>
+</table>
+<h3>7. 关键场景技术方案</h3>
+<h4>7.1 秒杀场景</h4>
+<pre data-lang="text"><code class="language-">时间线:
+  T-1h    秒杀商品预热: 秒杀库存加载到Redis, 商品信息加载到本地缓存
+  T-5min  用户进入秒杀页面: WebSocket推送倒计时
+  T-0     秒杀开始
+
+请求链路:
+  用户点击秒杀
+    → Gateway限流 (Sentinel: 令牌桶, 10000 QPS)
+    → SeckillService.seckill(userId, seckillSkuId)
+      → Redisson分布式锁 (key: smt:lock:seckill:{skuId}:{userId})
+      → Redis Lua脚本原子扣减秒杀库存
+        if redis.call('get', KEYS[1]) &gt; 0 then
+          redis.call('decr', KEYS[1])
+          return 1  -- 抢到
+        else
+          return 0  -- 已抢完
+        end
+      → 抢到: 发送RocketMQ消息异步创建订单
+      → 未抢到: 返回&quot;已抢光&quot;
+
+  异步下单流程:
+    RocketMQ Consumer → 创建预订单 → 扣减真实库存 → 返回订单号
+    WebSocket推送结果给用户</code></pre>
+<h4>7.2 分布式事务（下单核心链路）</h4>
+<div class="diagram comp-grid"><div class="comp-box client">订单服务 (TM)
+事务发起方</div><div class="comp-box service">库存服务 (RM)
+deductStock
+Seata代理数据源
+undo_log回滚</div><div class="comp-box service">优惠券服务 (RM)
+useCoupon
+Seata代理数据源</div><div class="comp-box service">订单服务 (RM)
+createOrder
+INSERT orders
++ order_items</div></div>
+<h4>7.3 库存扣减方案</h4>
+<pre data-lang="text"><code class="language-">方案: Redis预减 + DB最终一致
+
+下单流程:
+  1. 检查 Redis 库存 (&gt; 0)
+  2. Redis 预减库存 (DECR)
+  3. 发送 RocketMQ 消息
+  4. 消费端: DB 真实扣减 (乐观锁)
+     UPDATE inventory
+     SET available_stock = available_stock - #{quantity},
+         locked_stock = locked_stock + #{quantity},
+         version = version + 1
+     WHERE sku_id = #{skuId} AND available_stock &gt;= #{quantity} AND version = #{version}
+  5. DB扣减失败 → 重试 (最多3次) → 最终失败 → Redis库存补偿 + 告警
+
+超时释放:
+  - RocketMQ延迟消息 (30min)
+  - 消费端检查订单状态 = 待付款 → 取消订单 + 释放库存
+
+防止超卖:
+  - DB层面: 乐观锁 version 保证
+  - Redis层面: Lua脚本原子操作
+  - 对账: 定时任务对比 Redis 和 DB 库存, 差异告警</code></pre>
+<h3>8. 部署架构</h3>
+<h4>8.1 Docker Compose 开发环境</h4>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-cmt"># 目录结构</span>
+docker-compose/
+├── .env                          <span class="tok-cmt"># 环境变量（端口映射、密码等）</span>
+├── docker-compose.yml            <span class="tok-cmt"># 主编排文件（13 个服务）</span>
+├── mysql/
+│   └── init/                     <span class="tok-cmt"># 初始化SQL脚本（10 个文件）</span>
+│       ├── <span class="tok-num">01</span>-init-databases.sql    <span class="tok-cmt"># 11 个数据库创建（7 业务 + 4 基础设施）</span>
+│       ├── <span class="tok-num">02</span>-user-tables.sql       <span class="tok-cmt"># db_user: users, members, addresses</span>
+│       ├── <span class="tok-num">03</span>-product-tables.sql    <span class="tok-cmt"># db_product: categories, brands, spu, sku, inventory</span>
+│       ├── <span class="tok-num">04</span>-shop-tables.sql       <span class="tok-cmt"># db_shop: merchants, shops</span>
+│       ├── <span class="tok-num">05</span>-nacos-mysql-schema.sql <span class="tok-cmt"># Nacos 配置存储表</span>
+│       ├── <span class="tok-num">05</span>-order-tables.sql      <span class="tok-cmt"># db_order: orders, order_items, undo_log</span>
+│       ├── <span class="tok-num">06</span>-payment-tables.sql    <span class="tok-cmt"># db_payment: payments, payment_refunds, payment_idempotent, undo_log</span>
+│       ├── <span class="tok-num">06</span>-xxl-job-tables.sql    <span class="tok-cmt"># XXL-Job 调度器表</span>
+│       ├── <span class="tok-num">07</span>-seata-tables.sql      <span class="tok-cmt"># Seata: global_table, branch_table, lock_table</span>
+│       └── <span class="tok-num">08</span>-canal-manager.sql     <span class="tok-cmt"># Canal Admin 管理表</span>
+├── rocketmq/
+│   └── conf/broker.conf           <span class="tok-cmt"># RocketMQ Broker 配置</span>
+├── seata/
+│   └── application.yml            <span class="tok-cmt"># Seata Server 1.7.1 配置</span>
+└── elasticsearch/
+    └── config/                    <span class="tok-cmt"># ES 配置文件</span>
+
+<span class="tok-cmt"># 基础设施数据库</span>
+db_user / db_product / db_order / db_payment / db_marketing / db_shop / db_platform
+xxl_job / seata / nacos / canal_manager</code></pre>
+<h3>开发环境中间件端口规划</h3>
+<blockquote>
+全部映射到高位端口（1xxxx-2xxxx），避免与本机常用服务冲突。
+</blockquote>
+<table>
+<tr>
+  <th>中间件</th>
+  <th>容器内端口</th>
+  <th>主机映射端口</th>
+  <th>说明</th>
+</tr>
+<tr>
+  <td><strong>MySQL</strong></td>
+  <td>3306</td>
+  <td><strong>13306</strong></td>
+  <td>8.0.35，11 个数据库</td>
+</tr>
+<tr>
+  <td><strong>Redis</strong></td>
+  <td>6379</td>
+  <td><strong>16379</strong></td>
+  <td>7.2-alpine，512MB，AOF 持久化</td>
+</tr>
+<tr>
+  <td><strong>Nacos</strong></td>
+  <td>8848 / 9848</td>
+  <td><strong>8848</strong> / <strong>9848</strong></td>
+  <td>2.3.1，standalone，鉴权关闭（开发环境）</td>
+</tr>
+<tr>
+  <td><strong>RocketMQ NameServer</strong></td>
+  <td>9876</td>
+  <td><strong>19876</strong></td>
+  <td>5.1.4</td>
+</tr>
+<tr>
+  <td><strong>RocketMQ Broker</strong></td>
+  <td>10911 / 10909</td>
+  <td><strong>20911</strong> / <strong>20909</strong></td>
+  <td>5.1.4，ASYNC_MASTER</td>
+</tr>
+<tr>
+  <td><strong>Elasticsearch</strong></td>
+  <td>9200 / 9300</td>
+  <td><strong>19200</strong> / <strong>19300</strong></td>
+  <td>7.17.23，单节点，固定 IP 10.10.5.20</td>
+</tr>
+<tr>
+  <td><strong>MinIO</strong></td>
+  <td>9000 / 9001</td>
+  <td><strong>19000</strong> / <strong>19001</strong></td>
+  <td>API / Console</td>
+</tr>
+<tr>
+  <td><strong>XXL-Job Admin</strong></td>
+  <td>8080</td>
+  <td><strong>18081</strong></td>
+  <td>2.4.1</td>
+</tr>
+<tr>
+  <td><strong>Sentinel Dashboard</strong></td>
+  <td>8858</td>
+  <td><strong>18858</strong></td>
+  <td>1.8.6，对接 Nacos</td>
+</tr>
+<tr>
+  <td><strong>SkyWalking OAP</strong></td>
+  <td>11800 / 12800</td>
+  <td><strong>21800</strong> / <strong>22800</strong></td>
+  <td>9.7.0，存储后端 ES</td>
+</tr>
+<tr>
+  <td><strong>SkyWalking UI</strong></td>
+  <td>8080</td>
+  <td><strong>18083</strong></td>
+  <td>9.7.0</td>
+</tr>
+<tr>
+  <td><strong>Seata Server</strong></td>
+  <td>8091 / 7091</td>
+  <td><strong>19091</strong> / <strong>19092</strong></td>
+  <td>1.7.1，DB 存储模式，控制台 seata/seata</td>
+</tr>
+<tr>
+  <td><strong>Canal Server</strong></td>
+  <td>11111</td>
+  <td><strong>21111</strong></td>
+  <td>1.1.7，对接 Canal Admin 管理</td>
+</tr>
+<tr>
+  <td><strong>Canal Admin</strong></td>
+  <td>8089</td>
+  <td><strong>18089</strong></td>
+  <td>1.1.7，管理 Canal Instance</td>
+</tr>
+</table>
+<blockquote>
+<strong>总计 13 个容器服务</strong>（14 个容器含 RocketMQ 双组件）。ES 分配固定 IP <code>10.10.5.20</code> 以解决 SkyWalking OAP Netty DNS 解析超时问题。开发环境 Nacos 鉴权关闭，Seata 使用 file 注册模式。</system-parameter>
+</blockquote>
+<h4>8.2 K8s 生产部署</h4>
+<div class="diagram comp-grid"><div class="comp-box gateway">Master 节点 ×3
+4C8G
+etcd · kube-apiserver
+scheduler · controller
+Nginx Ingress</div><div class="comp-box service">Worker 节点 ×5
+8C16G
+业务服务 (Deployment)
+中间件 (StatefulSet)
+存储 (StatefulSet+PV)</div><div class="comp-box access">MetalLB (Layer 2)
+VIP: 192.168.1.200-250
+暴露: Nginx Ingress
+(80/443)</div><div class="comp-box store">存储方案
+开发: hostPath
+生产: Longhorn
+/ Rook Ceph</div></div>
+<h3>9. 监控与可观测性</h3>
+<div class="diagram tree"><div class="tree-root">可观测性三支柱</div><div class="tree-branches"><div class="tree-branch"><div class="tree-label">Metrics 指标 — Prometheus + Grafana</div><div class="tree-leaf">服务可用率 < 99.9% → P1</div><div class="tree-leaf">接口P99 > 500ms → P2</div><div class="tree-leaf">Redis内存 > 80% → P2</div><div class="tree-leaf">消息积压 > 10000 → P1</div><div class="tree-leaf">订单成功率 < 99% → P0</div></div><div class="tree-branch"><div class="tree-label">Tracing 链路追踪 — SkyWalking 9.7</div><div class="tree-leaf">全链路追踪</div><div class="tree-leaf">服务拓扑图</div><div class="tree-leaf">性能剖析</div><div class="tree-leaf">依赖分析</div></div><div class="tree-branch"><div class="tree-label">Logging 日志 — ELK Stack</div><div class="tree-leaf">ES 日志存储</div><div class="tree-leaf">Kibana 可视化</div><div class="tree-leaf">Filebeat 采集</div><div class="tree-leaf">集中检索</div></div></div></div>
+<h3>10. 开发路线图</h3>
+<div class="diagram"><div class="comp-group"><div class="comp-group-title">基础服务 (P0)</div><div class="svc-row"><span class="svc-chip service">用户服务 :9301</span><span class="svc-chip service">认证授权 :9302</span><span class="svc-chip service">会员服务 :9303</span><span class="svc-chip service">地址服务 :9304</span><span class="svc-chip service">商品服务 :9311</span><span class="svc-chip service">类目服务 :9312</span><span class="svc-chip service">库存服务 :9313</span><span class="svc-chip service">评价服务 :9314</span><span class="svc-chip service">购物车 :9321</span><span class="svc-chip service">订单服务 :9322</span><span class="svc-chip service">支付服务 :9331</span><span class="svc-chip service">商家店铺 :9341</span></div></div><div class="comp-group"><div class="comp-group-title">扩展服务 (P1)</div><div class="svc-row"><span class="svc-chip mid">优惠券服务 :9351</span><span class="svc-chip mid">秒杀服务 :9352</span><span class="svc-chip mid">搜索服务 :9361</span></div></div><div class="comp-group"><div class="comp-group-title">支撑服务 (P1)</div><div class="svc-row"><span class="svc-chip store">文件服务 :9371</span><span class="svc-chip store">通知服务 :9372</span><span class="svc-chip store">运营平台 :9381</span></div></div></div>
+<h3>11. 项目代码结构</h3>
+<pre class="arch-diagram" style="text-align:left;padding:16px 24px;">super-market/
+├── docs/                           # 文档
+│   ├── prd.md                      # 产品需求文档
+│   └── solution-design.md          # 本方案设计文档
+├── docker-compose/                 # 本地开发环境
+│   ├── docker-compose.yml
+│   ├── .env
+│   └── conf.d/                     # 各中间件配置
+├── frontend/                       # 前端项目 (Monorepo)
+│   ├── app-b2c/                    # 用户前台
+│   ├── app-b2b/                    # 商家后台
+│   ├── app-admin/                  # 运营后台
+│   └── packages/                   # 公共组件库
+├── super-market-common/            # 公共模块
+│   ├── common-core/                # 核心工具/异常/常量
+│   ├── common-dubbo-api/           # Dubbo API 接口定义
+│   ├── common-security/            # 安全模块 (JWT/RBAC)
+│   ├── common-web/                 # Web 通用配置
+│   └── common-mybatis/             # MyBatis 通用配置
+├── super-market-services/          # 微服务实现
+│   ├── service-user/               # 用户服务
+│   ├── service-auth/               # 认证授权服务
+│   ├── service-member/             # 会员服务
+│   ├── service-address/            # 地址服务
+│   ├── service-product/            # 商品基础服务
+│   ├── service-category/           # 类目服务
+│   ├── service-inventory/          # 库存服务
+│   ├── service-review/             # 评价服务
+│   ├── service-cart/               # 购物车服务
+│   ├── service-order/              # 订单服务
+│   ├── service-payment/            # 支付服务
+│   ├── service-coupon/             # 优惠券服务
+│   ├── service-seckill/            # 秒杀服务
+│   ├── service-search/             # 搜索服务
+│   ├── service-shop/               # 商家/店铺服务
+│   ├── service-platform/           # 运营平台服务
+│   ├── service-file/               # 文件服务
+│   └── service-notify/             # 通知服务
+├── super-market-gateway/           # Spring Cloud Gateway
+├── super-market-k8s/               # K8s 部署配置
+│   ├── base/                       # 基础设施 (中间件 StatefulSet)
+│   ├── apps/                       # 业务服务 (Deployment)
+│   └── monitoring/                 # 监控组件
+├── pom.xml                         # Maven 父 POM
+└── README.md</pre>
+<hr>
+<blockquote>
+<strong>下一步</strong>: 方案评审通过后，进入 Phase 1 — 基础设施搭建与项目脚手架初始化。
+</blockquote>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

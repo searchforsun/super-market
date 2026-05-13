@@ -7,7 +7,7 @@ spring:
     allow-bean-definition-overriding: true
 
 server:
-  port: ${SERVER_PORT:9061}
+  port: ${SERVER_PORT:9361}
   servlet:
     encoding:
       charset: UTF-8

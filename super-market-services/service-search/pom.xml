@@ -11,7 +11,7 @@
     </parent>
     <artifactId>service-search</artifactId>
     <packaging>jar</packaging>
-    <description>search服务 — 用户注册、登录、信息管理</description>
+    <description>搜索服务 — 商品全文检索、ES索引管理、Canal数据同步</description>
 
     <dependencies>
         <dependency>
@@ -71,6 +71,10 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
         </dependency>
     </dependencies>
 

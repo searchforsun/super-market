@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service Registry — 微服务注册表 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html" class="active">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<h1>微服务注册表</h1>
+<table>
+<tr>
+  <th>序号</th>
+  <th>模块目录</th>
+  <th>服务名</th>
+  <th>中文名称</th>
+  <th>端口</th>
+  <th>业务域</th>
+  <th>数据库</th>
+  <th>包名</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td>service-user</td>
+  <td>user-service</td>
+  <td>用户服务</td>
+  <td>9301</td>
+  <td>用户域</td>
+  <td>db_user</td>
+  <td>com.supermarket.user</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>service-auth</td>
+  <td>auth-service</td>
+  <td>认证授权服务</td>
+  <td>9302</td>
+  <td>用户域</td>
+  <td>db_user</td>
+  <td>com.supermarket.auth</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>service-member</td>
+  <td>member-service</td>
+  <td>会员服务</td>
+  <td>9303</td>
+  <td>用户域</td>
+  <td>db_user</td>
+  <td>com.supermarket.member</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>service-address</td>
+  <td>address-service</td>
+  <td>地址服务</td>
+  <td>9304</td>
+  <td>用户域</td>
+  <td>db_user</td>
+  <td>com.supermarket.address</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>service-product</td>
+  <td>product-service</td>
+  <td>商品基础服务</td>
+  <td>9311</td>
+  <td>商品域</td>
+  <td>db_product</td>
+  <td>com.supermarket.product</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>service-category</td>
+  <td>category-service</td>
+  <td>类目服务</td>
+  <td>9312</td>
+  <td>商品域</td>
+  <td>db_product</td>
+  <td>com.supermarket.category</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>service-inventory</td>
+  <td>inventory-service</td>
+  <td>库存服务</td>
+  <td>9313</td>
+  <td>商品域</td>
+  <td>db_product</td>
+  <td>com.supermarket.inventory</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>service-review</td>
+  <td>review-service</td>
+  <td>评价服务</td>
+  <td>9314</td>
+  <td>商品域</td>
+  <td>db_product</td>
+  <td>com.supermarket.review</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>service-cart</td>
+  <td>cart-service</td>
+  <td>购物车服务</td>
+  <td>9321</td>
+  <td>交易域</td>
+  <td>db_order</td>
+  <td>com.supermarket.cart</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>service-order</td>
+  <td>order-service</td>
+  <td>订单服务</td>
+  <td>9322</td>
+  <td>交易域</td>
+  <td>db_order</td>
+  <td>com.supermarket.order</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td>service-payment</td>
+  <td>payment-service</td>
+  <td>支付服务</td>
+  <td>9331</td>
+  <td>支付域</td>
+  <td>db_payment</td>
+  <td>com.supermarket.payment</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td>service-coupon</td>
+  <td>coupon-service</td>
+  <td>优惠券服务</td>
+  <td>9351</td>
+  <td>营销域</td>
+  <td>db_marketing</td>
+  <td>com.supermarket.coupon</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td>service-seckill</td>
+  <td>seckill-service</td>
+  <td>秒杀服务</td>
+  <td>9352</td>
+  <td>营销域</td>
+  <td>db_marketing</td>
+  <td>com.supermarket.seckill</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td>service-search</td>
+  <td>search-service</td>
+  <td>搜索服务</td>
+  <td>9361</td>
+  <td>搜索域</td>
+  <td>db_product</td>
+  <td>com.supermarket.search</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td>service-shop</td>
+  <td>shop-service</td>
+  <td>商家店铺服务</td>
+  <td>9341</td>
+  <td>商家域</td>
+  <td>db_shop</td>
+  <td>com.supermarket.shop</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td>service-platform</td>
+  <td>platform-service</td>
+  <td>运营平台服务</td>
+  <td>9381</td>
+  <td>平台域</td>
+  <td>db_platform</td>
+  <td>com.supermarket.platform</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td>service-file</td>
+  <td>file-service</td>
+  <td>文件服务</td>
+  <td>9371</td>
+  <td>基础支撑域</td>
+  <td>db_product</td>
+  <td>com.supermarket.file</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td>service-notify</td>
+  <td>notify-service</td>
+  <td>通知服务</td>
+  <td>9372</td>
+  <td>基础支撑域</td>
+  <td>db_product</td>
+  <td>com.supermarket.notify</td>
+</tr>
+</table>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

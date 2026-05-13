@@ -1,0 +1,1939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 3 — 交易域 + 支付域 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 3</span>
+    <span class="phase-period">W7-W10</span>
+    <p>3 个微服务 · Seata AT 分布式事务 · RocketMQ 消息驱动 · 支付幂等 · 超时取消 (48 测试)</p>
+  </div>
+<h1>Phase 3 — 交易域 + 支付域 Implementation Plan</h1>
+<blockquote>
+<strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.
+</blockquote>
+<p><strong>Goal:</strong> 实现购物车服务（Redis Hash）、订单服务（Seata AT 分布式事务 + 状态流转）、支付服务（幂等 + 回调 + 退款），集成 RocketMQ 订单事件消息 + 延迟消息（30min 超时取消），以及 Seata AT 模式基础设施。</p>
+<p><strong>Architecture:</strong> 购物车基于 Redis Hash 存储。订单服务作为 Seata TM 发起全局事务，协调库存服务（RM）扣减库存。支付服务模拟第三方支付回调，实现幂等性保证。RocketMQ 用于订单事件异步通知和延迟消息取消超时订单。</p>
+<p><strong>Tech Stack:</strong> Java 21, Spring Boot 3.2, Apache Dubbo 3.2, MyBatis-Plus 3.5, Redis 7.2 + Redisson, RocketMQ 5.1, Seata 1.7 (AT mode), MySQL 8.0, JUnit 5 + Mockito</p>
+<p><strong>简化策略：</strong> 本阶段 Seata AT 事务仅覆盖 order-service + inventory-service 两个参与者。优惠券/积分核销留 Phase 4 扩展。支付采用 mock 模式，不对接真实支付宝/微信。</p>
+<hr>
+<h2>Phase 3 验收标准</h2>
+<ul>
+<li>[ ] 所有 3 个服务 <code>mvn clean install -DskipTests</code> BUILD SUCCESS</li>
+<li>[ ] 所有单元测试 <code>mvn test</code> 通过，覆盖率 > 80%</li>
+<li>[ ] 购物车添加/修改/选中 API 正常，数据存储在 Redis</li>
+<li>[ ] 下单 API 创建订单 + 扣减库存（Seata AT 事务），库存不足时回滚</li>
+<li>[ ] 订单状态流转：待付款→(支付)→待发货→(发货)→待收货→(确认)→已完成</li>
+<li>[ ] 支付回调幂等：重复回调不会重复处理</li>
+<li>[ ] RocketMQ 延迟消息：下单 30min 后未支付自动取消</li>
+<li>[ ] Seata Server 启动正常，undo_log 表正常工作</li>
+</ul>
+<hr>
+<h2>Task Group A: 数据库 DDL</h2>
+<h3>Task A1: 创建 db_order + db_payment 表 + Seata undo_log</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/mysql/init/05-order-tables.sql</code></li>
+<li>Create: <code>docker-compose/mysql/init/06-payment-tables.sql</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入订单域 DDL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/05-order-tables.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">USE</span> db_order;
+
+<span class="tok-cmt">-- 订单表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> orders (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    shop_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺ID'</span>,
+    total_amount    <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单总金额'</span>,
+    discount_amount <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'优惠金额'</span>,
+    freight_amount  <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'运费'</span>,
+    actual_amount   <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'实付金额'</span>,
+    pay_method      <span class="tok-kw">TINYINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付方式 1支付宝 2微信'</span>,
+    pay_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付单号'</span>,
+    order_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1待付款 2待发货 3待收货 4已完成 5已取消 6已退款'</span>,
+    address_snapshot <span class="tok-kw">JSON</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货地址快照'</span>,
+    expire_time     <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付过期时间'</span>,
+    paid_at         <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付时间'</span>,
+    shipped_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'发货时间'</span>,
+    received_at     <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> uk_order_no (order_no),
+    <span class="tok-kw">INDEX</span> idx_user_status (user_id, order_status),
+    <span class="tok-kw">INDEX</span> idx_expire (expire_time)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'订单表'</span>;
+
+<span class="tok-cmt">-- 订单明细表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> order_items (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    sku_name        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品名称(快照)'</span>,
+    sku_image       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品图片(快照)'</span>,
+    sku_price       <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'购买时单价'</span>,
+    quantity        <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'购买数量'</span>,
+    total_price     <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'小计'</span>,
+    <span class="tok-kw">INDEX</span> idx_order_no (order_no)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'订单明细表'</span>;
+
+<span class="tok-cmt">-- Seata AT 模式 undo_log 表（每个业务库都需要）</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> undo_log (
+    branch_id       <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'分支事务ID'</span>,
+    xid             <span class="tok-kw">VARCHAR</span>(<span class="tok-num">128</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'全局事务ID'</span>,
+    context         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">128</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'上下文'</span>,
+    rollback_info   <span class="tok-kw">LONGBLOB</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'回滚信息'</span>,
+    log_status      <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'日志状态'</span>,
+    log_created     <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'创建时间'</span>,
+    log_modified    <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'修改时间'</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> ux_undo_log (xid, branch_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'Seata AT undo_log'</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入支付域 DDL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/06-payment-tables.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">USE</span> db_payment;
+
+<span class="tok-cmt">-- 支付单表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> payments (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    pay_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付单号'</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    amount          <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付金额'</span>,
+    pay_method      <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付方式 1支付宝 2微信'</span>,
+    pay_status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1待支付 2支付成功 3支付失败 4已退款'</span>,
+    third_pay_no    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">64</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'第三方支付流水号'</span>,
+    paid_at         <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'支付成功时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> uk_pay_no (pay_no),
+    <span class="tok-kw">INDEX</span> idx_order_no (order_no),
+    <span class="tok-kw">INDEX</span> idx_user (user_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'支付单表'</span>;
+
+<span class="tok-cmt">-- 退款单表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> payment_refunds (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    refund_no       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'退款单号'</span>,
+    pay_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'原支付单号'</span>,
+    order_no        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'订单号'</span>,
+    refund_amount   <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'退款金额'</span>,
+    refund_reason   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'退款原因'</span>,
+    refund_status   <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1退款中 2退款成功 3退款失败'</span>,
+    third_refund_no <span class="tok-kw">VARCHAR</span>(<span class="tok-num">64</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'第三方退款流水号'</span>,
+    refunded_at     <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'退款成功时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> uk_refund_no (refund_no),
+    <span class="tok-kw">INDEX</span> idx_pay_no (pay_no),
+    <span class="tok-kw">INDEX</span> idx_order_no (order_no)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'退款单表'</span>;
+
+<span class="tok-cmt">-- 幂等表（支付回调幂等）</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> payment_idempotent (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    request_id      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">64</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'请求唯一标识'</span>,
+    business_type   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'业务类型 PAYMENT/REFUND'</span>,
+    business_no     <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'业务单号'</span>,
+    response_data   <span class="tok-kw">JSON</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'首次处理响应'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> uk_request_id (request_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'支付幂等表'</span>;
+
+<span class="tok-cmt">-- Seata undo_log</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> undo_log (
+    branch_id       <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL,
+    xid             <span class="tok-kw">VARCHAR</span>(<span class="tok-num">128</span>) <span class="tok-kw">NOT</span> NULL,
+    context         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">128</span>) <span class="tok-kw">NOT</span> NULL,
+    rollback_info   <span class="tok-kw">LONGBLOB</span> <span class="tok-kw">NOT</span> NULL,
+    log_status      <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL,
+    log_created     <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL,
+    log_modified    <span class="tok-kw">DATETIME</span> <span class="tok-kw">NOT</span> NULL,
+    <span class="tok-kw">UNIQUE</span> <span class="tok-kw">KEY</span> ux_undo_log (xid, branch_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'Seata AT undo_log'</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 执行 SQL 验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 -e <span class="tok-str">&quot;USE db_order; SHOW TABLES;&quot;</span> &amp;&amp; <span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 -e <span class="tok-str">&quot;USE db_payment; SHOW TABLES;&quot;</span></code></pre>
+<p>Expected: db_order 输出 <code>orders</code>, <code>order_items</code>, <code>undo_log</code>；db_payment 输出 <code>payments</code>, <code>payment_refunds</code>, <code>payment_idempotent</code>, <code>undo_log</code></p>
+<ul>
+<li>[ ] <strong>Step 4: 为 db_product 也添加 undo_log（库存服务参与 Seata）</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 db_product -e <span class="tok-str">&quot;
+CREATE TABLE IF NOT EXISTS undo_log (
+    branch_id       BIGINT NOT NULL,
+    xid             VARCHAR(128) NOT NULL,
+    context         VARCHAR(128) NOT NULL,
+    rollback_info   LONGBLOB NOT NULL,
+    log_status      INT NOT NULL,
+    log_created     DATETIME NOT NULL,
+    log_modified    DATETIME NOT NULL,
+    UNIQUE KEY ux_undo_log (xid, branch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Seata AT undo_log';
+&quot;</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/mysql/init/05-order-tables.sql <span class="tok-builtin">docker</span>-compose/mysql/init/06-payment-tables.sql
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add order + payment domain DDL (orders, payments, refunds, undo_log)&quot;</span></code></pre>
+<hr>
+<h2>Task Group B: Seata 基础设施</h2>
+<h3>Task B1: Docker Compose 添加 Seata Server + 配置</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>docker-compose/docker-compose.yml</code> — 添加 seata-server 服务</li>
+<li>Create: <code>docker-compose/seata/application.yml</code> — Seata Server 配置</li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 在 docker-compose.yml 添加 Seata Server</strong></li>
+</ul>
+<p>在 <code>docker-compose/docker-compose.yml</code> 的 <code>services:</code> 下添加:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">  seata-server:</span>
+<span class="tok-prop">    image:</span> seataio/seata-server:<span class="tok-num">1.7</span>.<span class="tok-num">1</span>
+<span class="tok-prop">    container_name:</span> smt-seata
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      SEATA_PORT:</span> <span class="tok-num">8091</span>
+<span class="tok-prop">      STORE_MODE:</span> db
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${SEATA_PORT:-19091}:8091&quot;</span>
+      - <span class="tok-str">&quot;${SEATA_CONSOLE_PORT:-18092}:7091&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - ./seata/application.yml:/seata-server/resources/application.yml
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      mysql:</span>
+<span class="tok-prop">        condition:</span> service_healthy</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建 Seata Server 配置</strong></li>
+</ul>
+<p>写入 <code>docker-compose/seata/application.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">server:</span>
+<span class="tok-prop">  port:</span> <span class="tok-num">7091</span>
+<span class="tok-prop">
+spring:</span>
+<span class="tok-prop">  application:</span>
+<span class="tok-prop">    name:</span> seata-server
+<span class="tok-prop">
+logging:</span>
+<span class="tok-prop">  level:</span>
+<span class="tok-prop">    io.seata:</span> INFO
+<span class="tok-prop">
+seata:</span>
+<span class="tok-prop">  config:</span>
+<span class="tok-prop">    type:</span> file
+<span class="tok-prop">  registry:</span>
+<span class="tok-prop">    type:</span> file
+<span class="tok-prop">  store:</span>
+<span class="tok-prop">    mode:</span> db
+<span class="tok-prop">    db:</span>
+<span class="tok-prop">      datasource:</span> druid
+<span class="tok-prop">      db-type:</span> mysql
+<span class="tok-prop">      driver-class-name:</span> com.mysql.cj.jdbc.Driver
+<span class="tok-prop">      url:</span> jdbc:mysql://mysql:<span class="tok-num">3306</span>/seata?useUnicode=<span class="tok-kw">true</span>&amp;characterEncoding=UTF-<span class="tok-num">8</span>&amp;serverTimezone=Asia/Shanghai&amp;useSSL=<span class="tok-kw">false</span>
+<span class="tok-prop">      user:</span> root
+<span class="tok-prop">      password:</span> root123
+<span class="tok-prop">      min-conn:</span> <span class="tok-num">5</span>
+<span class="tok-prop">      max-conn:</span> <span class="tok-num">100</span>
+<span class="tok-prop">      global-table:</span> global_table
+<span class="tok-prop">      branch-table:</span> branch_table
+<span class="tok-prop">      lock-table:</span> lock_table
+<span class="tok-prop">      distributed-lock-table:</span> distributed_lock
+<span class="tok-prop">      query-limit:</span> <span class="tok-num">100</span>
+<span class="tok-prop">      max-wait:</span> <span class="tok-num">5000</span>
+<span class="tok-prop">  server:</span>
+<span class="tok-prop">    service-port:</span> <span class="tok-num">8091</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 添加 seata 库初始化 SQL 到 01-init-databases.sql</strong></li>
+</ul>
+<p>在 <code>docker-compose/mysql/init/01-init-databases.sql</code> 末尾添加:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> seata <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/<span class="tok-builtin">docker</span>-compose.yml <span class="tok-builtin">docker</span>-compose/seata/ <span class="tok-builtin">docker</span>-compose/mysql/init/01-init-databases.sql
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add Seata Server 1.7 to docker-compose + seata database&quot;</span></code></pre>
+<hr>
+<h3>Task B2: 服务端添加 Seata 依赖与配置</h3>
+<ul>
+<li>[ ] <strong>Step 1: 父 POM 添加 Seata 版本管理</strong></li>
+</ul>
+<p>在根 <code>pom.xml</code> 的 <code><properties></code> 中添加:</p>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;seata.version</span>&gt;1.7.1<span class="tok-tag">&lt;/seata.version</span>&gt;</code></pre>
+<p>在 <code><dependencyManagement></code> 中添加:</p>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;io.seata<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;seata-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;version</span>&gt;${seata.version}<span class="tok-tag">&lt;/version</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: order-service pom.xml 添加 Seata 依赖</strong></li>
+</ul>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;io.seata<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;seata-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: order-service application-dev.yml 添加 Seata 配置</strong></li>
+</ul>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">seata:</span>
+<span class="tok-prop">  enabled:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">  application-id:</span> order-service
+<span class="tok-prop">  tx-service-group:</span> super-market-tx-group
+<span class="tok-prop">  service:</span>
+<span class="tok-prop">    vgroup-mapping:</span>
+<span class="tok-prop">      super-market-tx-group:</span> default
+<span class="tok-prop">    grouplist:</span>
+<span class="tok-prop">      default:</span> localhost:<span class="tok-num">19091</span>
+<span class="tok-prop">  data-source-proxy-mode:</span> AT</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: inventory-service 同样添加 Seata 依赖和配置</strong></li>
+</ul>
+<p>在 <code>service-inventory/pom.xml</code> 添加 seata 依赖，<code>application-dev.yml</code> 添加:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">seata:</span>
+<span class="tok-prop">  enabled:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">  application-id:</span> inventory-service
+<span class="tok-prop">  tx-service-group:</span> super-market-tx-group
+<span class="tok-prop">  service:</span>
+<span class="tok-prop">    vgroup-mapping:</span>
+<span class="tok-prop">      super-market-tx-group:</span> default
+<span class="tok-prop">    grouplist:</span>
+<span class="tok-prop">      default:</span> localhost:<span class="tok-num">19091</span>
+<span class="tok-prop">  data-source-proxy-mode:</span> AT</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add pom.xml super-market-services/service-order/pom.xml super-market-services/service-inventory/pom.xml super-market-services/service-order/src/main/resources/ super-market-services/service-inventory/src/main/resources/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add Seata AT mode config to order-service + inventory-service&quot;</span></code></pre>
+<hr>
+<h2>Task Group C: Common Dubbo API 扩展</h2>
+<h3>Task C1: 创建订单域的 Dubbo 接口</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/order/OrderDubboService.java</code></li>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/order/dto/CreateOrderRequest.java</code></li>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/order/dto/OrderDTO.java</code></li>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/payment/PaymentDubboService.java</code></li>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/payment/dto/PaymentDTO.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 CreateOrderRequest DTO</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.order.dto;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> java.io.Serializable;
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CreateOrderRequest <span class="tok-kw">implements</span> Serializable {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> addressId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> addressSnapshot;
+    <span class="tok-kw">private</span> <span class="tok-typ">List</span>&lt;OrderItemRequest&gt; items;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> remark;
+
+    <span class="tok-ann">@Data</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> <span class="tok-kw">class</span> OrderItemRequest <span class="tok-kw">implements</span> Serializable {
+        <span class="tok-kw">private</span> <span class="tok-typ">Long</span> skuId;
+        <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuName;
+        <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuImage;
+        <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> skuPrice;
+        <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> quantity;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 OrderDTO</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.order.dto;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> java.io.Serializable;
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderDTO <span class="tok-kw">implements</span> Serializable {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> shopId;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> totalAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> discountAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> freightAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> actualAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> orderStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> addressSnapshot;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> expireTime;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> createdAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 OrderDubboService 接口</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.order;
+
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.OrderDTO;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> OrderDubboService {
+    OrderDTO createOrder(CreateOrderRequest request);
+    OrderDTO getByOrderNo(<span class="tok-typ">String</span> orderNo);
+    <span class="tok-kw">void</span> updateStatus(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">Integer</span> toStatus);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 PaymentDTO 和 PaymentDubboService</strong></li>
+</ul>
+<p><code>PaymentDTO.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.payment.dto;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> java.io.Serializable;
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> PaymentDTO <span class="tok-kw">implements</span> Serializable {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> payNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> amount;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> payMethod;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> payStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> thirdPayNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> paidAt;
+}</code></pre>
+<p><code>PaymentDubboService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.payment;
+
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.payment.dto.PaymentDTO;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> PaymentDubboService {
+    PaymentDTO createPayment(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">Long</span> userId, <span class="tok-typ">BigDecimal</span> amount, <span class="tok-typ">Integer</span> payMethod);
+    PaymentDTO getByPayNo(<span class="tok-typ">String</span> payNo);
+    <span class="tok-kw">void</span> handleCallback(<span class="tok-typ">String</span> payNo, <span class="tok-typ">String</span> thirdPayNo);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-dubbo-api/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add OrderDubboService + PaymentDubboService API definitions&quot;</span></code></pre>
+<hr>
+<h2>Task Group D: cart-service（购物车服务 — Redis Hash）</h2>
+<h3>Task D1: CartService + CartController + Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-cart/src/main/java/com/supermarket/cart/service/CartService.java</code></li>
+<li>Create: <code>super-market-services/service-cart/src/main/java/com/supermarket/cart/service/impl/CartServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-cart/src/main/java/com/supermarket/cart/dto/CartItemDTO.java</code></li>
+<li>Create: <code>super-market-services/service-cart/src/main/java/com/supermarket/cart/controller/CartController.java</code></li>
+<li>Create: <code>super-market-services/service-cart/src/test/java/com/supermarket/cart/service/CartServiceTest.java</code></li>
+<li>Create: <code>super-market-services/service-cart/src/test/resources/application-test.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 CartItemDTO</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.cart.dto;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> java.io.Serializable;
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CartItemDTO <span class="tok-kw">implements</span> Serializable {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> skuId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> spuId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> spuName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuSpec;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuImage;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> price;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> quantity;
+    <span class="tok-kw">private</span> <span class="tok-typ">Boolean</span> selected;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 CartService 接口</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.cart.service;
+
+<span class="tok-kw">import</span> com.supermarket.cart.dto.CartItemDTO;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> CartService {
+    <span class="tok-kw">void</span> addItem(<span class="tok-typ">Long</span> userId, CartItemDTO item);
+    <span class="tok-kw">void</span> updateQuantity(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId, <span class="tok-typ">Integer</span> quantity);
+    <span class="tok-kw">void</span> removeItem(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId);
+    <span class="tok-kw">void</span> selectItem(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId, <span class="tok-typ">Boolean</span> selected);
+    <span class="tok-kw">void</span> selectAll(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Boolean</span> selected);
+    <span class="tok-typ">List</span>&lt;CartItemDTO&gt; getCartList(<span class="tok-typ">Long</span> userId);
+    <span class="tok-typ">List</span>&lt;CartItemDTO&gt; getSelectedItems(<span class="tok-typ">Long</span> userId);
+    <span class="tok-kw">void</span> clearSelected(<span class="tok-typ">Long</span> userId);
+    <span class="tok-typ">Integer</span> getCartCount(<span class="tok-typ">Long</span> userId);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 CartServiceImpl（Redis Hash 实现）</strong></li>
+</ul>
+<p>Redis Key 设计:</p>
+<ul>
+<li><code>smt:cart:{userId}</code> → Hash, field=skuId, value=CartItemDTO JSON</li>
+<li><code>smt:cart:version:{userId}</code> → String, 乐观锁版本号</li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.cart.service.impl;
+
+<span class="tok-kw">import</span> cn.hutool.core.util.StrUtil;
+<span class="tok-kw">import</span> cn.hutool.json.JSONUtil;
+<span class="tok-kw">import</span> com.supermarket.cart.dto.CartItemDTO;
+<span class="tok-kw">import</span> com.supermarket.cart.service.CartService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.redisson.api.RMap;
+<span class="tok-kw">import</span> org.redisson.api.RedissonClient;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+
+<span class="tok-kw">import</span> java.util.ArrayList;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+<span class="tok-kw">import</span> java.util.stream.Collectors;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CartServiceImpl <span class="tok-kw">implements</span> CartService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> RedissonClient redissonClient;
+
+    <span class="tok-kw">private</span> <span class="tok-kw">static</span> <span class="tok-kw">final</span> <span class="tok-typ">String</span> CART_PREFIX = <span class="tok-str">&quot;smt:cart:&quot;</span>;
+
+    <span class="tok-kw">private</span> RMap&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; getCartMap(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> redissonClient.getMap(CART_PREFIX + userId);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> addItem(<span class="tok-typ">Long</span> userId, CartItemDTO item) {
+        RMap&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; cart = getCartMap(userId);
+        <span class="tok-typ">String</span> key = <span class="tok-typ">String</span>.valueOf(item.getSkuId());
+        <span class="tok-typ">String</span> existing = cart.get(key);
+        <span class="tok-kw">if</span> (existing != <span class="tok-kw">null</span>) {
+            CartItemDTO existItem = JSONUtil.toBean(existing, CartItemDTO.<span class="tok-kw">class</span>);
+            existItem.setQuantity(existItem.getQuantity() + item.getQuantity());
+            cart.put(key, JSONUtil.toJsonStr(existItem));
+        } <span class="tok-kw">else</span> {
+            item.setSelected(<span class="tok-kw">true</span>);
+            cart.put(key, JSONUtil.toJsonStr(item));
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> updateQuantity(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId, <span class="tok-typ">Integer</span> quantity) {
+        RMap&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; cart = getCartMap(userId);
+        <span class="tok-typ">String</span> key = <span class="tok-typ">String</span>.valueOf(skuId);
+        <span class="tok-typ">String</span> existing = cart.get(key);
+        <span class="tok-kw">if</span> (existing != <span class="tok-kw">null</span>) {
+            CartItemDTO item = JSONUtil.toBean(existing, CartItemDTO.<span class="tok-kw">class</span>);
+            item.setQuantity(quantity);
+            cart.put(key, JSONUtil.toJsonStr(item));
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> removeItem(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId) {
+        cart.remove(<span class="tok-typ">String</span>.valueOf(skuId));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> selectItem(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Long</span> skuId, <span class="tok-typ">Boolean</span> selected) {
+        <span class="tok-typ">String</span> key = <span class="tok-typ">String</span>.valueOf(skuId);
+        <span class="tok-typ">String</span> existing = cart.get(key);
+        <span class="tok-kw">if</span> (existing != <span class="tok-kw">null</span>) {
+            CartItemDTO item = JSONUtil.toBean(existing, CartItemDTO.<span class="tok-kw">class</span>);
+            item.setSelected(selected);
+            cart.put(key, JSONUtil.toJsonStr(item));
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> selectAll(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Boolean</span> selected) {
+        <span class="tok-kw">for</span> (<span class="tok-kw">var</span> entry : cart.entrySet()) {
+            CartItemDTO item = JSONUtil.toBean(entry.getValue(), CartItemDTO.<span class="tok-kw">class</span>);
+            item.setSelected(selected);
+            cart.put(entry.getKey(), JSONUtil.toJsonStr(item));
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;CartItemDTO&gt; getCartList(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> cart.values().stream()
+            .map(v -&gt; JSONUtil.toBean(v, CartItemDTO.<span class="tok-kw">class</span>))
+            .collect(Collectors.toList());
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;CartItemDTO&gt; getSelectedItems(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> getCartList(userId).stream()
+            .filter(CartItemDTO::getSelected)
+            .collect(Collectors.toList());
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> clearSelected(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; toRemove = cart.entrySet().stream()
+            .filter(e -&gt; {
+                CartItemDTO item = JSONUtil.toBean(e.getValue(), CartItemDTO.<span class="tok-kw">class</span>);
+                <span class="tok-kw">return</span> item.getSelected();
+            })
+            .map(<span class="tok-typ">Map</span>.Entry::getKey)
+            .collect(Collectors.toList());
+        cart.removeAll(toRemove);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">Integer</span> getCartCount(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> cart.size();
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 CartController</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.cart.controller;
+
+<span class="tok-kw">import</span> com.supermarket.cart.dto.CartItemDTO;
+<span class="tok-kw">import</span> com.supermarket.cart.service.CartService;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/cart&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CartController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> CartService cartService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/add&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; add(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId, <span class="tok-ann">@RequestBody</span> CartItemDTO item) {
+        cartService.addItem(userId, item);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/item/{skuId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; updateQuantity(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId,
+                                   <span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> skuId,
+                                   <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Integer</span> quantity) {
+        cartService.updateQuantity(userId, skuId, quantity);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@DeleteMapping</span>(<span class="tok-str">&quot;/item/{skuId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; remove(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId, <span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> skuId) {
+        cartService.removeItem(userId, skuId);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/item/{skuId}/select&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; select(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId,
+                          <span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> skuId,
+                          <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Boolean</span> selected) {
+        cartService.selectItem(userId, skuId, selected);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/select-all&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; selectAll(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Boolean</span> selected) {
+        cartService.selectAll(userId, selected);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/list&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;CartItemDTO&gt;&gt; list(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> R.ok(cartService.getCartList(userId));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/count&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">Integer</span>&gt; count(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> R.ok(cartService.getCartCount(userId));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入单元测试</strong></li>
+</ul>
+<p><code>CartServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.cart.service;
+
+<span class="tok-kw">import</span> com.supermarket.cart.dto.CartItemDTO;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;test&quot;</span>)
+<span class="tok-kw">class</span> CartServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> CartService cartService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldAddItem() {
+        cartService.addItem(<span class="tok-num">1L</span>, newItem(<span class="tok-num">1001L</span>, <span class="tok-num">2</span>));
+        <span class="tok-typ">List</span>&lt;CartItemDTO&gt; list = cartService.getCartList(<span class="tok-num">1L</span>);
+        assertThat(list).hasSize(<span class="tok-num">1</span>);
+        assertThat(list.get(<span class="tok-num">0</span>).getQuantity()).isEqualTo(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldUpdateQuantity() {
+        cartService.addItem(<span class="tok-num">2L</span>, newItem(<span class="tok-num">1001L</span>, <span class="tok-num">1</span>));
+        cartService.updateQuantity(<span class="tok-num">2L</span>, <span class="tok-num">1001L</span>, <span class="tok-num">5</span>);
+        <span class="tok-typ">List</span>&lt;CartItemDTO&gt; list = cartService.getCartList(<span class="tok-num">2L</span>);
+        assertThat(list.get(<span class="tok-num">0</span>).getQuantity()).isEqualTo(<span class="tok-num">5</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRemoveItem() {
+        cartService.addItem(<span class="tok-num">3L</span>, newItem(<span class="tok-num">1001L</span>, <span class="tok-num">1</span>));
+        cartService.removeItem(<span class="tok-num">3L</span>, <span class="tok-num">1001L</span>);
+        assertThat(cartService.getCartList(<span class="tok-num">3L</span>)).isEmpty();
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldGetSelectedItems() {
+        cartService.addItem(<span class="tok-num">4L</span>, newItem(<span class="tok-num">1001L</span>, <span class="tok-num">1</span>));
+        cartService.addItem(<span class="tok-num">4L</span>, newItem(<span class="tok-num">1002L</span>, <span class="tok-num">1</span>));
+        cartService.selectItem(<span class="tok-num">4L</span>, <span class="tok-num">1001L</span>, <span class="tok-kw">false</span>);
+        <span class="tok-typ">List</span>&lt;CartItemDTO&gt; selected = cartService.getSelectedItems(<span class="tok-num">4L</span>);
+        assertThat(selected).hasSize(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldClearSelected() {
+        cartService.addItem(<span class="tok-num">5L</span>, newItem(<span class="tok-num">1001L</span>, <span class="tok-num">1</span>));
+        cartService.addItem(<span class="tok-num">5L</span>, newItem(<span class="tok-num">1002L</span>, <span class="tok-num">1</span>));
+        cartService.selectItem(<span class="tok-num">5L</span>, <span class="tok-num">1002L</span>, <span class="tok-kw">false</span>);
+        cartService.clearSelected(<span class="tok-num">5L</span>);
+        assertThat(cartService.getCartList(<span class="tok-num">5L</span>)).hasSize(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-kw">private</span> CartItemDTO newItem(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> qty) {
+        CartItemDTO item = <span class="tok-kw">new</span> CartItemDTO();
+        item.setSkuId(skuId);
+        item.setSpuId(skuId + <span class="tok-num">10000</span>);
+        item.setSpuName(<span class="tok-str">&quot;测试商品&quot;</span>);
+        item.setSkuSpec(<span class="tok-str">&quot;默认规格&quot;</span>);
+        item.setPrice(<span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>));
+        item.setQuantity(qty);
+        <span class="tok-kw">return</span> item;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 创建测试 profile</strong></li>
+</ul>
+<p><code>application-test.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  cloud:</span>
+<span class="tok-prop">    nacos:</span>
+<span class="tok-prop">      discovery:</span>
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">      config:</span>
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">  autoconfigure:</span>
+<span class="tok-prop">    exclude:</span>
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+      - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
+      - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
+<span class="tok-prop">  data:</span>
+<span class="tok-prop">    redis:</span>
+<span class="tok-prop">      host:</span> localhost
+<span class="tok-prop">      port:</span> <span class="tok-num">16379</span>
+<span class="tok-prop">      password:</span> redis123
+<span class="tok-prop">
+dubbo:</span>
+<span class="tok-prop">  registry:</span>
+<span class="tok-prop">    address:</span> N/A
+<span class="tok-prop">  config-center:</span>
+<span class="tok-prop">    address:</span> N/A</code></pre>
+<ul>
+<li>[ ] <strong>Step 7: 编译 + 测试验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean test -pl super-market-services/service-cart</code></pre>
+<p>Expected: <code>Tests run: 5, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 8: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-cart/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(cart-service): Redis Hash shopping cart with 5 tests&quot;</span></code></pre>
+<hr>
+<h2>Task Group E: order-service（订单服务 + Seata AT）</h2>
+<h3>Task E1: Order Entity + Mapper</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/entity/Order.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/entity/OrderItem.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/mapper/OrderMapper.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/mapper/OrderItemMapper.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Order Entity</strong></li>
+</ul>
+<p><code>Order.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;orders&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Order <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> shopId;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> totalAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> discountAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> freightAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> actualAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> payMethod;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> payNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> orderStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> addressSnapshot;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> expireTime;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> paidAt;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> shippedAt;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> receivedAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 OrderItem Entity + Mappers</strong></li>
+</ul>
+<p><code>OrderItem.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.IdType;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableId;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;order_items&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderItem {
+    <span class="tok-ann">@TableId</span>(type = IdType.AUTO)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> skuId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuImage;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> skuPrice;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> quantity;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> totalPrice;
+}</code></pre>
+<p><code>OrderMapper.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> OrderMapper <span class="tok-kw">extends</span> BaseMapper&lt;Order&gt; {
+}</code></pre>
+<p><code>OrderItemMapper.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.order.entity.OrderItem;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Param;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Select;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> OrderItemMapper <span class="tok-kw">extends</span> BaseMapper&lt;OrderItem&gt; {
+
+    <span class="tok-ann">@Select</span>(<span class="tok-str">&quot;SELECT * FROM order_items WHERE order_no = #{orderNo}&quot;</span>)
+    <span class="tok-typ">List</span>&lt;OrderItem&gt; selectByOrderNo(<span class="tok-ann">@Param</span>(<span class="tok-str">&quot;orderNo&quot;</span>) <span class="tok-typ">String</span> orderNo);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-services/service-order -DskipTests</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-order/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(order-service): add Order/OrderItem entities and mappers&quot;</span></code></pre>
+<hr>
+<h3>Task E2: OrderService + Seata 分布式事务</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/service/OrderService.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/service/impl/OrderServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/controller/OrderController.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/test/java/com/supermarket/order/service/OrderServiceTest.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/test/resources/application-test.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 OrderService 接口</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.service;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> com.supermarket.order.entity.OrderItem;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> OrderService {
+    Order createOrder(CreateOrderRequest request);
+    Order getByOrderNo(<span class="tok-typ">String</span> orderNo);
+    Order getById(<span class="tok-typ">Long</span> orderId);
+    Page&lt;Order&gt; listByUser(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Integer</span> status, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size);
+    Page&lt;Order&gt; listByShop(<span class="tok-typ">Long</span> shopId, <span class="tok-typ">Integer</span> status, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size);
+    <span class="tok-kw">void</span> cancelOrder(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">String</span> reason);
+    <span class="tok-kw">void</span> paySuccess(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">String</span> payNo);
+    <span class="tok-kw">void</span> ship(<span class="tok-typ">String</span> orderNo);
+    <span class="tok-kw">void</span> confirmReceive(<span class="tok-typ">String</span> orderNo);
+    <span class="tok-typ">List</span>&lt;OrderItem&gt; getOrderItems(<span class="tok-typ">String</span> orderNo);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 OrderServiceImpl（核心 — Seata AT 事务）</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.service.impl;
+
+<span class="tok-kw">import</span> cn.hutool.core.util.IdUtil;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.inventory.InventoryDubboService;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> com.supermarket.order.entity.OrderItem;
+<span class="tok-kw">import</span> com.supermarket.order.mapper.OrderItemMapper;
+<span class="tok-kw">import</span> com.supermarket.order.mapper.OrderMapper;
+<span class="tok-kw">import</span> com.supermarket.order.service.OrderService;
+<span class="tok-kw">import</span> io.seata.spring.annotation.GlobalTransactional;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.apache.dubbo.config.annotation.DubboReference;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+<span class="tok-kw">import</span> java.util.ArrayList;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;OrderMapper, Order&gt; <span class="tok-kw">implements</span> OrderService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> OrderItemMapper orderItemMapper;
+
+    <span class="tok-ann">@DubboReference</span>(check = <span class="tok-kw">false</span>)
+    <span class="tok-kw">private</span> InventoryDubboService inventoryDubboService;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@GlobalTransactional</span>(timeoutMills = <span class="tok-num">30000</span>)
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Order createOrder(CreateOrderRequest request) {
+        <span class="tok-cmt">// 1. 生成订单号</span>
+        <span class="tok-typ">String</span> orderNo = <span class="tok-str">&quot;ORD&quot;</span> + IdUtil.getSnowflakeNextId();
+
+        <span class="tok-cmt">// 2. 计算金额</span>
+        <span class="tok-typ">BigDecimal</span> totalAmount = <span class="tok-typ">BigDecimal</span>.ZERO;
+        <span class="tok-kw">for</span> (<span class="tok-kw">var</span> item : request.getItems()) {
+            <span class="tok-typ">BigDecimal</span> itemTotal = item.getSkuPrice().multiply(<span class="tok-typ">BigDecimal</span>.valueOf(item.getQuantity()));
+            totalAmount = totalAmount.add(itemTotal);
+        }
+
+        <span class="tok-cmt">// 3. 创建订单</span>
+        Order order = <span class="tok-kw">new</span> Order();
+        order.setOrderNo(orderNo);
+        order.setUserId(request.getUserId());
+        order.setShopId(<span class="tok-num">1L</span>); <span class="tok-cmt">// 简化：单店铺，后续从SKU反查</span>
+        order.setTotalAmount(totalAmount);
+        order.setDiscountAmount(<span class="tok-typ">BigDecimal</span>.ZERO);
+        order.setFreightAmount(<span class="tok-typ">BigDecimal</span>.ZERO);
+        order.setActualAmount(totalAmount);
+        order.setOrderStatus(<span class="tok-num">1</span>); <span class="tok-cmt">// 待付款</span>
+        order.setAddressSnapshot(request.getAddressSnapshot());
+        order.setExpireTime(<span class="tok-typ">LocalDateTime</span>.now().plusMinutes(<span class="tok-num">30</span>));
+        save(order);
+
+        <span class="tok-cmt">// 4. 创建订单明细</span>
+        <span class="tok-kw">for</span> (<span class="tok-kw">var</span> item : request.getItems()) {
+            OrderItem oi = <span class="tok-kw">new</span> OrderItem();
+            oi.setOrderNo(orderNo);
+            oi.setSkuId(item.getSkuId());
+            oi.setSkuName(item.getSkuName());
+            oi.setSkuImage(item.getSkuImage());
+            oi.setSkuPrice(item.getSkuPrice());
+            oi.setQuantity(item.getQuantity());
+            oi.setTotalPrice(item.getSkuPrice().multiply(<span class="tok-typ">BigDecimal</span>.valueOf(item.getQuantity())));
+            orderItemMapper.insert(oi);
+        }
+
+        <span class="tok-cmt">// 5. Seata AT: 调用库存服务扣减（RM参与者）</span>
+        <span class="tok-kw">for</span> (<span class="tok-kw">var</span> item : request.getItems()) {
+            <span class="tok-kw">boolean</span> deducted = inventoryDubboService.deduct(item.getSkuId(), item.getQuantity());
+            <span class="tok-kw">if</span> (!deducted) {
+                <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;库存不足: skuId=&quot;</span> + item.getSkuId());
+            }
+        }
+
+        log.info(<span class="tok-str">&quot;订单创建成功: orderNo={}, amount={}&quot;</span>, orderNo, totalAmount);
+        <span class="tok-kw">return</span> order;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Order getByOrderNo(<span class="tok-typ">String</span> orderNo) {
+        Order order = getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Order&gt;().eq(Order::getOrderNo, orderNo));
+        <span class="tok-kw">if</span> (order == <span class="tok-kw">null</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;订单不存在&quot;</span>);
+        <span class="tok-kw">return</span> order;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Order getById(<span class="tok-typ">Long</span> orderId) {
+        Order order = <span class="tok-kw">super</span>.getById(orderId);
+        <span class="tok-kw">if</span> (order == <span class="tok-kw">null</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;订单不存在&quot;</span>);
+        <span class="tok-kw">return</span> order;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Page&lt;Order&gt; listByUser(<span class="tok-typ">Long</span> userId, <span class="tok-typ">Integer</span> status, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size) {
+        LambdaQueryWrapper&lt;Order&gt; wrapper = <span class="tok-kw">new</span> LambdaQueryWrapper&lt;Order&gt;()
+            .eq(Order::getUserId, userId)
+            .orderByDesc(Order::getCreatedAt);
+        <span class="tok-kw">if</span> (status != <span class="tok-kw">null</span>) wrapper.eq(Order::getOrderStatus, status);
+        <span class="tok-kw">return</span> page(<span class="tok-kw">new</span> Page&lt;&gt;(page, size), wrapper);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Page&lt;Order&gt; listByShop(<span class="tok-typ">Long</span> shopId, <span class="tok-typ">Integer</span> status, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size) {
+        LambdaQueryWrapper&lt;Order&gt; wrapper = <span class="tok-kw">new</span> LambdaQueryWrapper&lt;Order&gt;()
+            .eq(Order::getShopId, shopId)
+            .orderByDesc(Order::getCreatedAt);
+        <span class="tok-kw">if</span> (status != <span class="tok-kw">null</span>) wrapper.eq(Order::getOrderStatus, status);
+        <span class="tok-kw">return</span> page(<span class="tok-kw">new</span> Page&lt;&gt;(page, size), wrapper);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> cancelOrder(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">String</span> reason) {
+        Order order = getByOrderNo(orderNo);
+        <span class="tok-kw">if</span> (order.getOrderStatus() != <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;仅待付款订单可取消&quot;</span>);
+        }
+        order.setOrderStatus(<span class="tok-num">5</span>); <span class="tok-cmt">// 已取消</span>
+        updateById(order);
+        <span class="tok-cmt">// 回补库存（非Seata，独立事务）</span>
+        rollbackInventory(orderNo);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> paySuccess(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">String</span> payNo) {
+        Order order = getByOrderNo(orderNo);
+        <span class="tok-kw">if</span> (order.getOrderStatus() != <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;订单状态不正确&quot;</span>);
+        }
+        order.setOrderStatus(<span class="tok-num">2</span>); <span class="tok-cmt">// 待发货</span>
+        order.setPayNo(payNo);
+        order.setPaidAt(<span class="tok-typ">LocalDateTime</span>.now());
+        updateById(order);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> ship(<span class="tok-typ">String</span> orderNo) {
+        Order order = getByOrderNo(orderNo);
+        <span class="tok-kw">if</span> (order.getOrderStatus() != <span class="tok-num">2</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;仅待发货订单可发货&quot;</span>);
+        order.setOrderStatus(<span class="tok-num">3</span>); <span class="tok-cmt">// 待收货</span>
+        order.setShippedAt(<span class="tok-typ">LocalDateTime</span>.now());
+        updateById(order);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> confirmReceive(<span class="tok-typ">String</span> orderNo) {
+        Order order = getByOrderNo(orderNo);
+        <span class="tok-kw">if</span> (order.getOrderStatus() != <span class="tok-num">3</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;仅待收货订单可确认&quot;</span>);
+        order.setOrderStatus(<span class="tok-num">4</span>); <span class="tok-cmt">// 已完成</span>
+        order.setReceivedAt(<span class="tok-typ">LocalDateTime</span>.now());
+        updateById(order);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;OrderItem&gt; getOrderItems(<span class="tok-typ">String</span> orderNo) {
+        <span class="tok-kw">return</span> orderItemMapper.selectByOrderNo(orderNo);
+    }
+
+    <span class="tok-kw">private</span> <span class="tok-kw">void</span> rollbackInventory(<span class="tok-typ">String</span> orderNo) {
+        <span class="tok-typ">List</span>&lt;OrderItem&gt; items = getOrderItems(orderNo);
+        <span class="tok-kw">for</span> (OrderItem item : items) {
+            <span class="tok-kw">try</span> {
+                inventoryDubboService.restore(item.getSkuId(), item.getQuantity());
+            } <span class="tok-kw">catch</span> (Exception e) {
+                log.error(<span class="tok-str">&quot;回补库存失败: skuId={}&quot;</span>, item.getSkuId(), e);
+            }
+        }
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 OrderController</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.controller;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> com.supermarket.order.entity.OrderItem;
+<span class="tok-kw">import</span> com.supermarket.order.service.OrderService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/order&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> OrderService orderService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/create&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Order&gt; create(<span class="tok-ann">@RequestBody</span> CreateOrderRequest request) {
+        <span class="tok-kw">return</span> R.ok(orderService.createOrder(request));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/{orderNo}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Order&gt; detail(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">String</span> orderNo) {
+        Order order = orderService.getByOrderNo(orderNo);
+        <span class="tok-typ">List</span>&lt;OrderItem&gt; items = orderService.getOrderItems(orderNo);
+        <span class="tok-cmt">// 简单返回，生产环境用 VO 包装</span>
+        <span class="tok-kw">return</span> R.ok(order);
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/list/user/{userId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Page&lt;Order&gt;&gt; listByUser(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> userId,
+                                     <span class="tok-ann">@RequestParam</span>(required = <span class="tok-kw">false</span>) <span class="tok-typ">Integer</span> status,
+                                     <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;1&quot;</span>) <span class="tok-kw">int</span> page,
+                                     <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;10&quot;</span>) <span class="tok-kw">int</span> size) {
+        <span class="tok-kw">return</span> R.ok(orderService.listByUser(userId, status, page, size));
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/{orderNo}/cancel&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; cancel(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">String</span> orderNo, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> reason) {
+        orderService.cancelOrder(orderNo, reason);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/{orderNo}/ship&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; ship(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">String</span> orderNo) {
+        orderService.ship(orderNo);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/{orderNo}/receive&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; receive(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">String</span> orderNo) {
+        orderService.confirmReceive(orderNo);
+        <span class="tok-kw">return</span> R.ok();
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入单元测试</strong></li>
+</ul>
+<p><code>OrderServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.service;
+
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.inventory.InventoryDubboService;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.boot.test.mock.mockito.MockBean;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.mockito.ArgumentMatchers.anyInt;
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.mockito.ArgumentMatchers.anyLong;
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.mockito.Mockito.when;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;test&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> OrderServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> OrderService orderService;
+
+    <span class="tok-ann">@MockBean</span>
+    <span class="tok-kw">private</span> InventoryDubboService inventoryDubboService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateOrder() {
+        when(inventoryDubboService.deduct(anyLong(), anyInt())).thenReturn(<span class="tok-kw">true</span>);
+        CreateOrderRequest req = buildRequest();
+        Order order = orderService.createOrder(req);
+        assertThat(order.getOrderNo()).startsWith(<span class="tok-str">&quot;ORD&quot;</span>);
+        assertThat(order.getOrderStatus()).isEqualTo(<span class="tok-num">1</span>);
+        assertThat(order.getExpireTime()).isNotNull();
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCancelOrder() {
+        when(inventoryDubboService.deduct(anyLong(), anyInt())).thenReturn(<span class="tok-kw">true</span>);
+        Order order = orderService.createOrder(buildRequest());
+        orderService.cancelOrder(order.getOrderNo(), <span class="tok-str">&quot;不想要了&quot;</span>);
+        Order cancelled = orderService.getByOrderNo(order.getOrderNo());
+        assertThat(cancelled.getOrderStatus()).isEqualTo(<span class="tok-num">5</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldPaySuccess() {
+        when(inventoryDubboService.deduct(anyLong(), anyInt())).thenReturn(<span class="tok-kw">true</span>);
+        Order order = orderService.createOrder(buildRequest());
+        orderService.paySuccess(order.getOrderNo(), <span class="tok-str">&quot;PAY2024001&quot;</span>);
+        Order paid = orderService.getByOrderNo(order.getOrderNo());
+        assertThat(paid.getOrderStatus()).isEqualTo(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFullStatusFlow() {
+        when(inventoryDubboService.deduct(anyLong(), anyInt())).thenReturn(<span class="tok-kw">true</span>);
+        Order order = orderService.createOrder(buildRequest());
+        <span class="tok-typ">String</span> orderNo = order.getOrderNo();
+
+        orderService.paySuccess(orderNo, <span class="tok-str">&quot;PAY001&quot;</span>);
+        assertThat(orderService.getByOrderNo(orderNo).getOrderStatus()).isEqualTo(<span class="tok-num">2</span>);
+
+        orderService.ship(orderNo);
+        assertThat(orderService.getByOrderNo(orderNo).getOrderStatus()).isEqualTo(<span class="tok-num">3</span>);
+
+        orderService.confirmReceive(orderNo);
+        assertThat(orderService.getByOrderNo(orderNo).getOrderStatus()).isEqualTo(<span class="tok-num">4</span>);
+    }
+
+    <span class="tok-kw">private</span> CreateOrderRequest buildRequest() {
+        CreateOrderRequest req = <span class="tok-kw">new</span> CreateOrderRequest();
+        req.setUserId(<span class="tok-num">1L</span>);
+        req.setAddressSnapshot(<span class="tok-str">&quot;{\&quot;name\&quot;:\&quot;张三\&quot;,\&quot;phone\&quot;:\&quot;13800000000\&quot;}&quot;</span>);
+        CreateOrderRequest.OrderItemRequest item = <span class="tok-kw">new</span> CreateOrderRequest.OrderItemRequest();
+        item.setSkuId(<span class="tok-num">1001L</span>);
+        item.setSkuName(<span class="tok-str">&quot;测试商品-红色-XL&quot;</span>);
+        item.setSkuPrice(<span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>));
+        item.setQuantity(<span class="tok-num">2</span>);
+        req.setItems(<span class="tok-typ">List</span>.of(item));
+        <span class="tok-kw">return</span> req;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 创建测试 profile</strong></li>
+</ul>
+<p><code>application-test.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  cloud:</span>
+<span class="tok-prop">    nacos:</span>
+<span class="tok-prop">      discovery:</span>
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">      config:</span>
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">  autoconfigure:</span>
+<span class="tok-prop">    exclude:</span>
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+      - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
+      - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
+      - io.seata.spring.boot.autoconfigure.SeataAutoConfiguration
+<span class="tok-prop">  datasource:</span>
+<span class="tok-prop">    url:</span> jdbc:mysql://localhost:<span class="tok-num">13306</span>/db_order?useUnicode=<span class="tok-kw">true</span>&amp;characterEncoding=UTF-<span class="tok-num">8</span>&amp;serverTimezone=Asia/Shanghai&amp;useSSL=<span class="tok-kw">false</span>&amp;allowPublicKeyRetrieval=<span class="tok-kw">true</span>
+<span class="tok-prop">    username:</span> root
+<span class="tok-prop">    password:</span> root123
+<span class="tok-prop">    driver-class-name:</span> com.mysql.cj.jdbc.Driver
+<span class="tok-prop">
+mybatis-plus:</span>
+<span class="tok-prop">  global-config:</span>
+<span class="tok-prop">    db-config:</span>
+<span class="tok-prop">      id-type:</span> assign_id
+<span class="tok-prop">
+dubbo:</span>
+<span class="tok-prop">  registry:</span>
+<span class="tok-prop">    address:</span> N/A
+<span class="tok-prop">  config-center:</span>
+<span class="tok-prop">    address:</span> N/A
+<span class="tok-prop">
+seata:</span>
+<span class="tok-prop">  enabled:</span> <span class="tok-kw">false</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 编译 + 测试验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean test -pl super-market-services/service-order</code></pre>
+<p>Expected: <code>Tests run: 4, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-order/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(order-service): order create/cancel/status-flow with Seata AT + 4 tests&quot;</span></code></pre>
+<hr>
+<h2>Task Group F: payment-service（支付服务）</h2>
+<h3>Task F1: Payment Entity + Mapper + Service + Controller + Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/entity/Payment.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/entity/PaymentRefund.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/entity/PaymentIdempotent.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/mapper/PaymentMapper.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/mapper/PaymentRefundMapper.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/mapper/PaymentIdempotentMapper.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/service/PaymentService.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/service/impl/PaymentServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/main/java/com/supermarket/payment/controller/PaymentController.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/test/java/com/supermarket/payment/service/PaymentServiceTest.java</code></li>
+<li>Create: <code>super-market-services/service-payment/src/test/resources/application-test.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Entities</strong></li>
+</ul>
+<p><code>Payment.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.payment.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;payments&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Payment <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> payNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> amount;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> payMethod;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> payStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> thirdPayNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> paidAt;
+}</code></pre>
+<p><code>PaymentRefund.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.payment.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;payment_refunds&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> PaymentRefund <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> refundNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> payNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> orderNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> refundAmount;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> refundReason;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> refundStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> thirdRefundNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> refundedAt;
+}</code></pre>
+<p><code>PaymentIdempotent.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.payment.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.IdType;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableId;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;payment_idempotent&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> PaymentIdempotent {
+    <span class="tok-ann">@TableId</span>(type = IdType.AUTO)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> requestId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> businessType;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> businessNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> responseData;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> createdAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 Mappers</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// PaymentMapper.java</span>
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> PaymentMapper <span class="tok-kw">extends</span> BaseMapper&lt;Payment&gt; {}
+
+<span class="tok-cmt">// PaymentRefundMapper.java</span>
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> PaymentRefundMapper <span class="tok-kw">extends</span> BaseMapper&lt;PaymentRefund&gt; {}
+
+<span class="tok-cmt">// PaymentIdempotentMapper.java</span>
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> PaymentIdempotentMapper <span class="tok-kw">extends</span> BaseMapper&lt;PaymentIdempotent&gt; {
+    <span class="tok-ann">@Select</span>(<span class="tok-str">&quot;SELECT response_data FROM payment_idempotent WHERE request_id = #{requestId}&quot;</span>)
+    <span class="tok-typ">String</span> getResponseByRequestId(<span class="tok-ann">@Param</span>(<span class="tok-str">&quot;requestId&quot;</span>) <span class="tok-typ">String</span> requestId);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 PaymentService + Impl</strong></li>
+</ul>
+<p><code>PaymentService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.payment.service;
+
+<span class="tok-kw">import</span> com.supermarket.payment.entity.Payment;
+<span class="tok-kw">import</span> com.supermarket.payment.entity.PaymentRefund;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> PaymentService {
+    Payment createPayment(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">Long</span> userId, <span class="tok-typ">BigDecimal</span> amount, <span class="tok-typ">Integer</span> payMethod);
+    Payment getByPayNo(<span class="tok-typ">String</span> payNo);
+    Payment getByOrderNo(<span class="tok-typ">String</span> orderNo);
+    <span class="tok-typ">String</span> handleCallback(<span class="tok-typ">String</span> requestId, <span class="tok-typ">String</span> payNo, <span class="tok-typ">String</span> thirdPayNo);
+    PaymentRefund refund(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">BigDecimal</span> refundAmount, <span class="tok-typ">String</span> reason);
+}</code></pre>
+<p><code>PaymentServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.payment.service.impl;
+
+<span class="tok-kw">import</span> cn.hutool.core.util.IdUtil;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.order.OrderDubboService;
+<span class="tok-kw">import</span> com.supermarket.payment.entity.Payment;
+<span class="tok-kw">import</span> com.supermarket.payment.entity.PaymentIdempotent;
+<span class="tok-kw">import</span> com.supermarket.payment.entity.PaymentRefund;
+<span class="tok-kw">import</span> com.supermarket.payment.mapper.PaymentIdempotentMapper;
+<span class="tok-kw">import</span> com.supermarket.payment.mapper.PaymentMapper;
+<span class="tok-kw">import</span> com.supermarket.payment.mapper.PaymentRefundMapper;
+<span class="tok-kw">import</span> com.supermarket.payment.service.PaymentService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.apache.dubbo.config.annotation.DubboReference;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> PaymentServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;PaymentMapper, Payment&gt; <span class="tok-kw">implements</span> PaymentService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> PaymentRefundMapper refundMapper;
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> PaymentIdempotentMapper idempotentMapper;
+
+    <span class="tok-ann">@DubboReference</span>(check = <span class="tok-kw">false</span>)
+    <span class="tok-kw">private</span> OrderDubboService orderDubboService;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Payment createPayment(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">Long</span> userId, <span class="tok-typ">BigDecimal</span> amount, <span class="tok-typ">Integer</span> payMethod) {
+        Payment exist = getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Payment&gt;().eq(Payment::getOrderNo, orderNo));
+        <span class="tok-kw">if</span> (exist != <span class="tok-kw">null</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该订单已创建支付单&quot;</span>);
+
+        <span class="tok-typ">String</span> payNo = <span class="tok-str">&quot;PAY&quot;</span> + IdUtil.getSnowflakeNextId();
+        Payment payment = <span class="tok-kw">new</span> Payment();
+        payment.setPayNo(payNo);
+        payment.setOrderNo(orderNo);
+        payment.setUserId(userId);
+        payment.setAmount(amount);
+        payment.setPayMethod(payMethod);
+        payment.setPayStatus(<span class="tok-num">1</span>); <span class="tok-cmt">// 待支付</span>
+        save(payment);
+        <span class="tok-kw">return</span> payment;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Payment getByPayNo(<span class="tok-typ">String</span> payNo) {
+        Payment p = getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Payment&gt;().eq(Payment::getPayNo, payNo));
+        <span class="tok-kw">if</span> (p == <span class="tok-kw">null</span>) <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;支付单不存在&quot;</span>);
+        <span class="tok-kw">return</span> p;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Payment getByOrderNo(<span class="tok-typ">String</span> orderNo) {
+        <span class="tok-kw">return</span> getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Payment&gt;().eq(Payment::getOrderNo, orderNo));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">String</span> handleCallback(<span class="tok-typ">String</span> requestId, <span class="tok-typ">String</span> payNo, <span class="tok-typ">String</span> thirdPayNo) {
+        <span class="tok-cmt">// 幂等检查</span>
+        <span class="tok-typ">String</span> cached = idempotentMapper.getResponseByRequestId(requestId);
+        <span class="tok-kw">if</span> (cached != <span class="tok-kw">null</span>) {
+            log.info(<span class="tok-str">&quot;重复回调: requestId={}&quot;</span>, requestId);
+            <span class="tok-kw">return</span> cached;
+        }
+
+        Payment payment = getByPayNo(payNo);
+        <span class="tok-kw">if</span> (payment.getPayStatus() != <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;支付单状态不正确&quot;</span>);
+        }
+
+        <span class="tok-cmt">// 更新支付单</span>
+        payment.setPayStatus(<span class="tok-num">2</span>); <span class="tok-cmt">// 支付成功</span>
+        payment.setThirdPayNo(thirdPayNo);
+        payment.setPaidAt(<span class="tok-typ">LocalDateTime</span>.now());
+        updateById(payment);
+
+        <span class="tok-cmt">// 通知订单服务</span>
+        orderDubboService.updateStatus(payment.getOrderNo(), <span class="tok-num">2</span>);
+
+        <span class="tok-cmt">// 记录幂等</span>
+        PaymentIdempotent idem = <span class="tok-kw">new</span> PaymentIdempotent();
+        idem.setRequestId(requestId);
+        idem.setBusinessType(<span class="tok-str">&quot;PAYMENT&quot;</span>);
+        idem.setBusinessNo(payNo);
+        idem.setResponseData(<span class="tok-str">&quot;{\&quot;status\&quot;:\&quot;success\&quot;}&quot;</span>);
+        idempotentMapper.insert(idem);
+
+        <span class="tok-kw">return</span> <span class="tok-str">&quot;success&quot;</span>;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> PaymentRefund refund(<span class="tok-typ">String</span> orderNo, <span class="tok-typ">BigDecimal</span> refundAmount, <span class="tok-typ">String</span> reason) {
+        Payment payment = getByOrderNo(orderNo);
+        <span class="tok-kw">if</span> (payment == <span class="tok-kw">null</span> || payment.getPayStatus() != <span class="tok-num">2</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;仅已支付订单可退款&quot;</span>);
+        }
+
+        <span class="tok-typ">String</span> refundNo = <span class="tok-str">&quot;RFD&quot;</span> + IdUtil.getSnowflakeNextId();
+        PaymentRefund refund = <span class="tok-kw">new</span> PaymentRefund();
+        refund.setRefundNo(refundNo);
+        refund.setPayNo(payment.getPayNo());
+        refund.setOrderNo(orderNo);
+        refund.setRefundAmount(refundAmount);
+        refund.setRefundReason(reason);
+        refund.setRefundStatus(<span class="tok-num">2</span>); <span class="tok-cmt">// 模拟退款成功</span>
+        refund.setRefundedAt(<span class="tok-typ">LocalDateTime</span>.now());
+        refundMapper.insert(refund);
+
+        <span class="tok-cmt">// 更新支付单状态</span>
+        payment.setPayStatus(<span class="tok-num">4</span>); <span class="tok-cmt">// 已退款</span>
+        updateById(payment);
+
+        <span class="tok-cmt">// 通知订单服务</span>
+        orderDubboService.updateStatus(orderNo, <span class="tok-num">6</span>);
+
+        <span class="tok-kw">return</span> refund;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 PaymentController</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/payment&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> PaymentController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> PaymentService paymentService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/pay&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Payment&gt; pay(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> orderNo,
+                          <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId,
+                          <span class="tok-ann">@RequestParam</span> <span class="tok-typ">BigDecimal</span> amount,
+                          <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;1&quot;</span>) <span class="tok-typ">Integer</span> payMethod) {
+        <span class="tok-kw">return</span> R.ok(paymentService.createPayment(orderNo, userId, amount, payMethod));
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/callback/mock&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">String</span>&gt; mockCallback(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> requestId,
+                                  <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> payNo) {
+        <span class="tok-typ">String</span> thirdPayNo = <span class="tok-str">&quot;TPN&quot;</span> + IdUtil.getSnowflakeNextId();
+        <span class="tok-kw">return</span> R.ok(paymentService.handleCallback(requestId, payNo, thirdPayNo));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/{payNo}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Payment&gt; query(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">String</span> payNo) {
+        <span class="tok-kw">return</span> R.ok(paymentService.getByPayNo(payNo));
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/refund&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;PaymentRefund&gt; refund(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> orderNo,
+                                   <span class="tok-ann">@RequestParam</span> <span class="tok-typ">BigDecimal</span> refundAmount,
+                                   <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> reason) {
+        <span class="tok-kw">return</span> R.ok(paymentService.refund(orderNo, refundAmount, reason));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入单元测试</strong></li>
+</ul>
+<p><code>PaymentServiceTest.java</code> (7 tests):</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;test&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> PaymentServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> PaymentService paymentService;
+
+    <span class="tok-ann">@MockBean</span>
+    <span class="tok-kw">private</span> OrderDubboService orderDubboService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreatePayment() {
+        Payment payment = paymentService.createPayment(<span class="tok-str">&quot;ORD001&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>);
+        assertThat(payment.getPayNo()).startsWith(<span class="tok-str">&quot;PAY&quot;</span>);
+        assertThat(payment.getPayStatus()).isEqualTo(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRejectDuplicatePayment() {
+        paymentService.createPayment(<span class="tok-str">&quot;ORD002&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>);
+        assertThatThrownBy(() -&gt; paymentService.createPayment(<span class="tok-str">&quot;ORD002&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>))
+            .hasMessageContaining(<span class="tok-str">&quot;已创建支付单&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldHandleCallback() {
+        Payment payment = paymentService.createPayment(<span class="tok-str">&quot;ORD003&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>);
+        paymentService.handleCallback(<span class="tok-str">&quot;req-001&quot;</span>, payment.getPayNo(), <span class="tok-str">&quot;TPN001&quot;</span>);
+        Payment updated = paymentService.getByPayNo(payment.getPayNo());
+        assertThat(updated.getPayStatus()).isEqualTo(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldBeIdempotentOnRepeatedCallback() {
+        Payment payment = paymentService.createPayment(<span class="tok-str">&quot;ORD004&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>);
+        paymentService.handleCallback(<span class="tok-str">&quot;req-002&quot;</span>, payment.getPayNo(), <span class="tok-str">&quot;TPN002&quot;</span>);
+        <span class="tok-typ">String</span> result = paymentService.handleCallback(<span class="tok-str">&quot;req-002&quot;</span>, payment.getPayNo(), <span class="tok-str">&quot;TPN003&quot;</span>);
+        assertThat(result).isEqualTo(<span class="tok-str">&quot;success&quot;</span>); <span class="tok-cmt">// 幂等返回首次结果</span>
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRefund() {
+        Payment payment = paymentService.createPayment(<span class="tok-str">&quot;ORD005&quot;</span>, <span class="tok-num">1L</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-num">1</span>);
+        paymentService.handleCallback(<span class="tok-str">&quot;req-003&quot;</span>, payment.getPayNo(), <span class="tok-str">&quot;TPN004&quot;</span>);
+        PaymentRefund refund = paymentService.refund(<span class="tok-str">&quot;ORD005&quot;</span>, <span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>), <span class="tok-str">&quot;不满意&quot;</span>);
+        assertThat(refund.getRefundNo()).startsWith(<span class="tok-str">&quot;RFD&quot;</span>);
+        assertThat(refund.getRefundStatus()).isEqualTo(<span class="tok-num">2</span>);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 创建测试 profile</strong></li>
+</ul>
+<p>同 order-service 的 test profile，数据源改为 <code>db_payment</code>。</p>
+<ul>
+<li>[ ] <strong>Step 7: 编译 + 测试验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean test -pl super-market-services/service-payment</code></pre>
+<p>Expected: <code>Tests run: 5, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 8: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-payment/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(payment-service): payment create/callback/refund with idempotency + 5 tests&quot;</span></code></pre>
+<hr>
+<h2>Task Group G: InventoryDubboService 扩展</h2>
+<h3>Task G1: 添加 Dubbo 扣减/回补接口</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/inventory/InventoryDubboService.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 InventoryDubboService</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.inventory;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> InventoryDubboService {
+    <span class="tok-kw">boolean</span> deduct(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity);
+    <span class="tok-kw">boolean</span> restore(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 在 inventory-service 的 InventoryServiceImpl 上实现</strong></li>
+</ul>
+<p>添加 <code>@DubboService</code> 和实现 <code>InventoryDubboService</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-ann">@DubboService</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> InventoryServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;InventoryMapper, Inventory&gt;
+        <span class="tok-kw">implements</span> InventoryService, InventoryDubboService {
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> deduct(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity) {
+        <span class="tok-kw">return</span> deductStock(skuId, quantity);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> restore(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity) {
+        <span class="tok-kw">return</span> restoreStock(skuId, quantity);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 更新测试 profile — inventory-service 添加 Seata 排除</strong></li>
+</ul>
+<p>在 <code>service-inventory/src/test/resources/application-test.yml</code> 的 <code>spring.autoconfigure.exclude</code> 中添加:</p>
+<pre data-lang="yaml"><code class="language-yaml">- io.seata.spring.boot.autoconfigure.SeataAutoConfiguration</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-dubbo-api/ super-market-services/service-inventory/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add InventoryDubboService for Seata AT inter-service inventory ops&quot;</span></code></pre>
+<hr>
+<h2>Task Group H: RocketMQ 集成</h2>
+<h3>Task H1: order-service 添加 RocketMQ 生产者 + 消费者</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>super-market-services/service-order/pom.xml</code> — 添加 RocketMQ 依赖</li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/mq/OrderEventProducer.java</code></li>
+<li>Create: <code>super-market-services/service-order/src/main/java/com/supermarket/order/mq/OrderTimeoutConsumer.java</code></li>
+<li>Modify: <code>application-dev.yml</code> — 添加 RocketMQ 配置</li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: pom.xml 添加 RocketMQ 依赖</strong></li>
+</ul>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;org.apache.rocketmq<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;rocketmq-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;version</span>&gt;2.2.3<span class="tok-tag">&lt;/version</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: application-dev.yml 添加 RocketMQ 配置</strong></li>
+</ul>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">rocketmq:</span>
+<span class="tok-prop">  name-server:</span> localhost:<span class="tok-num">19876</span>
+<span class="tok-prop">  producer:</span>
+<span class="tok-prop">    group:</span> order-producer-group
+<span class="tok-prop">  consumer:</span>
+<span class="tok-prop">    group:</span> order-consumer-group</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 OrderEventProducer</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.mq;
+
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.apache.rocketmq.spring.core.RocketMQTemplate;
+<span class="tok-kw">import</span> org.springframework.messaging.Message;
+<span class="tok-kw">import</span> org.springframework.messaging.support.MessageBuilder;
+<span class="tok-kw">import</span> org.springframework.stereotype.Component;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Component</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderEventProducer {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> RocketMQTemplate rocketMQTemplate;
+
+    <span class="tok-kw">private</span> <span class="tok-kw">static</span> <span class="tok-kw">final</span> <span class="tok-typ">String</span> ORDER_EVENT_TOPIC = <span class="tok-str">&quot;order-event-topic&quot;</span>;
+    <span class="tok-kw">private</span> <span class="tok-kw">static</span> <span class="tok-kw">final</span> <span class="tok-typ">String</span> DELAY_ORDER_TOPIC = <span class="tok-str">&quot;delay-order-topic&quot;</span>;
+
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> sendOrderCreated(<span class="tok-typ">String</span> orderNo) {
+        send(ORDER_EVENT_TOPIC, <span class="tok-str">&quot;ORDER_CREATED&quot;</span>, orderNo);
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> sendOrderTimeoutCheck(<span class="tok-typ">String</span> orderNo) {
+        Message&lt;<span class="tok-typ">String</span>&gt; msg = MessageBuilder.withPayload(orderNo).build();
+        <span class="tok-cmt">// Level 16 = 30min (1s/5s/10s/30s/1m/2m/3m/4m/5m/6m/7m/8m/9m/10m/20m/30m/1h/2h)</span>
+        rocketMQTemplate.syncSend(DELAY_ORDER_TOPIC, msg, <span class="tok-num">3000</span>, <span class="tok-num">16</span>);
+        log.info(<span class="tok-str">&quot;发送延迟消息: orderNo={}, delayLevel=16(30min)&quot;</span>, orderNo);
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> sendOrderPaid(<span class="tok-typ">String</span> orderNo) {
+        send(ORDER_EVENT_TOPIC, <span class="tok-str">&quot;ORDER_PAID&quot;</span>, orderNo);
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> sendOrderCancelled(<span class="tok-typ">String</span> orderNo) {
+        send(ORDER_EVENT_TOPIC, <span class="tok-str">&quot;ORDER_CANCELLED&quot;</span>, orderNo);
+    }
+
+    <span class="tok-kw">private</span> <span class="tok-kw">void</span> send(<span class="tok-typ">String</span> topic, <span class="tok-typ">String</span> tag, <span class="tok-typ">String</span> body) {
+        Message&lt;<span class="tok-typ">String</span>&gt; msg = MessageBuilder.withPayload(body).build();
+        rocketMQTemplate.syncSend(topic + <span class="tok-str">&quot;:&quot;</span> + tag, msg);
+        log.info(<span class="tok-str">&quot;发送消息: topic={}, tag={}&quot;</span>, topic, tag);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 OrderTimeoutConsumer（延迟消息消费者）</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.order.mq;
+
+<span class="tok-kw">import</span> com.supermarket.order.entity.Order;
+<span class="tok-kw">import</span> com.supermarket.order.service.OrderService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
+<span class="tok-kw">import</span> org.apache.rocketmq.spring.core.RocketMQListener;
+<span class="tok-kw">import</span> org.springframework.stereotype.Component;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Component</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-ann">@RocketMQMessageListener</span>(
+    topic = <span class="tok-str">&quot;delay-order-topic&quot;</span>,
+    consumerGroup = <span class="tok-str">&quot;order-consumer-group&quot;</span>
+)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderTimeoutConsumer <span class="tok-kw">implements</span> RocketMQListener&lt;<span class="tok-typ">String</span>&gt; {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> OrderService orderService;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> onMessage(<span class="tok-typ">String</span> orderNo) {
+        log.info(<span class="tok-str">&quot;收到延迟消息: orderNo={}&quot;</span>, orderNo);
+        <span class="tok-kw">try</span> {
+            Order order = orderService.getByOrderNo(orderNo);
+            <span class="tok-kw">if</span> (order.getOrderStatus() == <span class="tok-num">1</span> &amp;&amp; order.getExpireTime().isBefore(<span class="tok-typ">LocalDateTime</span>.now())) {
+                orderService.cancelOrder(orderNo, <span class="tok-str">&quot;支付超时自动取消&quot;</span>);
+                log.info(<span class="tok-str">&quot;超时订单已取消: orderNo={}&quot;</span>, orderNo);
+            }
+        } <span class="tok-kw">catch</span> (Exception e) {
+            log.error(<span class="tok-str">&quot;处理超时订单失败: orderNo={}&quot;</span>, orderNo, e);
+        }
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 在 OrderServiceImpl.createOrder 中集成消息发送</strong></li>
+</ul>
+<p>在 <code>createOrder()</code> 方法末尾添加:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 发送订单创建事件</span>
+orderEventProducer.sendOrderCreated(orderNo);
+<span class="tok-cmt">// 发送延迟消息(30min后检查支付状态)</span>
+orderEventProducer.sendOrderTimeoutCheck(orderNo);</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-order/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(order-service): add RocketMQ producer + delay message consumer for order events&quot;</span></code></pre>
+<hr>
+<h2>Task Group I: Gateway 路由更新</h2>
+<h3>Task I1: 添加 cart/order/payment 路由</h3>
+<ul>
+<li>[ ] <strong>Step 1: 在 Gateway application.yml 添加路由</strong></li>
+</ul>
+<pre data-lang="yaml"><code class="language-yaml">- id: cart-service
+<span class="tok-prop">  uri:</span> lb://cart-service
+<span class="tok-prop">  predicates:</span>
+    - Path=/api/cart/**
+- id: order-service
+<span class="tok-prop">  uri:</span> lb://order-service
+<span class="tok-prop">  predicates:</span>
+    - Path=/api/order/**
+- id: payment-service
+<span class="tok-prop">  uri:</span> lb://payment-service
+<span class="tok-prop">  predicates:</span>
+    - Path=/api/payment/**</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-gateway/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(gateway): add cart/order/payment route rules&quot;</span></code></pre>
+<hr>
+<h2>Task Group J: 全量集成验证</h2>
+<ul>
+<li>[ ] <strong>Step 1: 全量编译</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean install -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 2: 全量测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean test</code></pre>
+<p>Expected: 全部测试通过（Phase 2 的 34 个 + Phase 3 的 14 个 = ~48 个测试用例）</p>
+<ul>
+<li>[ ] <strong>Step 3: 验证服务端口</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== 新服务 ===&quot;</span> &amp;&amp; <span class="tok-builtin">grep</span> <span class="tok-str">&quot;SERVER_PORT&quot;</span> super-market-services/service-cart/src/main/resources/application.yml &amp;&amp; <span class="tok-builtin">grep</span> <span class="tok-str">&quot;SERVER_PORT&quot;</span> super-market-services/service-order/src/main/resources/application.yml &amp;&amp; <span class="tok-builtin">grep</span> <span class="tok-str">&quot;SERVER_PORT&quot;</span> super-market-services/service-payment/src/main/resources/application.yml</code></pre>
+<p>Expected: 9321, 9322, 9331</p>
+<ul>
+<li>[ ] <strong>Step 4: 最终提交</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add -A
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;chore: Phase 3 complete — order + payment domain (3 services, ~48 tests total)
+
+Implemented:
+- cart-service: Redis Hash shopping cart (add/update/remove/select/clear)
+- order-service: Seata AT distributed transaction + status flow + RocketMQ events
+- payment-service: payment/callback/refund with idempotency
+- InventoryDubboService: Dubbo RPC for deduct/restore
+- Seata Server: AT mode infrastructure
+- RocketMQ: order events + delay message (30min timeout)
+
+DDL: orders, order_items, payments, payment_refunds, payment_idempotent, undo_log (×3)&quot;</span></code></pre>
+<hr>
+<h2>Phase 3 完成检查清单</h2>
+<h3>数据库</h3>
+<ul>
+<li>[ ] db_order: orders, order_items, undo_log</li>
+<li>[ ] db_payment: payments, payment_refunds, payment_idempotent, undo_log</li>
+<li>[ ] db_product: undo_log (追加)</li>
+</ul>
+<h3>中间件</h3>
+<ul>
+<li>[ ] Seata Server 启动并健康</li>
+<li>[ ] RocketMQ NameServer + Broker 可连接</li>
+</ul>
+<h3>服务</h3>
+<ul>
+<li>[ ] cart-service: Redis 购物车 CRUD + 选中管理</li>
+<li>[ ] order-service: 下单(Seata AT) + 状态流转 + 取消 + RocketMQ 消息</li>
+<li>[ ] payment-service: 支付单 + 回调幂等 + 退款</li>
+<li>[ ] InventoryDubboService: 跨服务库存扣减/回补</li>
+</ul>
+<h3>测试</h3>
+<ul>
+<li>[ ] cart-service: 5 tests</li>
+<li>[ ] order-service: 4 tests</li>
+<li>[ ] payment-service: 5 tests</li>
+<li>[ ] Phase 2 回归: 34 tests</li>
+<li>[ ] 全量 <code>mvn clean install -DskipTests</code> BUILD SUCCESS</li>
+<li>[ ] 全量 <code>mvn test</code> 所有测试通过 (~48 tests)</li>
+</ul>
+<hr>
+<blockquote>
+<strong>Plan saved:</strong> <code>docs/superpowers/plans/2026-05-12-phase3-order-payment-services.md</code>
+
+<strong>Prerequisites:</strong> JDK 21 + Docker Compose 中间件全部健康 + Phase 2 全部测试通过
+
+<strong>Next:</strong> Execute this plan using <code>superpowers:subagent-driven-development</code>.
+</blockquote>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

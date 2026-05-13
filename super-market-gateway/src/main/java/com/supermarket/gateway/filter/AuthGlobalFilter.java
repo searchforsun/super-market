@@ -31,6 +31,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         "/api/user/register",
         "/api/user/login",
         "/api/auth/login",
+        "/api/search",       // 商品搜索无需登录
         "/actuator",
         "/doc.html",
         "/v3/api-docs"

@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 1 — 基础设施搭建与脚手架 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 1</span>
+    <span class="phase-period">W1-W2</span>
+    <p>Docker Compose 中间件编排 · Maven 多模块工程 · 18 服务脚手架 · Spring Cloud Gateway · CI/CD · K8s 基础配置</p>
+  </div>
+<h1>Phase 1 — 基础设施搭建与项目脚手架 Implementation Plan</h1>
+<blockquote>
+<strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.
+</blockquote>
+<p><strong>Goal:</strong> 搭建完整的本地开发环境（Docker Compose 中间件集群 + Maven 多模块项目骨架 + 16 个微服务脚手架 + Gateway + CI/CD + K8s 基础配置），使团队可以立即开始编码。</p>
+<p><strong>Architecture:</strong> Maven 多模块父子工程架构。顶层 parent POM 统一管理 Spring Boot 3.2 / Dubbo 3.2 / Spring Cloud 2023.0 等全部依赖版本。common 层提供共享代码（DTO/异常/工具/安全/持久层配置）。每个微服务是独立 Spring Boot 模块，通过 Dubbo RPC 互调，通过 Nacos 注册发现。</p>
+<p><strong>Tech Stack:</strong> Java 21, Spring Boot 3.2, Apache Dubbo 3.2, Nacos 2.3, Maven 3.9, Docker Compose, MySQL 8.0, Redis 7.2, RocketMQ 5.1, Elasticsearch 7.17</p>
+<hr>
+<h2>总览：6 阶段开发路线图</h2>
+<table>
+<tr>
+  <th>Phase</th>
+  <th>周期</th>
+  <th>目标</th>
+  <th>交付物</th>
+</tr>
+<tr>
+  <td><strong>Phase 1</strong></td>
+  <td>W1-W2</td>
+  <td>基础设施 + 脚手架</td>
+  <td>Docker Compose, Maven 工程, 16 服务骨架, CI/CD</td>
+</tr>
+<tr>
+  <td>Phase 2</td>
+  <td>W3-W6</td>
+  <td>用户+商品域</td>
+  <td>user/auth/member/address/product/category/inventory/shop 服务</td>
+</tr>
+<tr>
+  <td>Phase 3</td>
+  <td>W7-W10</td>
+  <td>交易+支付域</td>
+  <td>cart/order/payment 服务, Seata 分布式事务</td>
+</tr>
+<tr>
+  <td>Phase 4</td>
+  <td>W11-W13</td>
+  <td>搜索+营销域</td>
+  <td>search/coupon/seckill 服务, Canal+ES 集成</td>
+</tr>
+<tr>
+  <td>Phase 5</td>
+  <td>W14-W16</td>
+  <td>支撑服务+完善</td>
+  <td>review/notify/file/platform, 监控面板</td>
+</tr>
+<tr>
+  <td>Phase 6</td>
+  <td>W17-W18</td>
+  <td>压测+优化</td>
+  <td>JMeter 压测, JVM/DB/缓存调优, 高可用演练</td>
+</tr>
+</table>
+<blockquote>
+<strong>说明：</strong> 本文档是 Phase 1 的详细执行计划。Phase 2-6 将在各自启动前编写独立详细计划。
+</blockquote>
+<hr>
+<h2>Phase 1 验收标准</h2>
+<ul>
+<li>[ ] <code>docker-compose up -d</code> 一键启动全部中间件，所有服务健康 Check 通过</li>
+<li>[ ] <code>mvn clean install -DskipTests</code> 在根目录执行成功，所有模块编译通过</li>
+<li>[ ] Nacos 控制台 <code>http://localhost:8848/nacos</code> 可访问，16 个服务名在服务列表可见</li>
+<li>[ ] Gateway 启动后 <code>http://localhost:8080/actuator/health</code> 返回 UP</li>
+<li>[ ] Sentinel Dashboard <code>http://localhost:8858</code> 可访问</li>
+<li>[ ] <code>.gitlab-ci.yml</code> 模板就绪，4 阶段流水线定义完成</li>
+<li>[ ] K8s 基础配置目录结构就绪（Namespace / ConfigMap / Secret / PV 模板）</li>
+</ul>
+<hr>
+<h2>Task Group A: Docker Compose 中间件编排</h2>
+<h3>Task A1: 创建 docker-compose 目录与 .env 文件</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/.env</code></li>
+<li>Create: <code>docker-compose/docker-compose.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建 .env 环境变量文件</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p <span class="tok-builtin">docker</span>-compose/{mysql/init,nacos/conf,rocketmq/conf,nginx/conf.d,elasticsearch/config,minio/data,prometheus/config,grafana/provisioning}</code></pre>
+<p>写入 <code>docker-compose/.env</code>:</p>
+<pre data-lang="env"><code class="language-env"><span class="tok-cmt"># 网络配置</span>
+SUBNET=<span class="tok-num">10</span>.<span class="tok-num">10</span>.<span class="tok-num">0</span>.<span class="tok-num">0</span>/<span class="tok-num">16</span>
+
+<span class="tok-cmt"># MySQL</span>
+MYSQL_ROOT_PASSWORD=root123
+MYSQL_PORT=<span class="tok-num">3306</span>
+
+<span class="tok-cmt"># Redis</span>
+REDIS_PORT=<span class="tok-num">6379</span>
+REDIS_PASSWORD=redis123
+
+<span class="tok-cmt"># Nacos</span>
+NACOS_PORT=<span class="tok-num">8848</span>
+NACOS_GRPC_PORT=<span class="tok-num">9848</span>
+NACOS_AUTH_USERNAME=nacos
+NACOS_AUTH_PASSWORD=nacos123
+
+<span class="tok-cmt"># RocketMQ</span>
+ROCKETMQ_NAMESRV_PORT=<span class="tok-num">9876</span>
+ROCKETMQ_BROKER_PORT=<span class="tok-num">10911</span>
+
+<span class="tok-cmt"># Elasticsearch</span>
+ES_PORT=<span class="tok-num">9200</span>
+ES_TRANSPORT_PORT=<span class="tok-num">9300</span>
+ES_PASSWORD=elastic123
+
+<span class="tok-cmt"># MinIO</span>
+MINIO_API_PORT=<span class="tok-num">9000</span>
+MINIO_CONSOLE_PORT=<span class="tok-num">9001</span>
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+
+<span class="tok-cmt"># XXL-Job</span>
+XXL_JOB_PORT=<span class="tok-num">8081</span>
+XXL_JOB_DB=xxl_job
+
+<span class="tok-cmt"># SkyWalking</span>
+SKYWALKING_GRPC_PORT=<span class="tok-num">11800</span>
+SKYWALKING_HTTP_PORT=<span class="tok-num">12800</span>
+
+<span class="tok-cmt"># Sentinel</span>
+SENTINEL_PORT=<span class="tok-num">8858</span>
+SENTINEL_USERNAME=sentinel
+SENTINEL_PASSWORD=sentinel123
+
+<span class="tok-cmt"># Canal</span>
+CANAL_PORT=<span class="tok-num">11111</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 验证 .env 文件语法</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">grep</span> -E <span class="tok-str">'^[A-Z_]+\='</span> <span class="tok-builtin">docker</span>-compose/.<span class="tok-builtin">env</span> | wc -l</code></pre>
+<p>Expected: <code>18</code> (18 个环境变量定义)</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/.<span class="tok-builtin">env</span>
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add docker-compose .env with middleware configuration&quot;</span></code></pre>
+<hr>
+<h3>Task A2: 创建 MySQL 初始化脚本</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/mysql/init/01-init-databases.sql</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入数据库初始化 SQL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/01-init-databases.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-cmt">-- 创建业务数据库（垂直分库）</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_user       <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_product    <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_order      <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_payment    <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_marketing  <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_shop       <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> db_platform   <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+
+<span class="tok-cmt">-- 创建基础设施数据库</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> xxl_job       <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> seata         <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+<span class="tok-kw">CREATE</span> <span class="tok-kw">DATABASE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> nacos         <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARACTER</span> <span class="tok-kw">SET</span> <span class="tok-kw">utf8mb4</span> <span class="tok-kw">COLLATE</span> utf8mb4_unicode_ci;
+
+<span class="tok-cmt">-- 创建只读用户（读写分离预留）</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">USER</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span> <span class="tok-kw">IDENTIFIED</span> <span class="tok-kw">BY</span> <span class="tok-str">'app_user123'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_user.*       <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_product.*    <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_order.*      <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_payment.*    <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_marketing.*  <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_shop.*       <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> db_platform.*   <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> xxl_job.*       <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">GRANT</span> <span class="tok-kw">SELECT</span>, <span class="tok-kw">INSERT</span>, <span class="tok-kw">UPDATE</span>, <span class="tok-kw">DELETE</span> <span class="tok-kw">ON</span> seata.*         <span class="tok-kw">TO</span> <span class="tok-str">'app_user'</span>@<span class="tok-str">'%'</span>;
+<span class="tok-kw">FLUSH</span> <span class="tok-kw">PRIVILEGES</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/mysql/init/01-init-databases.sql
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add MySQL initialization script with business databases&quot;</span></code></pre>
+<hr>
+<h3>Task A3: 编写主 docker-compose.yml</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/docker-compose.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入完整的 Docker Compose 编排文件</strong></li>
+</ul>
+<p>写入 <code>docker-compose/docker-compose.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">version:</span> <span class="tok-str">'3.8'</span>
+<span class="tok-prop">
+networks:</span>
+<span class="tok-prop">  smt-net:</span>
+<span class="tok-prop">    driver:</span> bridge
+<span class="tok-prop">    ipam:</span>
+<span class="tok-prop">      config:</span>
+        - subnet: ${SUBNET:-<span class="tok-num">10.10</span>.<span class="tok-num">0.0</span>/<span class="tok-num">16</span>}
+<span class="tok-prop">
+services:</span>
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># MySQL 8.0</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  mysql:</span>
+<span class="tok-prop">    image:</span> mysql:<span class="tok-num">8.0</span>.<span class="tok-num">35</span>
+<span class="tok-prop">    container_name:</span> smt-mysql
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      MYSQL_ROOT_PASSWORD:</span> <span class="tok-var">${MYSQL_ROOT_PASSWORD:-root123}</span>
+<span class="tok-prop">      TZ:</span> Asia/Shanghai
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${MYSQL_PORT:-3306}:3306&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - ./mysql/conf:/etc/mysql/conf.d
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;mysqladmin&quot;</span>, <span class="tok-str">&quot;ping&quot;</span>, <span class="tok-str">&quot;-h&quot;</span>, <span class="tok-str">&quot;localhost&quot;</span>, <span class="tok-str">&quot;-u&quot;</span>, <span class="tok-str">&quot;root&quot;</span>, <span class="tok-str">&quot;-p${MYSQL_ROOT_PASSWORD}&quot;</span>]
+<span class="tok-prop">      interval:</span> 10s
+<span class="tok-prop">      timeout:</span> 5s
+<span class="tok-prop">      retries:</span> <span class="tok-num">5</span>
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># Redis 7.2</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  redis:</span>
+<span class="tok-prop">    image:</span> redis:<span class="tok-num">7.2</span>-alpine
+<span class="tok-prop">    container_name:</span> smt-redis
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    command:</span> &gt;
+      redis-server
+      --requirepass <span class="tok-var">${REDIS_PASSWORD:-redis123}</span>
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly <span class="tok-kw">yes</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${REDIS_PORT:-6379}:6379&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - redis-data:/data
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;redis-cli&quot;</span>, <span class="tok-str">&quot;-a&quot;</span>, <span class="tok-str">&quot;${REDIS_PASSWORD}&quot;</span>, <span class="tok-str">&quot;ping&quot;</span>]
+<span class="tok-prop">      interval:</span> 10s
+<span class="tok-prop">      timeout:</span> 5s
+<span class="tok-prop">      retries:</span> <span class="tok-num">5</span>
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># Nacos 2.3 (单机模式)</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  nacos:</span>
+<span class="tok-prop">    image:</span> nacos/nacos-server:v2.<span class="tok-num">3.1</span>
+<span class="tok-prop">    container_name:</span> smt-nacos
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      MODE:</span> standalone
+<span class="tok-prop">      NACOS_AUTH_ENABLE:</span> <span class="tok-str">&quot;true&quot;</span>
+<span class="tok-prop">      NACOS_AUTH_TOKEN_EXPIRE_SECONDS:</span> <span class="tok-str">&quot;86400&quot;</span>
+<span class="tok-prop">      NACOS_AUTH_IDENTITY_KEY:</span> serverIdentity
+<span class="tok-prop">      NACOS_AUTH_IDENTITY_VALUE:</span> security
+<span class="tok-prop">      SPRING_DATASOURCE_PLATFORM:</span> mysql
+<span class="tok-prop">      MYSQL_SERVICE_HOST:</span> mysql
+<span class="tok-prop">      MYSQL_SERVICE_PORT:</span> <span class="tok-num">3306</span>
+<span class="tok-prop">      MYSQL_SERVICE_DB_NAME:</span> nacos
+<span class="tok-prop">      MYSQL_SERVICE_USER:</span> root
+<span class="tok-prop">      MYSQL_SERVICE_PASSWORD:</span> <span class="tok-var">${MYSQL_ROOT_PASSWORD:-root123}</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${NACOS_PORT:-8848}:8848&quot;</span>
+      - <span class="tok-str">&quot;${NACOS_GRPC_PORT:-9848}:9848&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - nacos-data:/home/nacos/data
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      mysql:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;curl&quot;</span>, <span class="tok-str">&quot;-f&quot;</span>, <span class="tok-str">&quot;http://localhost:8848/nacos/v1/console/health/readiness&quot;</span>]
+<span class="tok-prop">      interval:</span> 15s
+<span class="tok-prop">      timeout:</span> 10s
+<span class="tok-prop">      retries:</span> <span class="tok-num">10</span>
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># RocketMQ 5.1</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  rocketmq-namesrv:</span>
+<span class="tok-prop">    image:</span> apache/rocketmq:<span class="tok-num">5.1</span>.<span class="tok-num">4</span>
+<span class="tok-prop">    container_name:</span> smt-rocketmq-namesrv
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    command:</span> sh mqnamesrv
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${ROCKETMQ_NAMESRV_PORT:-9876}:9876&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - rocketmq-namesrv-data:/home/rocketmq/store
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;sh&quot;</span>, <span class="tok-str">&quot;-c&quot;</span>, <span class="tok-str">&quot;curl -s localhost:9876 &gt;/dev/null || exit 1&quot;</span>]
+<span class="tok-prop">      interval:</span> 15s
+<span class="tok-prop">      timeout:</span> 10s
+<span class="tok-prop">      retries:</span> <span class="tok-num">5</span>
+<span class="tok-prop">
+  rocketmq-broker:</span>
+<span class="tok-prop">    image:</span> apache/rocketmq:<span class="tok-num">5.1</span>.<span class="tok-num">4</span>
+<span class="tok-prop">    container_name:</span> smt-rocketmq-broker
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    command:</span> sh mqbroker -n rocketmq-namesrv:<span class="tok-num">9876</span> -c /home/rocketmq/conf/broker.conf
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${ROCKETMQ_BROKER_PORT:-10911}:10911&quot;</span>
+      - <span class="tok-str">&quot;10909:10909&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - rocketmq-broker-data:/home/rocketmq/store
+      - ./rocketmq/conf/broker.conf:/home/rocketmq/conf/broker.conf
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      rocketmq-namesrv:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># Elasticsearch 7.17（Docker Hub 官方镜像）</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  elasticsearch:</span>
+<span class="tok-prop">    image:</span> elasticsearch:<span class="tok-num">7.17</span>.<span class="tok-num">23</span>
+<span class="tok-prop">    container_name:</span> smt-elasticsearch
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      discovery.type:</span> single-node
+<span class="tok-prop">      ES_JAVA_OPTS:</span> <span class="tok-str">&quot;-Xms512m -Xmx512m&quot;</span>
+<span class="tok-prop">      xpack.security.enabled:</span> <span class="tok-str">&quot;false&quot;</span>
+<span class="tok-prop">      xpack.security.http.ssl.enabled:</span> <span class="tok-str">&quot;false&quot;</span>
+<span class="tok-prop">      xpack.security.transport.ssl.enabled:</span> <span class="tok-str">&quot;false&quot;</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${ES_PORT:-9200}:9200&quot;</span>
+      - <span class="tok-str">&quot;${ES_TRANSPORT_PORT:-9300}:9300&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - es-data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config:/usr/share/elasticsearch/config
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;curl&quot;</span>, <span class="tok-str">&quot;-f&quot;</span>, <span class="tok-str">&quot;http://localhost:9200/_cluster/health&quot;</span>]
+<span class="tok-prop">      interval:</span> 15s
+<span class="tok-prop">      timeout:</span> 10s
+<span class="tok-prop">      retries:</span> <span class="tok-num">10</span>
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># MinIO 对象存储</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  minio:</span>
+<span class="tok-prop">    image:</span> quay.io/minio/minio:RELEASE.<span class="tok-num">2024</span>-<span class="tok-num">05</span>-10T01-<span class="tok-num">41</span>-38Z
+<span class="tok-prop">    container_name:</span> smt-minio
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    command:</span> server /data --console-address <span class="tok-str">&quot;:9001&quot;</span>
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      MINIO_ROOT_USER:</span> <span class="tok-var">${MINIO_ROOT_USER:-minioadmin}</span>
+<span class="tok-prop">      MINIO_ROOT_PASSWORD:</span> <span class="tok-var">${MINIO_ROOT_PASSWORD:-minioadmin123}</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${MINIO_API_PORT:-9000}:9000&quot;</span>
+      - <span class="tok-str">&quot;${MINIO_CONSOLE_PORT:-9001}:9001&quot;</span>
+<span class="tok-prop">    volumes:</span>
+      - minio-data:/data
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    healthcheck:</span>
+<span class="tok-prop">      test:</span> [<span class="tok-str">&quot;CMD&quot;</span>, <span class="tok-str">&quot;curl&quot;</span>, <span class="tok-str">&quot;-f&quot;</span>, <span class="tok-str">&quot;http://localhost:9000/minio/health/live&quot;</span>]
+<span class="tok-prop">      interval:</span> 10s
+<span class="tok-prop">      timeout:</span> 5s
+<span class="tok-prop">      retries:</span> <span class="tok-num">5</span>
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># XXL-Job 2.4</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  xxl-job-admin:</span>
+<span class="tok-prop">    image:</span> xuxueli/xxl-job-admin:<span class="tok-num">2.4</span>.<span class="tok-num">1</span>
+<span class="tok-prop">    container_name:</span> smt-xxl-job
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      PARAMS:</span> &gt;
+        --spring.datasource.url=jdbc:mysql://mysql:<span class="tok-num">3306</span>/xxl_job?useUnicode=<span class="tok-kw">true</span>&amp;characterEncoding=UTF-<span class="tok-num">8</span>&amp;serverTimezone=Asia/Shanghai
+        --spring.datasource.username=root
+        --spring.datasource.password=<span class="tok-var">${MYSQL_ROOT_PASSWORD:-root123}</span>
+        --xxl.job.accessToken=xxl-job-access-token-<span class="tok-num">2024</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${XXL_JOB_PORT:-8081}:8080&quot;</span>
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      mysql:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># Sentinel Dashboard 1.8</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  sentinel-dashboard:</span>
+<span class="tok-prop">    image:</span> bladex/sentinel-dashboard:<span class="tok-num">1.8</span>.<span class="tok-num">6</span>
+<span class="tok-prop">    container_name:</span> smt-sentinel
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      SERVER_PORT:</span> <span class="tok-num">8858</span>
+<span class="tok-prop">      AUTH_USERNAME:</span> <span class="tok-var">${SENTINEL_USERNAME:-sentinel}</span>
+<span class="tok-prop">      AUTH_PASSWORD:</span> <span class="tok-var">${SENTINEL_PASSWORD:-sentinel123}</span>
+<span class="tok-prop">      NACOS_SERVER_ADDR:</span> nacos:<span class="tok-num">8848</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${SENTINEL_PORT:-8858}:8858&quot;</span>
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      nacos:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># SkyWalking 9.7</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  skywalking-oap:</span>
+<span class="tok-prop">    image:</span> apache/skywalking-oap-server:<span class="tok-num">9.7</span>.<span class="tok-num">0</span>
+<span class="tok-prop">    container_name:</span> smt-skywalking-oap
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      SW_STORAGE:</span> elasticsearch
+<span class="tok-prop">      SW_STORAGE_ES_CLUSTER_NODES:</span> elasticsearch:<span class="tok-num">9200</span>
+<span class="tok-prop">      JAVA_OPTS:</span> <span class="tok-str">&quot;-Xms512m -Xmx512m&quot;</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${SKYWALKING_GRPC_PORT:-11800}:11800&quot;</span>
+      - <span class="tok-str">&quot;${SKYWALKING_HTTP_PORT:-12800}:12800&quot;</span>
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      elasticsearch:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+<span class="tok-prop">
+  skywalking-ui:</span>
+<span class="tok-prop">    image:</span> apache/skywalking-ui:<span class="tok-num">9.7</span>.<span class="tok-num">0</span>
+<span class="tok-prop">    container_name:</span> smt-skywalking-ui
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      SW_OAP_ADDRESS:</span> http://skywalking-oap:<span class="tok-num">12800</span>
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;8082:8080&quot;</span>
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+      - skywalking-oap
+
+  <span class="tok-cmt"># ============================</span>
+  <span class="tok-cmt"># Canal 1.1.x</span>
+  <span class="tok-cmt"># ============================</span>
+<span class="tok-prop">  canal-server:</span>
+<span class="tok-prop">    image:</span> canal/canal-server:v1.<span class="tok-num">1.7</span>
+<span class="tok-prop">    container_name:</span> smt-canal
+<span class="tok-prop">    restart:</span> unless-stopped
+<span class="tok-prop">    environment:</span>
+<span class="tok-prop">      CANAL_ADMIN_MANAGER:</span> <span class="tok-str">&quot;&quot;</span>
+<span class="tok-prop">      canal.instance.master.address:</span> mysql:<span class="tok-num">3306</span>
+<span class="tok-prop">      canal.instance.dbUsername:</span> root
+<span class="tok-prop">      canal.instance.dbPassword:</span> <span class="tok-var">${MYSQL_ROOT_PASSWORD:-root123}</span>
+<span class="tok-prop">      canal.instance.filter.regex:</span> .*\\..*
+<span class="tok-prop">    ports:</span>
+      - <span class="tok-str">&quot;${CANAL_PORT:-11111}:11111&quot;</span>
+<span class="tok-prop">    networks:</span>
+      - smt-net
+<span class="tok-prop">    depends_on:</span>
+<span class="tok-prop">      mysql:</span>
+<span class="tok-prop">        condition:</span> service_healthy
+<span class="tok-prop">
+volumes:</span>
+<span class="tok-prop">  mysql-data:</span>
+<span class="tok-prop">  redis-data:</span>
+<span class="tok-prop">  nacos-data:</span>
+<span class="tok-prop">  rocketmq-namesrv-data:</span>
+<span class="tok-prop">  rocketmq-broker-data:</span>
+<span class="tok-prop">  es-data:</span>
+<span class="tok-prop">  minio-data:</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建 RocketMQ Broker 配置</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p <span class="tok-builtin">docker</span>-compose/rocketmq/conf</code></pre>
+<p>写入 <code>docker-compose/rocketmq/conf/broker.conf</code>:</p>
+<pre data-lang="properties"><code class="language-properties">brokerClusterName=DefaultCluster
+brokerName=broker-a
+brokerId=<span class="tok-num">0</span>
+deleteWhen=<span class="tok-num">04</span>
+fileReservedTime=<span class="tok-num">48</span>
+brokerRole=ASYNC_MASTER
+flushDiskType=ASYNC_FLUSH
+autoCreateTopicEnable=true
+autoCreateSubscriptionGroup=true
+listenPort=<span class="tok-num">10911</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/<span class="tok-builtin">docker</span>-compose.yml <span class="tok-builtin">docker</span>-compose/rocketmq/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add Docker Compose middleware orchestration (12 services)&quot;</span></code></pre>
+<hr>
+<h3>Task A4: 验证 Docker Compose 启动</h3>
+<ul>
+<li>[ ] <strong>Step 1: 启动所有中间件</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">cd</span> <span class="tok-builtin">docker</span>-compose &amp;&amp; <span class="tok-builtin">docker</span> compose up -d</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 等待健康检查通过（约 90 秒）</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">docker</span> compose <span class="tok-builtin">ps</span></code></pre>
+<p>Expected: 所有服务 State = "Up" (healthy) 或 "Up"</p>
+<ul>
+<li>[ ] <strong>Step 3: 验证各中间件端点</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-cmt"># Nacos 控制台</span>
+<span class="tok-builtin">curl</span> -s -o /dev/null -w <span class="tok-str">&quot;%{http_code}&quot;</span> http://localhost:8848/nacos/v1/console/health/readiness
+<span class="tok-cmt"># Expected: 200</span>
+
+<span class="tok-cmt"># Redis</span>
+<span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-redis redis-cli -a redis123 ping
+<span class="tok-cmt"># Expected: PONG</span>
+
+<span class="tok-cmt"># MySQL</span>
+<span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysqladmin ping -h localhost -u root -proot123
+<span class="tok-cmt"># Expected: mysqld is alive</span>
+
+<span class="tok-cmt"># Elasticsearch</span>
+<span class="tok-builtin">curl</span> -s http://localhost:9200/_cluster/health | <span class="tok-builtin">grep</span> -o <span class="tok-str">'&quot;status&quot;:&quot;green&quot;'</span>
+<span class="tok-cmt"># Expected: &quot;status&quot;:&quot;green&quot;</span>
+
+<span class="tok-cmt"># MinIO</span>
+<span class="tok-builtin">curl</span> -s -o /dev/null -w <span class="tok-str">&quot;%{http_code}&quot;</span> http://localhost:9000/minio/health/live
+<span class="tok-cmt"># Expected: 200</span>
+
+<span class="tok-cmt"># XXL-Job</span>
+<span class="tok-builtin">curl</span> -s -o /dev/null -w <span class="tok-str">&quot;%{http_code}&quot;</span> http://localhost:8081/xxl-job-admin
+<span class="tok-cmt"># Expected: 200</span>
+
+<span class="tok-cmt"># Sentinel</span>
+<span class="tok-builtin">curl</span> -s -o /dev/null -w <span class="tok-str">&quot;%{http_code}&quot;</span> http://localhost:8858
+<span class="tok-cmt"># Expected: 200</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit checkpoint</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add -A
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;chore: Docker Compose middleware verified - all 12 services healthy&quot;</span></code></pre>
+<hr>
+<h2>Task Group B: Maven 多模块工程结构</h2>
+<h3>Task B1: 创建根目录 pom.xml（父 POM）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>pom.xml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入父 POM</strong></li>
+</ul>
+<p>写入 <code>pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+
+    <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;pom<span class="tok-tag">&lt;/packaging</span>&gt;
+
+    <span class="tok-tag">&lt;name</span>&gt;Super Market<span class="tok-tag">&lt;/name</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;京东式商城系统 — 基于 Dubbo 3.x 的微服务电商平台<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-parent<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;3.2.5<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>/&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+
+    <span class="tok-tag">&lt;modules</span>&gt;
+        <span class="tok-cmt">&lt;!-- 公共模块 --&gt;</span>
+        <span class="tok-tag">&lt;module</span>&gt;super-market-common/common-core<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-common/common-dubbo-api<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-common/common-security<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-common/common-web<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-common/common-mybatis<span class="tok-tag">&lt;/module</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- 网关 --&gt;</span>
+        <span class="tok-tag">&lt;module</span>&gt;super-market-gateway<span class="tok-tag">&lt;/module</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- 微服务 --&gt;</span>
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-user<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-auth<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-member<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-address<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-product<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-category<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-inventory<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-review<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-cart<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-order<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-payment<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-coupon<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-seckill<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-search<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-shop<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-platform<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-file<span class="tok-tag">&lt;/module</span>&gt;
+        <span class="tok-tag">&lt;module</span>&gt;super-market-services/service-notify<span class="tok-tag">&lt;/module</span>&gt;
+    <span class="tok-tag">&lt;/modules</span>&gt;
+
+    <span class="tok-tag">&lt;properties</span>&gt;
+        <span class="tok-tag">&lt;java.version</span>&gt;21<span class="tok-tag">&lt;/java.version</span>&gt;
+        <span class="tok-tag">&lt;maven.compiler.source</span>&gt;21<span class="tok-tag">&lt;/maven.compiler.source</span>&gt;
+        <span class="tok-tag">&lt;maven.compiler.target</span>&gt;21<span class="tok-tag">&lt;/maven.compiler.target</span>&gt;
+        <span class="tok-tag">&lt;project.build.sourceEncoding</span>&gt;UTF-8<span class="tok-tag">&lt;/project.build.sourceEncoding</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- Spring --&gt;</span>
+        <span class="tok-tag">&lt;spring-boot.version</span>&gt;3.2.5<span class="tok-tag">&lt;/spring-boot.version</span>&gt;
+        <span class="tok-tag">&lt;spring-cloud.version</span>&gt;2023.0.1<span class="tok-tag">&lt;/spring-cloud.version</span>&gt;
+        <span class="tok-tag">&lt;spring-cloud-alibaba.version</span>&gt;2023.0.1.0<span class="tok-tag">&lt;/spring-cloud-alibaba.version</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- Dubbo --&gt;</span>
+        <span class="tok-tag">&lt;dubbo.version</span>&gt;3.2.13<span class="tok-tag">&lt;/dubbo.version</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- Third-party --&gt;</span>
+        <span class="tok-tag">&lt;mybatis-plus.version</span>&gt;3.5.6<span class="tok-tag">&lt;/mybatis-plus.version</span>&gt;
+        <span class="tok-tag">&lt;redisson.version</span>&gt;3.25.2<span class="tok-tag">&lt;/redisson.version</span>&gt;
+        <span class="tok-tag">&lt;shardingsphere.version</span>&gt;5.4.1<span class="tok-tag">&lt;/shardingsphere.version</span>&gt;
+        <span class="tok-tag">&lt;hutool.version</span>&gt;5.8.27<span class="tok-tag">&lt;/hutool.version</span>&gt;
+        <span class="tok-tag">&lt;knife4j.version</span>&gt;4.3.0<span class="tok-tag">&lt;/knife4j.version</span>&gt;
+        <span class="tok-tag">&lt;mapstruct.version</span>&gt;1.5.5.Final<span class="tok-tag">&lt;/mapstruct.version</span>&gt;
+
+        <span class="tok-cmt">&lt;!-- Plugin --&gt;</span>
+        <span class="tok-tag">&lt;maven-surefire.version</span>&gt;3.2.5<span class="tok-tag">&lt;/maven-surefire.version</span>&gt;
+    <span class="tok-tag">&lt;/properties</span>&gt;
+
+    <span class="tok-tag">&lt;dependencyManagement</span>&gt;
+        <span class="tok-tag">&lt;dependencies</span>&gt;
+            <span class="tok-cmt">&lt;!-- Spring Cloud --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-dependencies<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${spring-cloud.version}<span class="tok-tag">&lt;/version</span>&gt;
+                <span class="tok-tag">&lt;type</span>&gt;pom<span class="tok-tag">&lt;/type</span>&gt;
+                <span class="tok-tag">&lt;scope</span>&gt;import<span class="tok-tag">&lt;/scope</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- Spring Cloud Alibaba --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-alibaba-dependencies<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${spring-cloud-alibaba.version}<span class="tok-tag">&lt;/version</span>&gt;
+                <span class="tok-tag">&lt;type</span>&gt;pom<span class="tok-tag">&lt;/type</span>&gt;
+                <span class="tok-tag">&lt;scope</span>&gt;import<span class="tok-tag">&lt;/scope</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- Dubbo --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.apache.dubbo<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;dubbo-bom<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${dubbo.version}<span class="tok-tag">&lt;/version</span>&gt;
+                <span class="tok-tag">&lt;type</span>&gt;pom<span class="tok-tag">&lt;/type</span>&gt;
+                <span class="tok-tag">&lt;scope</span>&gt;import<span class="tok-tag">&lt;/scope</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- MyBatis-Plus --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;com.baomidou<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;mybatis-plus-spring-boot3-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${mybatis-plus.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;com.baomidou<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;mybatis-plus-jsqlparser<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${mybatis-plus.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- Redisson --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.redisson<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;redisson-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${redisson.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- ShardingSphere --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.apache.shardingsphere<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;shardingsphere-jdbc-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${shardingsphere.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- Hutool --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;cn.hutool<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;hutool-all<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${hutool.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- Knife4j API 文档 --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;com.github.xiaoymin<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;knife4j-openapi3-jakarta-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${knife4j.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-cmt">&lt;!-- MapStruct --&gt;</span>
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.mapstruct<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;mapstruct<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${mapstruct.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+            <span class="tok-tag">&lt;dependency</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.mapstruct<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;mapstruct-processor<span class="tok-tag">&lt;/artifactId</span>&gt;
+                <span class="tok-tag">&lt;version</span>&gt;${mapstruct.version}<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;/dependencies</span>&gt;
+    <span class="tok-tag">&lt;/dependencyManagement</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-cmt">&lt;!-- 全局依赖: 所有模块自动继承 --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.projectlombok<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;lombok<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;optional</span>&gt;true<span class="tok-tag">&lt;/optional</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;cn.hutool<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;hutool-all<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+
+    <span class="tok-tag">&lt;build</span>&gt;
+        <span class="tok-tag">&lt;pluginManagement</span>&gt;
+            <span class="tok-tag">&lt;plugins</span>&gt;
+                <span class="tok-tag">&lt;plugin</span>&gt;
+                    <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+                    <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-maven-plugin<span class="tok-tag">&lt;/artifactId</span>&gt;
+                    <span class="tok-tag">&lt;version</span>&gt;${spring-boot.version}<span class="tok-tag">&lt;/version</span>&gt;
+                    <span class="tok-tag">&lt;executions</span>&gt;
+                        <span class="tok-tag">&lt;execution</span>&gt;
+                            <span class="tok-tag">&lt;goals</span>&gt;
+                                <span class="tok-tag">&lt;goal</span>&gt;repackage<span class="tok-tag">&lt;/goal</span>&gt;
+                            <span class="tok-tag">&lt;/goals</span>&gt;
+                        <span class="tok-tag">&lt;/execution</span>&gt;
+                    <span class="tok-tag">&lt;/executions</span>&gt;
+                <span class="tok-tag">&lt;/plugin</span>&gt;
+                <span class="tok-tag">&lt;plugin</span>&gt;
+                    <span class="tok-tag">&lt;groupId</span>&gt;org.apache.maven.plugins<span class="tok-tag">&lt;/groupId</span>&gt;
+                    <span class="tok-tag">&lt;artifactId</span>&gt;maven-compiler-plugin<span class="tok-tag">&lt;/artifactId</span>&gt;
+                    <span class="tok-tag">&lt;version</span>&gt;3.12.1<span class="tok-tag">&lt;/version</span>&gt;
+                    <span class="tok-tag">&lt;configuration</span>&gt;
+                        <span class="tok-tag">&lt;source</span>&gt;${java.version}<span class="tok-tag">&lt;/source</span>&gt;
+                        <span class="tok-tag">&lt;target</span>&gt;${java.version}<span class="tok-tag">&lt;/target</span>&gt;
+                        <span class="tok-tag">&lt;annotationProcessorPaths</span>&gt;
+                            <span class="tok-tag">&lt;path</span>&gt;
+                                <span class="tok-tag">&lt;groupId</span>&gt;org.projectlombok<span class="tok-tag">&lt;/groupId</span>&gt;
+                                <span class="tok-tag">&lt;artifactId</span>&gt;lombok<span class="tok-tag">&lt;/artifactId</span>&gt;
+                                <span class="tok-tag">&lt;version</span>&gt;${lombok.version}<span class="tok-tag">&lt;/version</span>&gt;
+                            <span class="tok-tag">&lt;/path</span>&gt;
+                            <span class="tok-tag">&lt;path</span>&gt;
+                                <span class="tok-tag">&lt;groupId</span>&gt;org.mapstruct<span class="tok-tag">&lt;/groupId</span>&gt;
+                                <span class="tok-tag">&lt;artifactId</span>&gt;mapstruct-processor<span class="tok-tag">&lt;/artifactId</span>&gt;
+                                <span class="tok-tag">&lt;version</span>&gt;${mapstruct.version}<span class="tok-tag">&lt;/version</span>&gt;
+                            <span class="tok-tag">&lt;/path</span>&gt;
+                        <span class="tok-tag">&lt;/annotationProcessorPaths</span>&gt;
+                    <span class="tok-tag">&lt;/configuration</span>&gt;
+                <span class="tok-tag">&lt;/plugin</span>&gt;
+            <span class="tok-tag">&lt;/plugins</span>&gt;
+        <span class="tok-tag">&lt;/pluginManagement</span>&gt;
+    <span class="tok-tag">&lt;/build</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 验证 POM 语法</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> validate</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add pom.xml
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add parent POM with dependency management for Spring Boot 3.2 + Dubbo 3.2&quot;</span></code></pre>
+<hr>
+<h3>Task B2: 创建 common-core 公共核心模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-core/pom.xml</code></li>
+<li>Create: <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/result/R.java</code></li>
+<li>Create: <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/exception/BizException.java</code></li>
+<li>Create: <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/constants/GlobalConstants.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建 common-core/pom.xml</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-common/common-core/src/main/<span class="tok-builtin">java</span>/com/supermarket/common/core/{result,exception,constants}
+<span class="tok-builtin">mkdir</span> -p super-market-common/common-core/src/test/<span class="tok-builtin">java</span></code></pre>
+<p>写入 <code>super-market-common/common-core/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;公共核心模块：统一返回体、异常、常量、工具类<span class="tok-tag">&lt;/description</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建统一返回体 R.java</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/result/R.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.core.result;
+
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.io.Serializable;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> R&lt;T&gt; <span class="tok-kw">implements</span> Serializable {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">int</span> code;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> message;
+    <span class="tok-kw">private</span> T data;
+    <span class="tok-kw">private</span> <span class="tok-kw">long</span> timestamp;
+
+    <span class="tok-kw">private</span> R() {
+        <span class="tok-kw">this</span>.timestamp = System.currentTimeMillis();
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> &lt;T&gt; R&lt;T&gt; ok() {
+        R&lt;T&gt; r = <span class="tok-kw">new</span> R&lt;&gt;();
+        r.code = <span class="tok-num">200</span>;
+        r.message = <span class="tok-str">&quot;success&quot;</span>;
+        <span class="tok-kw">return</span> r;
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> &lt;T&gt; R&lt;T&gt; ok(T data) {
+        R&lt;T&gt; r = ok();
+        r.data = data;
+        <span class="tok-kw">return</span> r;
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> &lt;T&gt; R&lt;T&gt; fail(<span class="tok-kw">int</span> code, <span class="tok-typ">String</span> message) {
+        R&lt;T&gt; r = <span class="tok-kw">new</span> R&lt;&gt;();
+        r.code = code;
+        r.message = message;
+        <span class="tok-kw">return</span> r;
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> &lt;T&gt; R&lt;T&gt; fail(<span class="tok-typ">String</span> message) {
+        <span class="tok-kw">return</span> fail(<span class="tok-num">500</span>, message);
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> isSuccess() {
+        <span class="tok-kw">return</span> <span class="tok-kw">this</span>.code == <span class="tok-num">200</span>;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 创建业务异常 BizException.java</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/exception/BizException.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.core.exception;
+
+<span class="tok-kw">import</span> lombok.Getter;
+
+<span class="tok-ann">@Getter</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> BizException <span class="tok-kw">extends</span> RuntimeException {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> <span class="tok-kw">int</span> code;
+
+    <span class="tok-kw">public</span> BizException(<span class="tok-kw">int</span> code, <span class="tok-typ">String</span> message) {
+        <span class="tok-kw">super</span>(message);
+        <span class="tok-kw">this</span>.code = code;
+    }
+
+    <span class="tok-kw">public</span> BizException(<span class="tok-typ">String</span> message) {
+        <span class="tok-kw">this</span>(<span class="tok-num">500</span>, message);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 创建全局常量 GlobalConstants.java</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-core/src/main/java/com/supermarket/common/core/constants/GlobalConstants.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.core.constants;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> GlobalConstants {
+
+    <span class="tok-typ">String</span> TRACE_ID = <span class="tok-str">&quot;X-Trace-Id&quot;</span>;
+    <span class="tok-typ">String</span> USER_ID = <span class="tok-str">&quot;X-User-Id&quot;</span>;
+    <span class="tok-typ">String</span> USER_ROLES = <span class="tok-str">&quot;X-User-Roles&quot;</span>;
+
+    <span class="tok-typ">String</span> REDIS_PREFIX = <span class="tok-str">&quot;smt:&quot;</span>;
+
+    <span class="tok-kw">int</span> PAGE_NO_DEFAULT = <span class="tok-num">1</span>;
+    <span class="tok-kw">int</span> PAGE_SIZE_DEFAULT = <span class="tok-num">20</span>;
+    <span class="tok-kw">int</span> PAGE_SIZE_MAX = <span class="tok-num">100</span>;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-common/common-core</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-core/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add common-core module (R, BizException, GlobalConstants)&quot;</span></code></pre>
+<hr>
+<h3>Task B3: 创建 common-dubbo-api 接口定义模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-dubbo-api/pom.xml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建模块 pom.xml</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-common/common-dubbo-api/src/main/<span class="tok-builtin">java</span>/com/supermarket/common/dubbo/api</code></pre>
+<p>写入 <code>super-market-common/common-dubbo-api/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;common-dubbo-api<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;Dubbo API 接口定义模块：各服务 RPC 接口与 DTO<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-common/common-dubbo-api</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-dubbo-api/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add common-dubbo-api module for RPC interface definitions&quot;</span></code></pre>
+<hr>
+<h3>Task B4: 创建 common-security 安全模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-security/pom.xml</code></li>
+<li>Create: <code>super-market-common/common-security/src/main/java/com/supermarket/common/security/config/JwtProperties.java</code></li>
+<li>Create: <code>super-market-common/common-security/src/main/java/com/supermarket/common/security/util/JwtUtil.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建模块 pom.xml</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-common/common-security/src/main/<span class="tok-builtin">java</span>/com/supermarket/common/security/{config,util}</code></pre>
+<p>写入 <code>super-market-common/common-security/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;common-security<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;公共安全模块：JWT 工具、安全配置<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-web<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- JWT --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;io.jsonwebtoken<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;jjwt-api<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;0.12.5<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;io.jsonwebtoken<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;jjwt-impl<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;0.12.5<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;scope</span>&gt;runtime<span class="tok-tag">&lt;/scope</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;io.jsonwebtoken<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;jjwt-jackson<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;0.12.5<span class="tok-tag">&lt;/version</span>&gt;
+            <span class="tok-tag">&lt;scope</span>&gt;runtime<span class="tok-tag">&lt;/scope</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建 JwtProperties 配置类</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-security/src/main/java/com/supermarket/common/security/config/JwtProperties.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.security.config;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> org.springframework.boot.context.properties.ConfigurationProperties;
+<span class="tok-kw">import</span> org.springframework.stereotype.Component;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@Component</span>
+<span class="tok-ann">@ConfigurationProperties</span>(prefix = <span class="tok-str">&quot;jwt&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> JwtProperties {
+
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> secret = <span class="tok-str">&quot;super-market-default-secret-key-change-in-production-min-256-bits&quot;</span>;
+    <span class="tok-kw">private</span> <span class="tok-kw">long</span> accessTokenExpire = <span class="tok-num">7200</span>;    <span class="tok-cmt">// 2 hours</span>
+    <span class="tok-kw">private</span> <span class="tok-kw">long</span> refreshTokenExpire = <span class="tok-num">604800</span>;  <span class="tok-cmt">// 7 days</span>
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> issuer = <span class="tok-str">&quot;super-market&quot;</span>;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 创建 JwtUtil 工具类</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-security/src/main/java/com/supermarket/common/security/util/JwtUtil.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.security.util;
+
+<span class="tok-kw">import</span> com.supermarket.common.security.config.JwtProperties;
+<span class="tok-kw">import</span> io.jsonwebtoken.Claims;
+<span class="tok-kw">import</span> io.jsonwebtoken.Jwts;
+<span class="tok-kw">import</span> io.jsonwebtoken.security.Keys;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.stereotype.Component;
+
+<span class="tok-kw">import</span> javax.crypto.SecretKey;
+<span class="tok-kw">import</span> java.nio.charset.StandardCharsets;
+<span class="tok-kw">import</span> java.util.Date;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Component</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> JwtUtil {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> JwtProperties jwtProperties;
+
+    <span class="tok-kw">private</span> SecretKey getKey() {
+        <span class="tok-kw">return</span> Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-typ">String</span> generateAccessToken(<span class="tok-typ">Long</span> userId, <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; roles) {
+        Date now = <span class="tok-kw">new</span> Date();
+        <span class="tok-kw">return</span> Jwts.builder()
+            .issuer(jwtProperties.getIssuer())
+            .subject(<span class="tok-typ">String</span>.valueOf(userId))
+            .claim(<span class="tok-str">&quot;roles&quot;</span>, roles)
+            .issuedAt(now)
+            .expiration(<span class="tok-kw">new</span> Date(now.getTime() + jwtProperties.getAccessTokenExpire() * <span class="tok-num">1000</span>))
+            .signWith(getKey())
+            .compact();
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-typ">String</span> generateRefreshToken(<span class="tok-typ">Long</span> userId) {
+        Date now = <span class="tok-kw">new</span> Date();
+        <span class="tok-kw">return</span> Jwts.builder()
+            .issuer(jwtProperties.getIssuer())
+            .subject(<span class="tok-typ">String</span>.valueOf(userId))
+            .issuedAt(now)
+            .expiration(<span class="tok-kw">new</span> Date(now.getTime() + jwtProperties.getRefreshTokenExpire() * <span class="tok-num">1000</span>))
+            .signWith(getKey())
+            .compact();
+    }
+
+    <span class="tok-kw">public</span> Claims parseToken(<span class="tok-typ">String</span> token) {
+        <span class="tok-kw">return</span> Jwts.parser()
+            .verifyWith(getKey())
+            .build()
+            .parseSignedClaims(token)
+            .getPayload();
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-typ">Long</span> getUserId(<span class="tok-typ">String</span> token) {
+        <span class="tok-kw">return</span> <span class="tok-typ">Long</span>.valueOf(parseToken(token).getSubject());
+    }
+
+    <span class="tok-ann">@SuppressWarnings</span>(<span class="tok-str">&quot;unchecked&quot;</span>)
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; getRoles(<span class="tok-typ">String</span> token) {
+        <span class="tok-kw">return</span> parseToken(token).get(<span class="tok-str">&quot;roles&quot;</span>, <span class="tok-typ">List</span>.<span class="tok-kw">class</span>);
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> isExpired(<span class="tok-typ">String</span> token) {
+        <span class="tok-kw">try</span> {
+            <span class="tok-kw">return</span> parseToken(token).getExpiration().before(<span class="tok-kw">new</span> Date());
+        } <span class="tok-kw">catch</span> (Exception e) {
+            <span class="tok-kw">return</span> <span class="tok-kw">true</span>;
+        }
+    }
+
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> validate(<span class="tok-typ">String</span> token) {
+        <span class="tok-kw">try</span> {
+            parseToken(token);
+            <span class="tok-kw">return</span> <span class="tok-kw">true</span>;
+        } <span class="tok-kw">catch</span> (Exception e) {
+            <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+        }
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-common/common-security</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-security/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add common-security module (JWT utils + properties)&quot;</span></code></pre>
+<hr>
+<h3>Task B5: 创建 common-web 通用 Web 配置模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-web/pom.xml</code></li>
+<li>Create: <code>super-market-common/common-web/src/main/java/com/supermarket/common/web/handler/GlobalExceptionHandler.java</code></li>
+<li>Create: <code>super-market-common/common-web/src/main/java/com/supermarket/common/web/config/JacksonConfig.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建 pom.xml 和目录</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-common/common-web/src/main/<span class="tok-builtin">java</span>/com/supermarket/common/web/{handler,config}</code></pre>
+<p>写入 <code>super-market-common/common-web/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;common-web<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;公共 Web 模块：全局异常处理、Jackson 配置、响应包装<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-web<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-validation<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建全局异常处理器</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-web/src/main/java/com/supermarket/common/web/handler/GlobalExceptionHandler.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.web.handler;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.springframework.http.HttpStatus;
+<span class="tok-kw">import</span> org.springframework.validation.FieldError;
+<span class="tok-kw">import</span> org.springframework.web.bind.MethodArgumentNotValidException;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.ExceptionHandler;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.ResponseStatus;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.RestControllerAdvice;
+
+<span class="tok-kw">import</span> java.util.stream.Collectors;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@RestControllerAdvice</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> GlobalExceptionHandler {
+
+    <span class="tok-ann">@ExceptionHandler</span>(BizException.<span class="tok-kw">class</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; handleBizException(BizException e) {
+        log.warn(<span class="tok-str">&quot;Business exception: code={}, message={}&quot;</span>, e.getCode(), e.getMessage());
+        <span class="tok-kw">return</span> R.fail(e.getCode(), e.getMessage());
+    }
+
+    <span class="tok-ann">@ExceptionHandler</span>(MethodArgumentNotValidException.<span class="tok-kw">class</span>)
+    <span class="tok-ann">@ResponseStatus</span>(HttpStatus.BAD_REQUEST)
+    <span class="tok-kw">public</span> R&lt;Void&gt; handleValidation(MethodArgumentNotValidException e) {
+        <span class="tok-typ">String</span> message = e.getBindingResult().getFieldErrors().stream()
+            .map(FieldError::getDefaultMessage)
+            .collect(Collectors.joining(<span class="tok-str">&quot;, &quot;</span>));
+        <span class="tok-kw">return</span> R.fail(<span class="tok-num">400</span>, message);
+    }
+
+    <span class="tok-ann">@ExceptionHandler</span>(Exception.<span class="tok-kw">class</span>)
+    <span class="tok-ann">@ResponseStatus</span>(HttpStatus.INTERNAL_SERVER_ERROR)
+    <span class="tok-kw">public</span> R&lt;Void&gt; handleException(Exception e) {
+        log.error(<span class="tok-str">&quot;Unexpected error&quot;</span>, e);
+        <span class="tok-kw">return</span> R.fail(<span class="tok-num">500</span>, <span class="tok-str">&quot;系统繁忙，请稍后重试&quot;</span>);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 创建 Jackson 配置</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-web/src/main/java/com/supermarket/common/web/config/JacksonConfig.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.web.config;
+
+<span class="tok-kw">import</span> com.fasterxml.jackson.databind.DeserializationFeature;
+<span class="tok-kw">import</span> com.fasterxml.jackson.databind.SerializationFeature;
+<span class="tok-kw">import</span> com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+<span class="tok-kw">import</span> com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
+<span class="tok-kw">import</span> org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
+<span class="tok-kw">import</span> org.springframework.context.annotation.Bean;
+<span class="tok-kw">import</span> org.springframework.context.annotation.Configuration;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+<span class="tok-kw">import</span> java.time.format.DateTimeFormatter;
+
+<span class="tok-ann">@Configuration</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> JacksonConfig {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">static</span> <span class="tok-kw">final</span> <span class="tok-typ">String</span> DATETIME_PATTERN = <span class="tok-str">&quot;yyyy-MM-dd HH:mm:ss&quot;</span>;
+
+    <span class="tok-ann">@Bean</span>
+    <span class="tok-kw">public</span> Jackson2ObjectMapperBuilderCustomizer jacksonCustomizer() {
+        <span class="tok-kw">return</span> builder -&gt; {
+            builder.featuresToDisable(
+                SerializationFeature.WRITE_DATES_AS_TIMESTAMPS,
+                DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES
+            );
+            JavaTimeModule module = <span class="tok-kw">new</span> JavaTimeModule();
+            module.addSerializer(<span class="tok-typ">LocalDateTime</span>.<span class="tok-kw">class</span>,
+                <span class="tok-kw">new</span> LocalDateTimeSerializer(DateTimeFormatter.ofPattern(DATETIME_PATTERN)));
+            builder.modules(module);
+        };
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-common/common-web</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-web/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add common-web module (GlobalExceptionHandler + JacksonConfig)&quot;</span></code></pre>
+<hr>
+<h3>Task B6: 创建 common-mybatis 持久层公共模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-mybatis/pom.xml</code></li>
+<li>Create: <code>super-market-common/common-mybatis/src/main/java/com/supermarket/common/mybatis/config/MyBatisPlusConfig.java</code></li>
+<li>Create: <code>super-market-common/common-mybatis/src/main/java/com/supermarket/common/mybatis/entity/BaseEntity.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建模块 pom.xml 和目录</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-common/common-mybatis/src/main/<span class="tok-builtin">java</span>/com/supermarket/common/mybatis/{config,entity,handler}</code></pre>
+<p>写入 <code>super-market-common/common-mybatis/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;common-mybatis<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;公共持久层模块：MyBatis-Plus 配置、BaseEntity、自动填充<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.baomidou<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;mybatis-plus-spring-boot3-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.mysql<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;mysql-connector-j<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 创建 MyBatis-Plus 配置类</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-mybatis/src/main/java/com/supermarket/common/mybatis/config/MyBatisPlusConfig.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.mybatis.config;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.DbType;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+<span class="tok-kw">import</span> org.springframework.context.annotation.Bean;
+<span class="tok-kw">import</span> org.springframework.context.annotation.Configuration;
+
+<span class="tok-ann">@Configuration</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> MyBatisPlusConfig {
+
+    <span class="tok-ann">@Bean</span>
+    <span class="tok-kw">public</span> MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = <span class="tok-kw">new</span> MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(<span class="tok-kw">new</span> PaginationInnerInterceptor(DbType.MYSQL));
+        <span class="tok-kw">return</span> interceptor;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 创建 BaseEntity</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-mybatis/src/main/java/com/supermarket/common/mybatis/entity/BaseEntity.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.mybatis.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.*;
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> BaseEntity {
+
+    <span class="tok-ann">@TableId</span>(type = IdType.ASSIGN_ID)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+
+    <span class="tok-ann">@TableField</span>(fill = FieldFill.INSERT)
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> createdAt;
+
+    <span class="tok-ann">@TableField</span>(fill = FieldFill.INSERT_UPDATE)
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> updatedAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-common/common-mybatis</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-mybatis/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add common-mybatis module (MyBatisPlusConfig + BaseEntity)&quot;</span></code></pre>
+<hr>
+<h3>Task B7: 全量编译验证</h3>
+<ul>
+<li>[ ] <strong>Step 1: 从根目录全量编译</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean install -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code>，6 个公共模块全部编译通过</p>
+<ul>
+<li>[ ] <strong>Step 2: 验证生成的 jar 包</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">find</span> super-market-common -name <span class="tok-str">&quot;*.jar&quot;</span> -path <span class="tok-str">&quot;*/target/*&quot;</span> | sort</code></pre>
+<p>Expected: 列出 5 个 common 模块的 jar 包</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add -A
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;chore: all common modules compile and install successfully&quot;</span></code></pre>
+<hr>
+<h2>Task Group C: 微服务脚手架</h2>
+<h3>设计说明</h3>
+<p>每个微服务采用统一的模块结构和配置模板：</p>
+<pre class="arch-diagram">service-{name}/
+├── pom.xml
+└── src/main/
+    ├── java/com/supermarket/{name}/
+    │   ├── {Name}Application.java          # Spring Boot 启动类
+    │   └── config/
+    │       └── DubboProviderConfig.java     # Dubbo 服务提供者配置
+    └── resources/
+        ├── application.yml                  # 主配置 (Nacos 配置中心)
+        ├── application-dev.yml              # 开发环境配置
+        └── bootstrap.yml                    # 引导配置 (Nacos 地址)</pre>
+<p>所有服务共用同一套 <code>application-dev.yml</code> 模板，区别仅在于：</p>
+<ul>
+<li><code>spring.application.name</code> = 服务名</li>
+<li><code>server.port</code> = 分配端口</li>
+<li><code>spring.datasource.url</code> = 对应数据库</li>
+</ul>
+<hr>
+<h3>Task C1: 创建服务模块父目录结构与生成脚本</h3>
+<ul>
+<li>[ ] <strong>Step 1: 创建 services 目录</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-services</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 定义服务注册表</strong></li>
+</ul>
+<p>在 <code>docs/superpowers/plans/</code> 下创建服务注册表 <code>service-registry.md</code>:</p>
+<pre data-lang="markdown"><code class="language-markdown"># 微服务注册表
+
+| 序号 | 模块目录 | 服务名 | 端口 | 数据库 | 包名 |
+|------|----------|--------|------|--------|------|
+| 1 | service-user | user-service | 9001 | db_user | com.supermarket.user |
+| 2 | service-auth | auth-service | 9002 | db_user | com.supermarket.auth |
+| 3 | service-member | member-service | 9003 | db_user | com.supermarket.member |
+| 4 | service-address | address-service | 9004 | db_user | com.supermarket.address |
+| 5 | service-product | product-service | 9011 | db_product | com.supermarket.product |
+| 6 | service-category | category-service | 9012 | db_product | com.supermarket.category |
+| 7 | service-inventory | inventory-service | 9013 | db_product | com.supermarket.inventory |
+| 8 | service-review | review-service | 9014 | db_product | com.supermarket.review |
+| 9 | service-cart | cart-service | 9021 | db_order | com.supermarket.cart |
+| 10 | service-order | order-service | 9022 | db_order | com.supermarket.order |
+| 11 | service-payment | payment-service | 9031 | db_payment | com.supermarket.payment |
+| 12 | service-coupon | coupon-service | 9051 | db_marketing | com.supermarket.coupon |
+| 13 | service-seckill | seckill-service | 9052 | db_marketing | com.supermarket.seckill |
+| 14 | service-search | search-service | 9061 | - (ES) | com.supermarket.search |
+| 15 | service-shop | shop-service | 9041 | db_shop | com.supermarket.shop |
+| 16 | service-platform | platform-service | 9081 | db_platform | com.supermarket.platform |
+| 17 | service-file | file-service | 9071 | - (MinIO) | com.supermarket.file |
+| 18 | service-notify | notify-service | 9072 | - | com.supermarket.notify |</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add docs/superpowers/plans/service-registry.md
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;docs: add service registry with port and database mapping&quot;</span></code></pre>
+<hr>
+<h3>Task C2: 创建核心服务脚手架 — user-service（模板验证）</h3>
+<p>以 <code>user-service</code> 为第一个完整创建，验证模板可用后，再批量生成其余 17 个服务。</p>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-user/pom.xml</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/UserApplication.java</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/config/DubboProviderConfig.java</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/resources/application.yml</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/resources/application-dev.yml</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/resources/bootstrap.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建目录结构</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-services/service-user/src/main/<span class="tok-builtin">java</span>/com/supermarket/user/config
+<span class="tok-builtin">mkdir</span> -p super-market-services/service-user/src/main/resources
+<span class="tok-builtin">mkdir</span> -p super-market-services/service-user/src/test/<span class="tok-builtin">java</span>/com/supermarket/user</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 pom.xml</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;service-user<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;用户服务 — 用户注册、登录、信息管理<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-core<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-web<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-security<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-mybatis<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-dubbo-api<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- Spring Boot --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-web<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-test<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;scope</span>&gt;test<span class="tok-tag">&lt;/scope</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- Dubbo --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.apache.dubbo<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;dubbo-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.apache.dubbo<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;dubbo-nacos-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- Nacos --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-alibaba-nacos-config<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-alibaba-nacos-discovery<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- Sentinel --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-alibaba-sentinel<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-cmt">&lt;!-- Redisson --&gt;</span>
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.redisson<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;redisson-spring-boot-starter<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+
+    <span class="tok-tag">&lt;build</span>&gt;
+        <span class="tok-tag">&lt;plugins</span>&gt;
+            <span class="tok-tag">&lt;plugin</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-maven-plugin<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;/plugin</span>&gt;
+        <span class="tok-tag">&lt;/plugins</span>&gt;
+    <span class="tok-tag">&lt;/build</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入启动类</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/UserApplication.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user;
+
+<span class="tok-kw">import</span> org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+<span class="tok-kw">import</span> org.springframework.boot.SpringApplication;
+<span class="tok-kw">import</span> org.springframework.boot.autoconfigure.SpringBootApplication;
+
+<span class="tok-ann">@EnableDubbo</span>
+<span class="tok-ann">@SpringBootApplication</span>(scanBasePackages = {
+    <span class="tok-str">&quot;com.supermarket.user&quot;</span>,
+    <span class="tok-str">&quot;com.supermarket.common&quot;</span>
+})
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> UserApplication {
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> <span class="tok-kw">void</span> main(<span class="tok-typ">String</span>[] args) {
+        SpringApplication.run(UserApplication.<span class="tok-kw">class</span>, args);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 Dubbo 配置类</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/config/DubboProviderConfig.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.config;
+
+<span class="tok-kw">import</span> org.apache.dubbo.config.annotation.DubboService;
+<span class="tok-kw">import</span> org.apache.dubbo.config.spring.context.annotation.DubboComponentScan;
+<span class="tok-kw">import</span> org.springframework.context.annotation.Configuration;
+
+<span class="tok-ann">@Configuration</span>
+<span class="tok-ann">@DubboComponentScan</span>(basePackages = <span class="tok-str">&quot;com.supermarket.user&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> DubboProviderConfig {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入配置文件</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/resources/application.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  application:</span>
+<span class="tok-prop">    name:</span> user-service
+<span class="tok-prop">  profiles:</span>
+<span class="tok-prop">    active:</span> dev
+<span class="tok-prop">  main:</span>
+<span class="tok-prop">    allow-bean-definition-overriding:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">
+server:</span>
+<span class="tok-prop">  port:</span> <span class="tok-var">${SERVER_PORT:9001}</span>
+<span class="tok-prop">  servlet:</span>
+<span class="tok-prop">    encoding:</span>
+<span class="tok-prop">      charset:</span> UTF-<span class="tok-num">8</span>
+<span class="tok-prop">      enabled:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">      force:</span> <span class="tok-kw">true</span></code></pre>
+<p>写入 <code>super-market-services/service-user/src/main/resources/application-dev.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  datasource:</span>
+<span class="tok-prop">    url:</span> jdbc:mysql://localhost:<span class="tok-num">3306</span>/db_user?useUnicode=<span class="tok-kw">true</span>&amp;characterEncoding=utf8mb4&amp;serverTimezone=Asia/Shanghai&amp;useSSL=<span class="tok-kw">false</span>&amp;allowPublicKeyRetrieval=<span class="tok-kw">true</span>
+<span class="tok-prop">    username:</span> root
+<span class="tok-prop">    password:</span> root123
+<span class="tok-prop">    driver-class-name:</span> com.mysql.cj.jdbc.Driver
+<span class="tok-prop">    hikari:</span>
+<span class="tok-prop">      minimum-idle:</span> <span class="tok-num">5</span>
+<span class="tok-prop">      maximum-pool-size:</span> <span class="tok-num">20</span>
+<span class="tok-prop">      idle-timeout:</span> <span class="tok-num">30000</span>
+<span class="tok-prop">      max-lifetime:</span> <span class="tok-num">1800000</span>
+<span class="tok-prop">      connection-timeout:</span> <span class="tok-num">5000</span>
+<span class="tok-prop">
+  data:</span>
+<span class="tok-prop">    redis:</span>
+<span class="tok-prop">      host:</span> localhost
+<span class="tok-prop">      port:</span> <span class="tok-num">6379</span>
+<span class="tok-prop">      password:</span> redis123
+<span class="tok-prop">      database:</span> <span class="tok-num">0</span>
+<span class="tok-prop">      lettuce:</span>
+<span class="tok-prop">        pool:</span>
+<span class="tok-prop">          max-active:</span> <span class="tok-num">8</span>
+<span class="tok-prop">          max-idle:</span> <span class="tok-num">8</span>
+<span class="tok-prop">          min-idle:</span> <span class="tok-num">2</span>
+<span class="tok-prop">
+dubbo:</span>
+<span class="tok-prop">  application:</span>
+<span class="tok-prop">    name:</span> user-service
+<span class="tok-prop">    qos-enable:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">  protocol:</span>
+<span class="tok-prop">    name:</span> tri
+<span class="tok-prop">    port:</span> -<span class="tok-num">1</span>
+<span class="tok-prop">  registry:</span>
+<span class="tok-prop">    address:</span> nacos://localhost:<span class="tok-num">8848</span>
+<span class="tok-prop">    parameters:</span>
+<span class="tok-prop">      namespace:</span> public
+<span class="tok-prop">  consumer:</span>
+<span class="tok-prop">    check:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">    timeout:</span> <span class="tok-num">5000</span>
+<span class="tok-prop">    retries:</span> <span class="tok-num">0</span>
+<span class="tok-prop">
+mybatis-plus:</span>
+<span class="tok-prop">  mapper-locations:</span> classpath*:mapper/**/*.xml
+<span class="tok-prop">  type-aliases-package:</span> com.supermarket.user.entity
+<span class="tok-prop">  global-config:</span>
+<span class="tok-prop">    db-config:</span>
+<span class="tok-prop">      id-type:</span> assign_id
+<span class="tok-prop">      logic-delete-field:</span> isDeleted
+<span class="tok-prop">      logic-delete-value:</span> <span class="tok-num">1</span>
+<span class="tok-prop">      logic-not-delete-value:</span> <span class="tok-num">0</span>
+<span class="tok-prop">
+logging:</span>
+<span class="tok-prop">  level:</span>
+<span class="tok-prop">    com.supermarket:</span> DEBUG
+<span class="tok-prop">    com.baomidou:</span> WARN</code></pre>
+<p>写入 <code>super-market-services/service-user/src/main/resources/bootstrap.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  cloud:</span>
+<span class="tok-prop">    nacos:</span>
+<span class="tok-prop">      config:</span>
+<span class="tok-prop">        server-addr:</span> localhost:<span class="tok-num">8848</span>
+<span class="tok-prop">        namespace:</span> public
+<span class="tok-prop">        group:</span> DEFAULT_GROUP
+<span class="tok-prop">        file-extension:</span> yaml
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">false</span>
+<span class="tok-prop">      discovery:</span>
+<span class="tok-prop">        server-addr:</span> localhost:<span class="tok-num">8848</span>
+<span class="tok-prop">        namespace:</span> public
+<span class="tok-prop">        enabled:</span> <span class="tok-kw">true</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-services/service-user</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-user/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add user-service scaffold (Spring Boot + Dubbo + Nacos + MyBatis-Plus)&quot;</span></code></pre>
+<hr>
+<h3>Task C3: 批量生成其余 17 个服务脚手架</h3>
+<ul>
+<li>[ ] <strong>Step 1: 执行批量生成脚本</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-cmt">#!/bin/bash</span>
+<span class="tok-cmt"># 服务注册表（来自 service-registry.md）</span>
+SERVICES=(
+  <span class="tok-str">&quot;service-auth:9002:com.supermarket.auth:AuthApplication:db_user&quot;</span>
+  <span class="tok-str">&quot;service-member:9003:com.supermarket.member:MemberApplication:db_user&quot;</span>
+  <span class="tok-str">&quot;service-address:9004:com.supermarket.address:AddressApplication:db_user&quot;</span>
+  <span class="tok-str">&quot;service-product:9011:com.supermarket.product:ProductApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-category:9012:com.supermarket.category:CategoryApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-inventory:9013:com.supermarket.inventory:InventoryApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-review:9014:com.supermarket.review:ReviewApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-cart:9021:com.supermarket.cart:CartApplication:db_order&quot;</span>
+  <span class="tok-str">&quot;service-order:9022:com.supermarket.order:OrderApplication:db_order&quot;</span>
+  <span class="tok-str">&quot;service-payment:9031:com.supermarket.payment:PaymentApplication:db_payment&quot;</span>
+  <span class="tok-str">&quot;service-coupon:9051:com.supermarket.coupon:CouponApplication:db_marketing&quot;</span>
+  <span class="tok-str">&quot;service-seckill:9052:com.supermarket.seckill:SeckillApplication:db_marketing&quot;</span>
+  <span class="tok-str">&quot;service-search:9061:com.supermarket.search:SearchApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-shop:9041:com.supermarket.shop:ShopApplication:db_shop&quot;</span>
+  <span class="tok-str">&quot;service-platform:9081:com.supermarket.platform:PlatformApplication:db_platform&quot;</span>
+  <span class="tok-str">&quot;service-file:9071:com.supermarket.file:FileApplication:db_product&quot;</span>
+  <span class="tok-str">&quot;service-notify:9072:com.supermarket.notify:NotifyApplication:db_product&quot;</span>
+)
+
+TEMPLATE_DIR=<span class="tok-str">&quot;super-market-services/service-user&quot;</span>
+
+<span class="tok-builtin">for</span> svc in <span class="tok-str">&quot;${SERVICES[@]}&quot;</span>; <span class="tok-builtin">do</span>
+  IFS=<span class="tok-str">':'</span> read -r dir port pkg class db &lt;&lt;&lt; <span class="tok-str">&quot;$svc&quot;</span>
+  <span class="tok-builtin">echo</span> <span class="tok-str">&quot;Generating $dir...&quot;</span>
+
+  TARGET=<span class="tok-str">&quot;super-market-services/$dir&quot;</span>
+  <span class="tok-builtin">mkdir</span> -p <span class="tok-str">&quot;$TARGET/src/main/java/${pkg//.//}/config&quot;</span>
+  <span class="tok-builtin">mkdir</span> -p <span class="tok-str">&quot;$TARGET/src/main/resources&quot;</span>
+  <span class="tok-builtin">mkdir</span> -p <span class="tok-str">&quot;$TARGET/src/test/java/${pkg//.//}&quot;</span>
+
+  <span class="tok-cmt"># pom.xml</span>
+  <span class="tok-builtin">sed</span> <span class="tok-str">&quot;s/service-user/$dir/g; s/user-service/${dir#service-}-service/g; s/UserApplication/$class/g; s/用户服务/${dir#service-}服务/g&quot;</span> \
+    <span class="tok-str">&quot;$TEMPLATE_DIR/pom.xml&quot;</span> &gt; <span class="tok-str">&quot;$TARGET/pom.xml&quot;</span>
+
+  <span class="tok-cmt"># Application.java</span>
+  PKG_PATH=<span class="tok-str">&quot;${pkg//.//}&quot;</span>
+  <span class="tok-builtin">cat</span> &gt; <span class="tok-str">&quot;$TARGET/src/main/java/$PKG_PATH/${class}.java&quot;</span> &lt;&lt; JEOF
+package <span class="tok-var">$pkg</span>;
+
+import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@EnableDubbo
+@SpringBootApplication(scanBasePackages = {
+    <span class="tok-str">&quot;$pkg&quot;</span>,
+    <span class="tok-str">&quot;com.supermarket.common&quot;</span>
+})
+public class <span class="tok-var">$class</span> {
+    public static void main(String[] args) {
+        SpringApplication.run(<span class="tok-var">$class</span>.class, args);
+    }
+}
+JEOF
+
+  <span class="tok-cmt"># DubboProviderConfig.java</span>
+  <span class="tok-builtin">cat</span> &gt; <span class="tok-str">&quot;$TARGET/src/main/java/$PKG_PATH/config/DubboProviderConfig.java&quot;</span> &lt;&lt; JEOF
+package <span class="tok-var">$pkg</span>.config;
+
+import org.apache.dubbo.config.spring.context.annotation.DubboComponentScan;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@DubboComponentScan(basePackages = <span class="tok-str">&quot;$pkg&quot;</span>)
+public class DubboProviderConfig {
+}
+JEOF
+
+  <span class="tok-cmt"># application.yml</span>
+  SVC_NAME=<span class="tok-str">&quot;${dir#service-}-service&quot;</span>
+  <span class="tok-builtin">sed</span> <span class="tok-str">&quot;s/user-service/$SVC_NAME/g; s/9001/$port/g&quot;</span> \
+    <span class="tok-str">&quot;$TEMPLATE_DIR/src/main/resources/application.yml&quot;</span> &gt; <span class="tok-str">&quot;$TARGET/src/main/resources/application.yml&quot;</span>
+
+  <span class="tok-cmt"># application-dev.yml</span>
+  <span class="tok-builtin">sed</span> <span class="tok-str">&quot;s/db_user/$db/g&quot;</span> \
+    <span class="tok-str">&quot;$TEMPLATE_DIR/src/main/resources/application-dev.yml&quot;</span> &gt; <span class="tok-str">&quot;$TARGET/src/main/resources/application-dev.yml&quot;</span>
+
+  <span class="tok-cmt"># bootstrap.yml (copy as-is)</span>
+  <span class="tok-builtin">cp</span> <span class="tok-str">&quot;$TEMPLATE_DIR/src/main/resources/bootstrap.yml&quot;</span> <span class="tok-str">&quot;$TARGET/src/main/resources/bootstrap.yml&quot;</span>
+
+  <span class="tok-builtin">echo</span> <span class="tok-str">&quot;  Done: $dir ($SVC_NAME :$port -&gt; $db)&quot;</span>
+<span class="tok-builtin">done</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 运行脚本</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">bash</span> docs/superpowers/plans/generate-services.<span class="tok-builtin">sh</span></code></pre>
+<p>Expected: 17 行 "Done: service-xxx" 输出</p>
+<ul>
+<li>[ ] <strong>Step 3: 全量编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code>，18 个服务模块全部编译通过</p>
+<ul>
+<li>[ ] <strong>Step 4: 验证所有服务启动类存在</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">find</span> super-market-services -name <span class="tok-str">&quot;*Application.java&quot;</span> | wc -l</code></pre>
+<p>Expected: <code>18</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: generate 18 microservice scaffolds (Spring Boot + Dubbo + Nacos)&quot;</span></code></pre>
+<hr>
+<h2>Task Group D: Gateway 网关模块</h2>
+<h3>Task D1: 创建 Spring Cloud Gateway 模块</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-gateway/pom.xml</code></li>
+<li>Create: <code>super-market-gateway/src/main/java/com/supermarket/gateway/GatewayApplication.java</code></li>
+<li>Create: <code>super-market-gateway/src/main/java/com/supermarket/gateway/filter/AuthGlobalFilter.java</code></li>
+<li>Create: <code>super-market-gateway/src/main/resources/application.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建目录结构</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-gateway/src/main/<span class="tok-builtin">java</span>/com/supermarket/gateway/filter
+<span class="tok-builtin">mkdir</span> -p super-market-gateway/src/main/resources</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 pom.xml</strong></li>
+</ul>
+<p>写入 <code>super-market-gateway/pom.xml</code>:</p>
+<pre data-lang="xml"><code class="language-xml">&lt;?xml version=<span class="tok-str">&quot;1.0&quot;</span> encoding=<span class="tok-str">&quot;UTF-8&quot;</span>?&gt;
+<span class="tok-tag">&lt;project</span> xmlns=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0&quot;</span>
+         xmlns:xsi=<span class="tok-str">&quot;http://www.w3.org/2001/XMLSchema-instance&quot;</span>
+         xsi:schemaLocation=<span class="tok-str">&quot;http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;</span>&gt;
+    <span class="tok-tag">&lt;modelVersion</span>&gt;4.0.0<span class="tok-tag">&lt;/modelVersion</span>&gt;
+    <span class="tok-tag">&lt;parent</span>&gt;
+        <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+        <span class="tok-tag">&lt;artifactId</span>&gt;super-market<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;version</span>&gt;1.0.0-SNAPSHOT<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;relativePath</span>&gt;../pom.xml<span class="tok-tag">&lt;/relativePath</span>&gt;
+    <span class="tok-tag">&lt;/parent</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;super-market-gateway<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;packaging</span>&gt;jar<span class="tok-tag">&lt;/packaging</span>&gt;
+    <span class="tok-tag">&lt;description</span>&gt;API 网关 — Spring Cloud Gateway + 统一鉴权 + 限流<span class="tok-tag">&lt;/description</span>&gt;
+
+    <span class="tok-tag">&lt;dependencies</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.supermarket<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;common-security<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;version</span>&gt;${project.version}<span class="tok-tag">&lt;/version</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-gateway<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-loadbalancer<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-alibaba-nacos-discovery<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-alibaba-sentinel<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;com.alibaba.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-alibaba-sentinel-gateway<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.cloud<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-cloud-starter-circuitbreaker-reactor-resilience4j<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-actuator<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+        <span class="tok-tag">&lt;dependency</span>&gt;
+            <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+            <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-starter-data-redis-reactive<span class="tok-tag">&lt;/artifactId</span>&gt;
+        <span class="tok-tag">&lt;/dependency</span>&gt;
+    <span class="tok-tag">&lt;/dependencies</span>&gt;
+
+    <span class="tok-tag">&lt;build</span>&gt;
+        <span class="tok-tag">&lt;plugins</span>&gt;
+            <span class="tok-tag">&lt;plugin</span>&gt;
+                <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.boot<span class="tok-tag">&lt;/groupId</span>&gt;
+                <span class="tok-tag">&lt;artifactId</span>&gt;spring-boot-maven-plugin<span class="tok-tag">&lt;/artifactId</span>&gt;
+            <span class="tok-tag">&lt;/plugin</span>&gt;
+        <span class="tok-tag">&lt;/plugins</span>&gt;
+    <span class="tok-tag">&lt;/build</span>&gt;
+<span class="tok-tag">&lt;/project</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入启动类</strong></li>
+</ul>
+<p>写入 <code>super-market-gateway/src/main/java/com/supermarket/gateway/GatewayApplication.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.gateway;
+
+<span class="tok-kw">import</span> org.springframework.boot.SpringApplication;
+<span class="tok-kw">import</span> org.springframework.boot.autoconfigure.SpringBootApplication;
+
+<span class="tok-ann">@SpringBootApplication</span>(scanBasePackages = {
+    <span class="tok-str">&quot;com.supermarket.gateway&quot;</span>,
+    <span class="tok-str">&quot;com.supermarket.common&quot;</span>
+})
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> GatewayApplication {
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> <span class="tok-kw">void</span> main(<span class="tok-typ">String</span>[] args) {
+        SpringApplication.run(GatewayApplication.<span class="tok-kw">class</span>, args);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入全局鉴权过滤器</strong></li>
+</ul>
+<p>写入 <code>super-market-gateway/src/main/java/com/supermarket/gateway/filter/AuthGlobalFilter.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.gateway.filter;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.constants.GlobalConstants;
+<span class="tok-kw">import</span> com.supermarket.common.security.util.JwtUtil;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.springframework.cloud.gateway.filter.GatewayFilterChain;
+<span class="tok-kw">import</span> org.springframework.cloud.gateway.filter.GlobalFilter;
+<span class="tok-kw">import</span> org.springframework.core.Ordered;
+<span class="tok-kw">import</span> org.springframework.core.io.buffer.DataBuffer;
+<span class="tok-kw">import</span> org.springframework.http.HttpHeaders;
+<span class="tok-kw">import</span> org.springframework.http.HttpStatus;
+<span class="tok-kw">import</span> org.springframework.http.MediaType;
+<span class="tok-kw">import</span> org.springframework.http.server.reactive.ServerHttpRequest;
+<span class="tok-kw">import</span> org.springframework.http.server.reactive.ServerHttpResponse;
+<span class="tok-kw">import</span> org.springframework.stereotype.Component;
+<span class="tok-kw">import</span> org.springframework.web.server.ServerWebExchange;
+<span class="tok-kw">import</span> reactor.core.publisher.Mono;
+
+<span class="tok-kw">import</span> java.nio.charset.StandardCharsets;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Component</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> AuthGlobalFilter <span class="tok-kw">implements</span> GlobalFilter, Ordered {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> JwtUtil jwtUtil;
+
+    <span class="tok-kw">private</span> <span class="tok-kw">static</span> <span class="tok-kw">final</span> <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; WHITELIST = <span class="tok-typ">List</span>.of(
+        <span class="tok-str">&quot;/api/user/register&quot;</span>,
+        <span class="tok-str">&quot;/api/user/login&quot;</span>,
+        <span class="tok-str">&quot;/api/auth/login&quot;</span>,
+        <span class="tok-str">&quot;/actuator&quot;</span>,
+        <span class="tok-str">&quot;/doc.html&quot;</span>,
+        <span class="tok-str">&quot;/v3/api-docs&quot;</span>
+    );
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Mono&lt;Void&gt; filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        ServerHttpRequest request = exchange.getRequest();
+        <span class="tok-typ">String</span> path = request.getURI().getPath();
+
+        <span class="tok-cmt">// 白名单放行</span>
+        <span class="tok-kw">if</span> (WHITELIST.stream().anyMatch(path::startsWith)) {
+            <span class="tok-kw">return</span> chain.filter(exchange);
+        }
+
+        <span class="tok-cmt">// 提取 Token</span>
+        <span class="tok-typ">String</span> authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        <span class="tok-kw">if</span> (authHeader == <span class="tok-kw">null</span> || !authHeader.startsWith(<span class="tok-str">&quot;Bearer &quot;</span>)) {
+            <span class="tok-kw">return</span> unauthorized(exchange, <span class="tok-str">&quot;未提供认证 Token&quot;</span>);
+        }
+
+        <span class="tok-typ">String</span> token = authHeader.substring(<span class="tok-num">7</span>);
+
+        <span class="tok-cmt">// 验证 Token</span>
+        <span class="tok-kw">if</span> (!jwtUtil.validate(token)) {
+            <span class="tok-kw">return</span> unauthorized(exchange, <span class="tok-str">&quot;Token 无效或已过期&quot;</span>);
+        }
+
+        <span class="tok-kw">if</span> (jwtUtil.isExpired(token)) {
+            <span class="tok-kw">return</span> unauthorized(exchange, <span class="tok-str">&quot;Token 已过期&quot;</span>);
+        }
+
+        <span class="tok-cmt">// 透传用户信息到下游</span>
+        <span class="tok-typ">Long</span> userId = jwtUtil.getUserId(token);
+        <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; roles = jwtUtil.getRoles(token);
+
+        ServerHttpRequest mutatedRequest = request.mutate()
+            .header(GlobalConstants.USER_ID, <span class="tok-typ">String</span>.valueOf(userId))
+            .header(GlobalConstants.USER_ROLES, <span class="tok-typ">String</span>.join(<span class="tok-str">&quot;,&quot;</span>, roles))
+            .build();
+
+        <span class="tok-kw">return</span> chain.filter(exchange.mutate().request(mutatedRequest).build());
+    }
+
+    <span class="tok-kw">private</span> Mono&lt;Void&gt; unauthorized(ServerWebExchange exchange, <span class="tok-typ">String</span> message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        <span class="tok-typ">String</span> body = <span class="tok-str">&quot;{\&quot;code\&quot;:401,\&quot;message\&quot;:\&quot;&quot;</span> + message + <span class="tok-str">&quot;\&quot;}&quot;</span>;
+        DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+        <span class="tok-kw">return</span> response.writeWith(Mono.just(buffer));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">int</span> getOrder() {
+        <span class="tok-kw">return</span> -<span class="tok-num">100</span>;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入 Gateway 配置</strong></li>
+</ul>
+<p>写入 <code>super-market-gateway/src/main/resources/application.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">spring:</span>
+<span class="tok-prop">  application:</span>
+<span class="tok-prop">    name:</span> gateway-service
+<span class="tok-prop">  profiles:</span>
+<span class="tok-prop">    active:</span> dev
+<span class="tok-prop">  main:</span>
+<span class="tok-prop">    web-application-type:</span> reactive
+<span class="tok-prop">  cloud:</span>
+<span class="tok-prop">    nacos:</span>
+<span class="tok-prop">      discovery:</span>
+<span class="tok-prop">        server-addr:</span> localhost:<span class="tok-num">8848</span>
+<span class="tok-prop">        namespace:</span> public
+<span class="tok-prop">    gateway:</span>
+<span class="tok-prop">      discovery:</span>
+<span class="tok-prop">        locator:</span>
+<span class="tok-prop">          enabled:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">          lower-case-service-id:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">      routes:</span>
+        - id: user-service
+<span class="tok-prop">          uri:</span> lb://user-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/user/**
+        - id: auth-service
+<span class="tok-prop">          uri:</span> lb://auth-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/auth/**
+        - id: product-service
+<span class="tok-prop">          uri:</span> lb://product-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/product/**
+        - id: inventory-service
+<span class="tok-prop">          uri:</span> lb://inventory-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/inventory/**
+        - id: cart-service
+<span class="tok-prop">          uri:</span> lb://cart-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/cart/**
+        - id: order-service
+<span class="tok-prop">          uri:</span> lb://order-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/order/**
+        - id: payment-service
+<span class="tok-prop">          uri:</span> lb://payment-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/payment/**
+        - id: coupon-service
+<span class="tok-prop">          uri:</span> lb://coupon-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/coupon/**
+        - id: seckill-service
+<span class="tok-prop">          uri:</span> lb://seckill-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/seckill/**
+        - id: search-service
+<span class="tok-prop">          uri:</span> lb://search-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/search/**
+        - id: shop-service
+<span class="tok-prop">          uri:</span> lb://shop-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/shop/**
+        - id: file-service
+<span class="tok-prop">          uri:</span> lb://file-service
+<span class="tok-prop">          predicates:</span>
+            - Path=/api/file/**
+<span class="tok-prop">      default-filters:</span>
+        - DedupeResponseHeader=Access-Control-Allow-Origin
+<span class="tok-prop">  data:</span>
+<span class="tok-prop">    redis:</span>
+<span class="tok-prop">      host:</span> localhost
+<span class="tok-prop">      port:</span> <span class="tok-num">6379</span>
+<span class="tok-prop">      password:</span> redis123
+<span class="tok-prop">
+server:</span>
+<span class="tok-prop">  port:</span> <span class="tok-num">8080</span>
+<span class="tok-prop">
+jwt:</span>
+<span class="tok-prop">  secret:</span> super-market-default-secret-key-change-in-production-min-<span class="tok-num">256</span>-bits
+<span class="tok-prop">  access-token-expire:</span> <span class="tok-num">7200</span>
+<span class="tok-prop">  refresh-token-expire:</span> <span class="tok-num">604800</span>
+<span class="tok-prop">
+logging:</span>
+<span class="tok-prop">  level:</span>
+<span class="tok-prop">    com.supermarket.gateway:</span> DEBUG
+<span class="tok-prop">
+management:</span>
+<span class="tok-prop">  endpoints:</span>
+<span class="tok-prop">    web:</span>
+<span class="tok-prop">      exposure:</span>
+<span class="tok-prop">        include:</span> health,info,gateway</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean compile -pl super-market-gateway</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-gateway/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add Gateway module (Spring Cloud Gateway + JWT auth filter + route config)&quot;</span></code></pre>
+<hr>
+<h2>Task Group E: CI/CD 流水线</h2>
+<h3>Task E1: 创建 GitLab CI/CD 模板</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>.gitlab-ci.yml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 CI/CD 配置</strong></li>
+</ul>
+<p>写入 <code>.gitlab-ci.yml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-cmt"># Super Market — GitLab CI/CD 流水线定义</span>
+<span class="tok-cmt"># 4 阶段: check → test → build → deploy</span>
+<span class="tok-prop">
+variables:</span>
+<span class="tok-prop">  MAVEN_OPTS:</span> <span class="tok-str">&quot;-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository&quot;</span>
+<span class="tok-prop">  MAVEN_CLI_OPTS:</span> <span class="tok-str">&quot;--batch-mode --errors --fail-at-end --show-version&quot;</span>
+<span class="tok-prop">  DOCKER_DRIVER:</span> overlay2
+<span class="tok-prop">  HARBOR_URL:</span> harbor.local
+<span class="tok-prop">  HARBOR_PROJECT:</span> super-market
+<span class="tok-prop">
+cache:</span>
+<span class="tok-prop">  key:</span> <span class="tok-var">${CI_COMMIT_REF_SLUG}</span>
+<span class="tok-prop">  paths:</span>
+    - .m2/repository/
+<span class="tok-prop">
+stages:</span>
+  - check
+  - test
+  - build
+  - deploy
+
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-cmt"># Stage 1: 代码检查</span>
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-prop">checkstyle:</span>
+<span class="tok-prop">  stage:</span> check
+<span class="tok-prop">  image:</span> maven:<span class="tok-num">3.9</span>-eclipse-temurin-<span class="tok-num">21</span>
+<span class="tok-prop">  script:</span>
+    - mvn checkstyle:check $MAVEN_CLI_OPTS || <span class="tok-kw">true</span>
+<span class="tok-prop">  allow_failure:</span> <span class="tok-kw">true</span>
+<span class="tok-prop">  only:</span>
+    - merge_requests
+    - master
+
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-cmt"># Stage 2: 构建 + 单元测试</span>
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-prop">unit-test:</span>
+<span class="tok-prop">  stage:</span> test
+<span class="tok-prop">  image:</span> maven:<span class="tok-num">3.9</span>-eclipse-temurin-<span class="tok-num">21</span>
+<span class="tok-prop">  services:</span>
+    - name: mysql:<span class="tok-num">8.0</span>.<span class="tok-num">35</span>
+<span class="tok-prop">      alias:</span> mysql
+<span class="tok-prop">      variables:</span>
+<span class="tok-prop">        MYSQL_ROOT_PASSWORD:</span> root123
+    - name: redis:<span class="tok-num">7.2</span>-alpine
+<span class="tok-prop">      alias:</span> redis
+<span class="tok-prop">  variables:</span>
+<span class="tok-prop">    SPRING_DATASOURCE_URL:</span> jdbc:mysql://mysql:<span class="tok-num">3306</span>/db_user
+<span class="tok-prop">    SPRING_DATASOURCE_USERNAME:</span> root
+<span class="tok-prop">    SPRING_DATASOURCE_PASSWORD:</span> root123
+<span class="tok-prop">    SPRING_REDIS_HOST:</span> redis
+<span class="tok-prop">  script:</span>
+    - mvn clean test $MAVEN_CLI_OPTS
+<span class="tok-prop">  artifacts:</span>
+<span class="tok-prop">    when:</span> always
+<span class="tok-prop">    reports:</span>
+<span class="tok-prop">      junit:</span>
+        - <span class="tok-str">&quot;**/target/surefire-reports/TEST-*.xml&quot;</span>
+<span class="tok-prop">    paths:</span>
+      - <span class="tok-str">&quot;**/target/surefire-reports/&quot;</span>
+<span class="tok-prop">  coverage:</span> <span class="tok-str">'/Total.*?([0-9]{1,3})%$/'</span>
+<span class="tok-prop">  only:</span>
+    - merge_requests
+    - master
+
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-cmt"># Stage 3: 镜像打包 + 推送</span>
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-prop">docker-build:</span>
+<span class="tok-prop">  stage:</span> build
+<span class="tok-prop">  image:</span> docker:<span class="tok-num">24</span>-dind
+<span class="tok-prop">  services:</span>
+    - docker:<span class="tok-num">24</span>-dind
+<span class="tok-prop">  before_script:</span>
+    - echo <span class="tok-str">&quot;$HARBOR_PASSWORD&quot;</span> | docker login $HARBOR_URL -u <span class="tok-str">&quot;$HARBOR_USERNAME&quot;</span> --password-stdin
+<span class="tok-prop">  script:</span>
+    - |
+      SERVICES=(
+        <span class="tok-str">&quot;service-user&quot;</span> <span class="tok-str">&quot;service-auth&quot;</span> <span class="tok-str">&quot;service-member&quot;</span> <span class="tok-str">&quot;service-address&quot;</span>
+        <span class="tok-str">&quot;service-product&quot;</span> <span class="tok-str">&quot;service-category&quot;</span> <span class="tok-str">&quot;service-inventory&quot;</span> <span class="tok-str">&quot;service-review&quot;</span>
+        <span class="tok-str">&quot;service-cart&quot;</span> <span class="tok-str">&quot;service-order&quot;</span> <span class="tok-str">&quot;service-payment&quot;</span>
+        <span class="tok-str">&quot;service-coupon&quot;</span> <span class="tok-str">&quot;service-seckill&quot;</span> <span class="tok-str">&quot;service-search&quot;</span>
+        <span class="tok-str">&quot;service-shop&quot;</span> <span class="tok-str">&quot;service-platform&quot;</span> <span class="tok-str">&quot;service-file&quot;</span> <span class="tok-str">&quot;service-notify&quot;</span>
+      )
+      for svc in <span class="tok-str">&quot;${SERVICES[@]}&quot;</span>; do
+        echo <span class="tok-str">&quot;Building $svc...&quot;</span>
+        cd super-market-services/$svc
+        docker build -t $HARBOR_URL/$HARBOR_PROJECT/$svc:$CI_COMMIT_SHORT_SHA .
+        docker push $HARBOR_URL/$HARBOR_PROJECT/$svc:$CI_COMMIT_SHORT_SHA
+        docker tag $HARBOR_URL/$HARBOR_PROJECT/$svc:$CI_COMMIT_SHORT_SHA $HARBOR_URL/$HARBOR_PROJECT/$svc:latest
+        docker push $HARBOR_URL/$HARBOR_PROJECT/$svc:latest
+        cd $CI_PROJECT_DIR
+      done
+      echo <span class="tok-str">&quot;Building gateway...&quot;</span>
+      cd super-market-gateway
+      docker build -t $HARBOR_URL/$HARBOR_PROJECT/gateway:$CI_COMMIT_SHORT_SHA .
+      docker push $HARBOR_URL/$HARBOR_PROJECT/gateway:$CI_COMMIT_SHORT_SHA
+<span class="tok-prop">  only:</span>
+    - master
+<span class="tok-prop">  when:</span> manual
+
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-cmt"># Stage 4: K8s 部署（滚动发布）</span>
+<span class="tok-cmt"># ==========================================</span>
+<span class="tok-prop">deploy-to-k8s:</span>
+<span class="tok-prop">  stage:</span> deploy
+<span class="tok-prop">  image:</span> bitnami/kubectl:<span class="tok-num">1.29</span>
+<span class="tok-prop">  script:</span>
+    - |
+      SERVICES=(
+        <span class="tok-str">&quot;service-user&quot;</span> <span class="tok-str">&quot;service-auth&quot;</span> <span class="tok-str">&quot;service-member&quot;</span> <span class="tok-str">&quot;service-address&quot;</span>
+        <span class="tok-str">&quot;service-product&quot;</span> <span class="tok-str">&quot;service-category&quot;</span> <span class="tok-str">&quot;service-inventory&quot;</span> <span class="tok-str">&quot;service-review&quot;</span>
+        <span class="tok-str">&quot;service-cart&quot;</span> <span class="tok-str">&quot;service-order&quot;</span> <span class="tok-str">&quot;service-payment&quot;</span>
+        <span class="tok-str">&quot;service-coupon&quot;</span> <span class="tok-str">&quot;service-seckill&quot;</span> <span class="tok-str">&quot;service-search&quot;</span>
+        <span class="tok-str">&quot;service-shop&quot;</span> <span class="tok-str">&quot;service-platform&quot;</span> <span class="tok-str">&quot;service-file&quot;</span> <span class="tok-str">&quot;service-notify&quot;</span>
+      )
+      for svc in <span class="tok-str">&quot;${SERVICES[@]}&quot;</span>; do
+        kubectl set image deployment/$svc $svc=$HARBOR_URL/$HARBOR_PROJECT/$svc:$CI_COMMIT_SHORT_SHA -n super-market
+        kubectl rollout status deployment/$svc -n super-market --timeout=300s
+      done
+      kubectl set image deployment/gateway gateway=$HARBOR_URL/$HARBOR_PROJECT/gateway:$CI_COMMIT_SHORT_SHA -n super-market
+      kubectl rollout status deployment/gateway -n super-market --timeout=300s
+<span class="tok-prop">  only:</span>
+    - master
+<span class="tok-prop">  when:</span> manual</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add .gitlab-ci.yml
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add GitLab CI/CD pipeline (4 stages: check, test, build, deploy)&quot;</span></code></pre>
+<hr>
+<h3>Task E2: 为每个服务添加 Dockerfile</h3>
+<ul>
+<li>[ ] <strong>Step 1: 创建 Dockerfile 模板</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/Dockerfile</code>:</p>
+<pre data-lang="dockerfile"><code class="language-dockerfile"><span class="tok-kw">FROM</span> eclipse-temurin:21-jre-alpine
+
+<span class="tok-kw">WORKDIR</span> /app
+
+<span class="tok-kw">COPY</span> target/*.jar app.jar
+
+<span class="tok-kw">RUN</span> addgroup -S appgroup &amp;&amp; adduser -S appuser -G appgroup
+<span class="tok-kw">USER</span> appuser
+
+<span class="tok-kw">EXPOSE</span> 9001
+
+<span class="tok-kw">ENTRYPOINT</span> [<span class="tok-str">&quot;java&quot;</span>, <span class="tok-str">&quot;-XX:+UseZGC&quot;</span>, <span class="tok-str">&quot;-XX:MaxRAMPercentage=75.0&quot;</span>, <span class="tok-str">&quot;-jar&quot;</span>, <span class="tok-str">&quot;app.jar&quot;</span>]</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 为其余 17 个服务复制并调整端口</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">for</span> svc in service-auth service-member service-address service-product service-category service-inventory service-review service-cart service-order service-payment service-coupon service-seckill service-search service-shop service-platform service-file service-notify; <span class="tok-builtin">do</span>
+  PORT=$(<span class="tok-builtin">grep</span> -A1 <span class="tok-str">&quot;$svc&quot;</span> docs/superpowers/plans/service-registry.md | <span class="tok-builtin">grep</span> -oP <span class="tok-str">'\d{4}'</span> | head -1)
+  <span class="tok-builtin">sed</span> <span class="tok-str">&quot;s/9001/$PORT/g&quot;</span> super-market-services/service-user/Dockerfile &gt; <span class="tok-str">&quot;super-market-services/$svc/Dockerfile&quot;</span>
+<span class="tok-builtin">done</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/*/Dockerfile
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add Dockerfile for all 18 microservices (Eclipse Temurin 21 + ZGC)&quot;</span></code></pre>
+<hr>
+<h2>Task Group F: K8s 基础配置</h2>
+<h3>Task F1: 创建 K8s 基础资源清单</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-k8s/base/namespace.yaml</code></li>
+<li>Create: <code>super-market-k8s/base/configmap.yaml</code></li>
+<li>Create: <code>super-market-k8s/base/secret.yaml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 创建目录结构</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mkdir</span> -p super-market-k8s/{base,apps,monitoring}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 Namespace</strong></li>
+</ul>
+<p>写入 <code>super-market-k8s/base/namespace.yaml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">apiVersion:</span> v1
+<span class="tok-prop">kind:</span> Namespace
+<span class="tok-prop">metadata:</span>
+<span class="tok-prop">  name:</span> super-market
+<span class="tok-prop">  labels:</span>
+<span class="tok-prop">    name:</span> super-market
+<span class="tok-prop">    environment:</span> production</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 ConfigMap</strong></li>
+</ul>
+<p>写入 <code>super-market-k8s/base/configmap.yaml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">apiVersion:</span> v1
+<span class="tok-prop">kind:</span> ConfigMap
+<span class="tok-prop">metadata:</span>
+<span class="tok-prop">  name:</span> super-market-config
+<span class="tok-prop">  namespace:</span> super-market
+<span class="tok-prop">data:</span>
+<span class="tok-prop">  NACOS_ADDR:</span> <span class="tok-str">&quot;nacos-0.nacos-headless.super-market.svc.cluster.local:8848&quot;</span>
+<span class="tok-prop">  MYSQL_HOST:</span> <span class="tok-str">&quot;mysql-0.mysql-headless.super-market.svc.cluster.local&quot;</span>
+<span class="tok-prop">  REDIS_HOST:</span> <span class="tok-str">&quot;redis-0.redis-headless.super-market.svc.cluster.local&quot;</span>
+<span class="tok-prop">  ROCKETMQ_NAMESRV:</span> <span class="tok-str">&quot;rocketmq-namesrv-0.rocketmq-headless.super-market.svc.cluster.local:9876&quot;</span>
+<span class="tok-prop">  ES_HOST:</span> <span class="tok-str">&quot;elasticsearch-0.es-headless.super-market.svc.cluster.local:9200&quot;</span>
+<span class="tok-prop">  MINIO_ENDPOINT:</span> <span class="tok-str">&quot;http://minio-0.minio-headless.super-market.svc.cluster.local:9000&quot;</span>
+<span class="tok-prop">  JWT_SECRET:</span> <span class="tok-str">&quot;change-this-to-a-real-secret-in-secret-resource&quot;</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 Secret</strong></li>
+</ul>
+<p>写入 <code>super-market-k8s/base/secret.yaml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">apiVersion:</span> v1
+<span class="tok-prop">kind:</span> Secret
+<span class="tok-prop">metadata:</span>
+<span class="tok-prop">  name:</span> super-market-secret
+<span class="tok-prop">  namespace:</span> super-market
+<span class="tok-prop">type:</span> Opaque
+<span class="tok-prop">stringData:</span>
+<span class="tok-prop">  MYSQL_ROOT_PASSWORD:</span> <span class="tok-str">&quot;root123&quot;</span>
+<span class="tok-prop">  MYSQL_APP_PASSWORD:</span> <span class="tok-str">&quot;app_user123&quot;</span>
+<span class="tok-prop">  REDIS_PASSWORD:</span> <span class="tok-str">&quot;redis123&quot;</span>
+<span class="tok-prop">  MINIO_ROOT_PASSWORD:</span> <span class="tok-str">&quot;minioadmin123&quot;</span>
+<span class="tok-prop">  JWT_SECRET:</span> <span class="tok-str">&quot;super-market-jwt-secret-min-256-bits-long-key-change-in-production&quot;</span></code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-k8s/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add K8s base resources (Namespace, ConfigMap, Secret)&quot;</span></code></pre>
+<hr>
+<h3>Task F2: 创建 K8s Deployment 模板</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-k8s/apps/service-template.yaml</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入通用 Deployment 模板</strong></li>
+</ul>
+<p>写入 <code>super-market-k8s/apps/service-template.yaml</code>:</p>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-cmt"># K8s Deployment 通用模板</span>
+<span class="tok-cmt"># 使用方式: 复制并替换 ${SERVICE_NAME}, ${PORT}, ${REPLICAS}</span>
+<span class="tok-prop">apiVersion:</span> apps/v1
+<span class="tok-prop">kind:</span> Deployment
+<span class="tok-prop">metadata:</span>
+<span class="tok-prop">  name:</span> <span class="tok-var">${SERVICE_NAME}</span>
+<span class="tok-prop">  namespace:</span> super-market
+<span class="tok-prop">  labels:</span>
+<span class="tok-prop">    app:</span> <span class="tok-var">${SERVICE_NAME}</span>
+<span class="tok-prop">spec:</span>
+<span class="tok-prop">  replicas:</span> <span class="tok-var">${REPLICAS}</span>
+<span class="tok-prop">  selector:</span>
+<span class="tok-prop">    matchLabels:</span>
+<span class="tok-prop">      app:</span> <span class="tok-var">${SERVICE_NAME}</span>
+<span class="tok-prop">  template:</span>
+<span class="tok-prop">    metadata:</span>
+<span class="tok-prop">      labels:</span>
+<span class="tok-prop">        app:</span> <span class="tok-var">${SERVICE_NAME}</span>
+<span class="tok-prop">        version:</span> <span class="tok-str">&quot;1.0.0&quot;</span>
+<span class="tok-prop">    spec:</span>
+<span class="tok-prop">      containers:</span>
+        - name: <span class="tok-var">${SERVICE_NAME}</span>
+<span class="tok-prop">          image:</span> harbor.local/super-market/<span class="tok-var">${SERVICE_NAME}</span>:latest
+<span class="tok-prop">          imagePullPolicy:</span> Always
+<span class="tok-prop">          ports:</span>
+            - containerPort: <span class="tok-var">${PORT}</span>
+<span class="tok-prop">              protocol:</span> TCP
+<span class="tok-prop">          envFrom:</span>
+            - configMapRef:
+<span class="tok-prop">                name:</span> super-market-config
+            - secretRef:
+<span class="tok-prop">                name:</span> super-market-secret
+<span class="tok-prop">          resources:</span>
+<span class="tok-prop">            requests:</span>
+<span class="tok-prop">              cpu:</span> <span class="tok-str">&quot;200m&quot;</span>
+<span class="tok-prop">              memory:</span> <span class="tok-str">&quot;512Mi&quot;</span>
+<span class="tok-prop">            limits:</span>
+<span class="tok-prop">              cpu:</span> <span class="tok-str">&quot;1000m&quot;</span>
+<span class="tok-prop">              memory:</span> <span class="tok-str">&quot;1024Mi&quot;</span>
+<span class="tok-prop">          livenessProbe:</span>
+<span class="tok-prop">            httpGet:</span>
+<span class="tok-prop">              path:</span> /actuator/health/liveness
+<span class="tok-prop">              port:</span> <span class="tok-var">${PORT}</span>
+<span class="tok-prop">            initialDelaySeconds:</span> <span class="tok-num">30</span>
+<span class="tok-prop">            periodSeconds:</span> <span class="tok-num">10</span>
+<span class="tok-prop">            timeoutSeconds:</span> <span class="tok-num">5</span>
+<span class="tok-prop">            failureThreshold:</span> <span class="tok-num">3</span>
+<span class="tok-prop">          readinessProbe:</span>
+<span class="tok-prop">            httpGet:</span>
+<span class="tok-prop">              path:</span> /actuator/health/readiness
+<span class="tok-prop">              port:</span> <span class="tok-var">${PORT}</span>
+<span class="tok-prop">            initialDelaySeconds:</span> <span class="tok-num">15</span>
+<span class="tok-prop">            periodSeconds:</span> <span class="tok-num">5</span>
+<span class="tok-prop">            timeoutSeconds:</span> <span class="tok-num">3</span>
+<span class="tok-prop">            failureThreshold:</span> <span class="tok-num">3</span>
+<span class="tok-prop">      restartPolicy:</span> Always</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-k8s/apps/service-template.yaml
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add K8s Deployment template with health probes and resource limits&quot;</span></code></pre>
+<hr>
+<h2>Task Group G: 最终验证</h2>
+<h3>Task G1: 全量构建验证</h3>
+<ul>
+<li>[ ] <strong>Step 1: 从根目录执行全量 Maven 构建</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">mvn</span> clean install -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code>，所有 23 个模块（5 个 common + 1 个 gateway + 18 个 service，去掉空的 common-dubbo-api 实际为 23+）编译通过</p>
+<ul>
+<li>[ ] <strong>Step 2: 验证项目结构完整性</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== Maven 模块 ===&quot;</span> &amp;&amp; <span class="tok-builtin">mvn</span> help:evaluate -Dexpression=project.modules -q -DforceStdout 2&gt;/dev/null || <span class="tok-builtin">grep</span> <span class="tok-str">'&lt;module&gt;'</span> pom.xml | wc -l
+<span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== 服务启动类 ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;*Application.java&quot;</span> -path <span class="tok-str">&quot;*/main/*&quot;</span> | wc -l
+<span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== Dockerfile ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;Dockerfile&quot;</span> -not -path <span class="tok-str">&quot;*/target/*&quot;</span> | wc -l
+<span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== application.yml ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;application.yml&quot;</span> -path <span class="tok-str">&quot;*/resources/*&quot;</span> | wc -l</code></pre>
+<p>Expected:</p>
+<ul>
+<li>23 个 Maven 模块</li>
+<li>18 个服务启动类 + 1 个 Gateway 启动类 = 19</li>
+<li>18 个 Dockerfile</li>
+<li>18 个 application.yml + 1 个 Gateway = 19</li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 3: 提交最终验证记录</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add -A
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;chore: Phase 1 complete — infrastructure + scaffolding verified
+
+Verified:
+- Docker Compose: 12 middleware services (MySQL, Redis, Nacos, RocketMQ, ES, MinIO, XXL-Job, Sentinel, SkyWalking, Canal)
+- Maven: 23 modules compile successfully (5 common + 18 services)
+- Gateway: Spring Cloud Gateway with JWT auth filter + route config
+- CI/CD: 4-stage pipeline (check, test, build, deploy)
+- K8s: Namespace, ConfigMap, Secret, Deployment template&quot;</span></code></pre>
+<hr>
+<h2>Phase 1 完成检查清单</h2>
+<ul>
+<li>[x] Docker Compose 12 个中间件服务定义完成</li>
+<li>[x] MySQL 初始化 SQL（10 个数据库）</li>
+<li>[x] Maven 父 POM（Spring Boot 3.2 + Dubbo 3.2 + 全部依赖版本管理）</li>
+<li>[x] 5 个 common 模块（core / dubbo-api / security / web / mybatis）</li>
+<li>[x] 18 个微服务脚手架（统一结构、配置、Dockerfile）</li>
+<li>[x] Gateway 网关（Spring Cloud Gateway + JWT 全局过滤器）</li>
+<li>[x] <code>.gitlab-ci.yml</code> CI/CD 流水线</li>
+<li>[x] K8s 基础配置（Namespace / ConfigMap / Secret / Deployment 模板）</li>
+<li>[x] 全量 Maven 编译通过</li>
+</ul>
+<hr>
+<h2>下一步：Phase 2 准备</h2>
+<p>Phase 2 将进入核心业务开发（用户域 + 商品域），包含 8 个微服务的完整实现。在启动 Phase 2 之前需要：</p>
+<ol>
+<li>确认 Phase 1 环境可正常启动（<code>docker compose up -d</code> + Gateway 启动）</li>
+<li>编写 Phase 2 详细执行计划（采用相同格式）</li>
+<li>准备数据库 DDL（按 <code>docs/solution-design.md</code> 第 3 节表结构）</li>
+</ol>
+<hr>
+<blockquote>
+<strong>Plan saved:</strong> <code>docs/superpowers/plans/2026-05-12-phase1-infrastructure.md</code>
+
+<strong>Next:</strong> Execute this plan using <code>superpowers:subagent-driven-development</code> (recommended) or <code>superpowers:executing-plans</code>.
+</blockquote>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

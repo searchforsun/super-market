@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRD — 产品需求文档 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html" class="active">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<h1>可落地京东式商城系统（PC端专属·纯本地全容器化版）</h1>
+<h2>业务架构与技术选型（Dubbo 3.x 纯开源栈·全K8s部署·开发环境优化）</h2>
+<h2>一、核心定位与目标</h2>
+<ul>
+<li><strong>用户规模</strong>：支撑100-1000万注册用户，日活10-100万</li>
+<li><strong>并发能力</strong>：峰值QPS 5000-20000，订单峰值1000-5000单/秒</li>
+<li><strong>架构目标</strong>：服务化拆分完成，全容器化部署，具备完善的服务治理能力，支撑业务快速迭代</li>
+<li><strong>部署要求</strong>：<strong>100%本地部署+全容器化</strong>，不依赖任何公有云服务，开发环境使用Docker Compose，生产环境使用K8s</li>
+<li><strong>运维理念</strong>：开发阶段简单高效，生产阶段稳定可靠，环境一致性</li>
+<li><strong>终端范围</strong>：仅PC端Web应用（含用户前台、商家后台、运营后台）</li>
+</ul>
+<h2>二、业务架构（DDD领域驱动设计）</h2>
+<h3>2.1 核心业务域与微服务拆分（第三阶段标准）</h3>
+<p>采用<strong>限界上下文</strong>原则进行服务拆分，每个微服务对应一个独立的业务能力单元，拥有独立的数据库和缓存资源，开发阶段本地启动，生产阶段以K8s Pod形式运行。</p>
+<table>
+<tr>
+  <th>业务域</th>
+  <th>拆分微服务</th>
+  <th>核心职责</th>
+  <th>部署方式</th>
+</tr>
+<tr>
+  <td><strong>用户域</strong></td>
+  <td>用户服务、认证授权服务、会员服务、地址服务</td>
+  <td>用户注册登录、身份认证、会员等级体系、收货地址管理</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>商品域</strong></td>
+  <td>商品基础服务、类目服务、库存服务、评价服务</td>
+  <td>商品全生命周期管理、分类体系、库存控制、商品评价管理</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>交易域</strong></td>
+  <td>购物车服务、订单服务、结算服务、退款服务</td>
+  <td>购物车管理、订单创建与状态流转、结算计算、售后退款流程</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>支付域</strong></td>
+  <td>支付服务、账户服务、对账服务</td>
+  <td>第三方支付渠道对接、资金账户管理、财务对账与清算</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>营销域</strong></td>
+  <td>优惠券服务、活动服务、积分服务、秒杀服务</td>
+  <td>各类营销活动管理、优惠券发放核销、积分体系、限时秒杀</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>搜索域</strong></td>
+  <td>搜索服务、索引同步服务</td>
+  <td>商品全文检索、过滤排序、索引实时同步与维护</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>商家域</strong></td>
+  <td>商家服务、店铺服务、商家结算服务</td>
+  <td>商家入驻审核、店铺装修与管理、商家对账与结算</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>平台域</strong></td>
+  <td>运营服务、风控服务、数据服务</td>
+  <td>平台运营配置、系统风控规则、业务数据分析与报表</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+<tr>
+  <td><strong>基础支撑域</strong></td>
+  <td>消息服务、文件服务、通知服务</td>
+  <td>消息队列管理、文件存储与分发、短信邮件通知推送</td>
+  <td>开发：本地IDE；生产：K8s Deployment</td>
+</tr>
+</table>
+<h3>2.2 第三阶段核心业务流程</h3>
+<ol>
+<li><strong>商品上架流程</strong>：商家创建商品 → 平台审核 → 商品服务持久化 → 库存服务初始化 → 发送事务消息 → 索引同步服务更新搜索引擎</li>
+<li><strong>用户下单流程</strong>：浏览商品 → 加入购物车 → 提交订单 → 库存服务扣减库存 → 订单服务创建订单 → 支付服务发起支付 → 支付回调 → 订单状态更新 → 通知商家发货</li>
+<li><strong>售后退款流程</strong>：用户申请退款 → 商家审核 → 退货物流确认 → 商家确认收货 → 退款服务发起退款 → 支付回调 → 订单状态更新 → 库存服务回补库存</li>
+</ol>
+<h2>三、技术架构分层（Dubbo 3.x 专属·双环境兼容）</h2>
+<p>采用<strong>七层分层架构</strong>，开发环境和生产环境技术栈完全一致，仅部署方式不同。</p>
+<div class="diagram layer-stack"><div class="layer layer-client">客户端层 — PC用户前台、商家后台、运营后台（Vue3 + Element Plus）<div class="arch-items"><span class="arch-item">Vue3 + Vite</span><span class="arch-item">Element Plus</span><span class="arch-item">Pinia</span><span class="arch-item">Axios</span></div></div><div class="layer layer-access">接入层 — 开发：localhost:Nginx；生产：MetalLB+Nginx Ingress+WAF<div class="arch-items"><span class="arch-item">Nginx</span><span class="arch-item">MetalLB</span><span class="arch-item">ModSecurity</span></div></div><div class="layer layer-gateway">网关层 — Spring Cloud Gateway集群、统一认证鉴权、限流熔断、链路追踪<div class="arch-items"><span class="arch-item">鉴权认证</span><span class="arch-item">限流熔断</span><span class="arch-item">请求路由</span><span class="arch-item">协议转换</span><span class="arch-item">链路追踪</span></div></div><div class="layer layer-business">业务服务层 — Dubbo 3.x微服务集群（用户、商品、订单、支付、营销等）<div class="arch-items"><span class="arch-item">用户服务</span><span class="arch-item">商品服务</span><span class="arch-item">订单服务</span><span class="arch-item">支付服务</span><span class="arch-item">营销服务</span><span class="arch-item">搜索服务</span><span class="arch-item">商家服务</span><span class="arch-item">平台服务</span></div></div><div class="layer layer-middleware">中间件层 — 消息队列、分布式缓存、搜索引擎、分布式事务、分布式锁<div class="arch-items"><span class="arch-item">RocketMQ</span><span class="arch-item">Redis</span><span class="arch-item">ES</span><span class="arch-item">Seata</span><span class="arch-item">Redisson</span><span class="arch-item">Sentinel</span></div></div><div class="layer layer-storage">数据存储层 — 关系型数据库（分库分表）、NoSQL、对象存储、数据仓库<div class="arch-items"><span class="arch-item">MySQL 8.0</span><span class="arch-item">MongoDB</span><span class="arch-item">MinIO</span><span class="arch-item">ClickHouse</span><span class="arch-item">ShardingSphere</span></div></div><div class="layer layer-infra">基础设施层 — 开发：Docker Compose；生产：本地K8s集群+GitLab CI/CD<div class="arch-items"><span class="arch-item">Docker</span><span class="arch-item">K8s</span><span class="arch-item">GitLab CI/CD</span><span class="arch-item">Prometheus</span><span class="arch-item">Grafana</span></div></div></div>
+<h2>四、详细技术选型（100%本地开源·双环境兼容版）</h2>
+<h3>4.1 前端技术栈（仅PC端）</h3>
+<table>
+<tr>
+  <th>技术领域</th>
+  <th>选型</th>
+  <th>版本</th>
+  <th>说明</th>
+</tr>
+<tr>
+  <td><strong>核心框架</strong></td>
+  <td>Vue 3 + Vite</td>
+  <td>3.4.x / 5.0.x</td>
+  <td>开发效率高，构建速度快</td>
+</tr>
+<tr>
+  <td><strong>状态管理</strong></td>
+  <td>Pinia</td>
+  <td>2.1.x</td>
+  <td>Vue 3官方推荐，比Vuex更简洁</td>
+</tr>
+<tr>
+  <td><strong>HTTP客户端</strong></td>
+  <td>Axios</td>
+  <td>1.6.x</td>
+  <td>功能强大，支持请求/响应拦截器</td>
+</tr>
+<tr>
+  <td><strong>UI组件库</strong></td>
+  <td>Element Plus</td>
+  <td>2.6.x</td>
+  <td>成熟稳定，组件丰富，适合后台系统</td>
+</tr>
+<tr>
+  <td><strong>路由管理</strong></td>
+  <td>Vue Router</td>
+  <td>4.3.x</td>
+  <td>官方路由，支持嵌套路由和路由守卫</td>
+</tr>
+<tr>
+  <td><strong>构建工具</strong></td>
+  <td>Vite</td>
+  <td>5.0.x</td>
+  <td>比Webpack快10倍以上的热更新和构建速度</td>
+</tr>
+<tr>
+  <td><strong>代码规范</strong></td>
+  <td>ESLint + Prettier</td>
+  <td>最新稳定版</td>
+  <td>统一团队代码风格</td>
+</tr>
+</table>
+<h3>4.2 后端技术栈（核心：Java + Dubbo 3.x）</h3>
+<table>
+<tr>
+  <th>技术领域</th>
+  <th>选型</th>
+  <th>版本</th>
+  <th>说明</th>
+</tr>
+<tr>
+  <td><strong>编程语言</strong></td>
+  <td>Java</td>
+  <td>JDK 21</td>
+  <td>性能优异，生态完善，支持虚拟线程</td>
+</tr>
+<tr>
+  <td><strong>开发框架</strong></td>
+  <td>Spring Boot</td>
+  <td>3.2.x</td>
+  <td>简化配置，快速开发，与Dubbo深度集成</td>
+</tr>
+<tr>
+  <td><strong>微服务框架</strong></td>
+  <td>Apache Dubbo</td>
+  <td>3.2.x</td>
+  <td>高性能RPC框架，阿里开源，京东核心技术栈</td>
+</tr>
+<tr>
+  <td><strong>服务注册发现</strong></td>
+  <td>Nacos</td>
+  <td>2.3.x</td>
+  <td>与Dubbo原生集成，同时支持配置中心</td>
+</tr>
+<tr>
+  <td><strong>配置中心</strong></td>
+  <td>Nacos</td>
+  <td>2.3.x</td>
+  <td>动态配置热更新，支持灰度发布和配置隔离</td>
+</tr>
+<tr>
+  <td><strong>API网关</strong></td>
+  <td>Spring Cloud Gateway</td>
+  <td>4.1.x</td>
+  <td>非阻塞异步架构，支持Dubbo协议转换</td>
+</tr>
+<tr>
+  <td><strong>熔断降级</strong></td>
+  <td>Sentinel</td>
+  <td>1.8.x</td>
+  <td>与Dubbo、Nacos无缝集成，流量控制能力强</td>
+</tr>
+<tr>
+  <td><strong>分布式事务</strong></td>
+  <td>Seata</td>
+  <td>1.7.x</td>
+  <td>支持AT、TCC、SAGA多种模式，与Dubbo集成</td>
+</tr>
+<tr>
+  <td><strong>分布式锁</strong></td>
+  <td>Redisson</td>
+  <td>3.25.x</td>
+  <td>基于Redis的分布式锁实现，功能完善</td>
+</tr>
+<tr>
+  <td><strong>ORM框架</strong></td>
+  <td>MyBatis-Plus</td>
+  <td>3.5.x</td>
+  <td>增强版MyBatis，大幅提高开发效率</td>
+</tr>
+</table>
+<h3>4.3 中间件技术栈（双环境部署）</h3>
+<table>
+<tr>
+  <th>技术领域</th>
+  <th>选型</th>
+  <th>版本</th>
+  <th>开发部署</th>
+  <th>生产部署</th>
+</tr>
+<tr>
+  <td><strong>消息队列</strong></td>
+  <td>Apache RocketMQ</td>
+  <td>5.1.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>分布式缓存</strong></td>
+  <td>Redis</td>
+  <td>7.2.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 3主3从集群</td>
+</tr>
+<tr>
+  <td><strong>搜索引擎</strong></td>
+  <td>Elasticsearch</td>
+  <td>7.17.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>分库分表</strong></td>
+  <td>ShardingSphere-JDBC</td>
+  <td>5.4.x</td>
+  <td>本地依赖</td>
+  <td>本地依赖</td>
+</tr>
+<tr>
+  <td><strong>分布式任务调度</strong></td>
+  <td>XXL-Job</td>
+  <td>2.4.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s Deployment 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>链路追踪</strong></td>
+  <td>Apache SkyWalking</td>
+  <td>9.7.x</td>
+  <td>Docker Compose精简版</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>日志收集</strong></td>
+  <td>ELK Stack</td>
+  <td>7.17.x</td>
+  <td>开发阶段可选</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>数据同步</strong></td>
+  <td>Canal</td>
+  <td>1.1.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s Deployment 3节点集群</td>
+</tr>
+</table>
+<h3>4.4 数据存储技术栈（双环境部署）</h3>
+<table>
+<tr>
+  <th>技术领域</th>
+  <th>选型</th>
+  <th>版本</th>
+  <th>开发部署</th>
+  <th>生产部署</th>
+</tr>
+<tr>
+  <td><strong>关系型数据库</strong></td>
+  <td>MySQL</td>
+  <td>8.0.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 8主16从集群</td>
+</tr>
+<tr>
+  <td><strong>NoSQL数据库</strong></td>
+  <td>MongoDB</td>
+  <td>7.0.x</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>本地对象存储</strong></td>
+  <td>MinIO</td>
+  <td>RELEASE.2024-05-10T01-41-38Z</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s StatefulSet 4节点集群</td>
+</tr>
+<tr>
+  <td><strong>数据仓库</strong></td>
+  <td>ClickHouse</td>
+  <td>23.8.x</td>
+  <td>开发阶段可选</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>本地镜像仓库</strong></td>
+  <td>Harbor</td>
+  <td>2.10.x</td>
+  <td>开发阶段可选</td>
+  <td>K8s StatefulSet 3节点集群</td>
+</tr>
+</table>
+<h3>4.5 基础设施与运维技术栈（双环境部署）</h3>
+<table>
+<tr>
+  <th>技术领域</th>
+  <th>选型</th>
+  <th>开发部署</th>
+  <th>生产部署</th>
+</tr>
+<tr>
+  <td><strong>容器运行时</strong></td>
+  <td>Docker</td>
+  <td>Docker Desktop</td>
+  <td>containerd</td>
+</tr>
+<tr>
+  <td><strong>容器编排</strong></td>
+  <td>Docker Compose / Kubernetes</td>
+  <td>Docker Compose</td>
+  <td>Kubernetes 1.29.x</td>
+</tr>
+<tr>
+  <td><strong>代码托管</strong></td>
+  <td>GitLab CE</td>
+  <td>本地GitLab或GitHub</td>
+  <td>本地K8s部署GitLab 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>CI/CD平台</strong></td>
+  <td>GitLab CI + GitLab Runner</td>
+  <td>开发阶段可选</td>
+  <td>K8s部署GitLab Runner动态伸缩</td>
+</tr>
+<tr>
+  <td><strong>监控告警</strong></td>
+  <td>Prometheus + Grafana</td>
+  <td>开发阶段可选</td>
+  <td>K8s部署Prometheus 3节点集群</td>
+</tr>
+<tr>
+  <td><strong>服务治理</strong></td>
+  <td>Dubbo Admin</td>
+  <td>Docker Compose单节点</td>
+  <td>K8s Deployment 1节点</td>
+</tr>
+<tr>
+  <td><strong>安全防护</strong></td>
+  <td>ModSecurity</td>
+  <td>开发阶段可选</td>
+  <td>Nginx Ingress集成</td>
+</tr>
+<tr>
+  <td><strong>负载均衡</strong></td>
+  <td>Nginx</td>
+  <td>Docker Compose</td>
+  <td>MetalLB + Nginx Ingress</td>
+</tr>
+</table>
+<h2>五、开发环境Docker Compose部署方案</h2>
+<h3>5.1 核心优势</h3>
+<ul>
+<li><strong>一键启动</strong>：一条命令启动所有中间件（13 个容器服务），5分钟内完成开发环境搭建</li>
+<li><strong>资源占用少</strong>：单节点部署，适合开发机配置</li>
+<li><strong>环境一致</strong>：所有开发者使用相同的中间件版本和配置</li>
+<li><strong>快速重置</strong>：数据保存在本地卷，可随时清理和重置</li>
+<li><strong>平滑过渡</strong>：技术栈与生产环境完全一致，部署时无需修改代码</li>
+</ul>
+<h3>5.2 中间件清单（13 个容器服务）</h3>
+<table>
+<tr>
+  <th>服务</th>
+  <th>镜像版本</th>
+  <th>主机端口</th>
+  <th>用途</th>
+</tr>
+<tr>
+  <td>MySQL 8.0</td>
+  <td>mysql:8.0.35</td>
+  <td>13306</td>
+  <td>关系型数据库（11 个数据库）</td>
+</tr>
+<tr>
+  <td>Redis 7.2</td>
+  <td>redis:7.2-alpine</td>
+  <td>16379</td>
+  <td>分布式缓存（512MB，AOF）</td>
+</tr>
+<tr>
+  <td>Nacos 2.3</td>
+  <td>nacos/nacos-server:v2.3.1</td>
+  <td>8848 / 9848</td>
+  <td>服务注册发现 + 配置中心</td>
+</tr>
+<tr>
+  <td>RocketMQ 5.1</td>
+  <td>apache/rocketmq:5.1.4</td>
+  <td>19876 / 20911</td>
+  <td>消息队列（NameServer + Broker）</td>
+</tr>
+<tr>
+  <td>Elasticsearch 7.17</td>
+  <td>elasticsearch:7.17.23</td>
+  <td>19200 / 19300</td>
+  <td>搜索引擎（固定 IP 10.10.5.20）</td>
+</tr>
+<tr>
+  <td>MinIO</td>
+  <td>quay.io/minio/minio</td>
+  <td>19000 / 19001</td>
+  <td>对象存储（API + Console）</td>
+</tr>
+<tr>
+  <td>XXL-Job 2.4</td>
+  <td>xuxueli/xxl-job-admin:2.4.1</td>
+  <td>18081</td>
+  <td>分布式任务调度</td>
+</tr>
+<tr>
+  <td>Sentinel 1.8</td>
+  <td>bladex/sentinel-dashboard:1.8.6</td>
+  <td>18858</td>
+  <td>熔断降级控制台</td>
+</tr>
+<tr>
+  <td>SkyWalking 9.7</td>
+  <td>apache/skywalking-oap-server:9.7.0</td>
+  <td>21800 / 22800</td>
+  <td>链路追踪（OAP + UI :18083）</td>
+</tr>
+<tr>
+  <td>Seata 1.7</td>
+  <td>seataio/seata-server:1.7.1</td>
+  <td>19091 / 19092</td>
+  <td>分布式事务（AT 模式，DB 存储）</td>
+</tr>
+<tr>
+  <td>Canal 1.1</td>
+  <td>canal/canal-server:v1.1.7</td>
+  <td>21111</td>
+  <td>MySQL binlog 数据同步（含 Admin :18089）</td>
+</tr>
+</table>
+<blockquote>
+端口选择高位段（1xxxx-2xxxx）以避免与本地常用服务冲突。开发环境 Nacos 鉴权关闭。ES 使用固定 IP 以解决 SkyWalking DNS 解析问题。
+</blockquote>
+<h3>5.3 数据库初始化（垂直分库）</h3>
+<pre data-lang="text"><code class="language-">业务库: db_user | db_product | db_order | db_payment | db_marketing | db_shop | db_platform
+基础库: xxl_job | seata | nacos | canal_manager</code></pre>
+<p>启动时 MySQL 自动执行 <code>docker-compose/mysql/init/</code> 目录下 10 个 SQL 脚本，完成建库建表。</p>
+<h2>六、GitLab CI/CD 全K8s部署方案</h2>
+<h3>6.1 核心架构原理</h3>
+<p>采用<strong>"全本地+K8s原生"</strong>的CI/CD架构，实现从代码提交到服务部署的全自动化：</p>
+<ul>
+<li>GitLab和GitLab Runner全部运行在本地K8s集群上</li>
+<li>GitLab Runner使用<strong>K8s执行器</strong>，每次构建自动创建临时Pod，构建完成后自动销毁</li>
+<li>构建产物（Docker镜像）推送到本地Harbor镜像仓库</li>
+<li>通过K8s API直接更新Deployment，实现滚动发布</li>
+<li>整个过程完全在本地K8s集群内完成，无任何外部依赖</li>
+</ul>
+<h3>6.2 标准CI/CD流水线</h3>
+<p>每个微服务使用统一的<code>.gitlab-ci.yml</code>模板，包含4个阶段：</p>
+<ol>
+<li><strong>代码检查</strong>：执行CheckStyle代码检查，确保代码质量</li>
+<li><strong>构建测试</strong>：编译代码，执行单元测试，生成构建产物</li>
+<li><strong>镜像打包</strong>：构建Docker镜像，推送到本地Harbor仓库</li>
+<li><strong>部署</strong>：更新K8s Deployment，实现滚动发布</li>
+</ol>
+<h2>七、第三阶段核心技术落地原则</h2>
+<h3>7.1 服务拆分原则</h3>
+<ul>
+<li>优先拆分<strong>用户、商品、订单、支付</strong>四大核心服务</li>
+<li>每个服务独立部署，拥有独立的数据库和缓存资源</li>
+<li>服务间通过Dubbo RPC调用，避免跨服务直接访问数据库</li>
+<li>非核心服务（如评价、通知）可在核心服务稳定后逐步拆分</li>
+</ul>
+<h3>7.2 数据架构原则</h3>
+<ul>
+<li>按业务域进行<strong>垂直分库</strong>，每个业务域对应一个独立数据库</li>
+<li>对大表（订单、商品）进行<strong>水平分表</strong>，采用哈希分片策略</li>
+<li>实施<strong>读写分离</strong>，一主多从架构，主库负责写，从库负责读</li>
+<li>冷热数据分离，历史数据归档到单独的历史库</li>
+</ul>
+<h3>7.3 高可用原则</h3>
+<ul>
+<li>所有中间件和服务均采用<strong>集群部署</strong>，避免单点故障</li>
+<li>核心服务（订单、支付）独立部署，与非核心服务隔离</li>
+<li>配置完善的<strong>限流、熔断、降级</strong>规则，防止系统雪崩</li>
+<li>建立完善的监控告警体系，实现故障快速发现和定位</li>
+</ul>
+<h3>7.4 性能优化原则</h3>
+<ul>
+<li>构建<strong>多级缓存体系</strong>（本地缓存Caffeine + Redis分布式缓存）</li>
+<li>所有非实时操作全部<strong>异步化</strong>处理，通过消息队列解耦</li>
+<li>对热点数据进行预加载和缓存预热</li>
+<li>优化数据库索引和SQL语句，避免慢查询</li>
+</ul>
+<h3>7.5 部署原则</h3>
+<ul>
+<li><strong>开发环境</strong>：使用Docker Compose部署中间件，业务服务本地IDE启动</li>
+<li><strong>测试环境</strong>：使用Docker Compose或轻量K8s集群部署所有服务</li>
+<li><strong>生产环境</strong>：使用完整K8s集群部署，StatefulSet部署有状态服务，Deployment部署无状态服务</li>
+<li>所有配置使用<strong>环境变量</strong>或配置中心管理，不硬编码在代码中</li>
+</ul>
+<h2>八、部署架构（双环境版）</h2>
+<h3>8.1 开发环境部署架构</h3>
+<div class="diagram arch"><div class="arch-layer" style="background:#f0f9ff;border-color:#93c5fd">
+      <div class="arch-label" style="color:#1e40af">开发者本地机器</div>
+      <div class="arch-items"><span class="arch-item">前端项目(Vite) → 本地Nginx → Spring Cloud Gateway</span><span class="arch-item">Dubbo微服务集群(IDE启动) → Docker Compose中间件集群</span><span class="arch-item">Nacos · MySQL · Redis · RocketMQ · ES · MinIO</span></div>
+    </div></div>
+<h3>8.2 生产环境部署架构</h3>
+<div class="diagram layer-stack"><div class="layer layer-access">本地K8s集群入口 — MetalLB(四层LB) → Nginx Ingress → ModSecurity WAF<div class="arch-items"><span class="arch-item">DNS</span><span class="arch-item">MetalLB</span><span class="arch-item">Nginx Ingress</span><span class="arch-item">WAF</span></div></div><div class="layer layer-gateway">业务应用层 — Spring Cloud Gateway(3节点) + Dubbo微服务集群(各3-5节点)<div class="arch-items"><span class="arch-item">Gateway ×3</span><span class="arch-item">18 微服务各3-5节点</span></div></div><div class="layer layer-middleware">中间件集群 — Redis Cluster(3主3从) · RocketMQ(3节点) · ES(3节点)<div class="arch-items"><span class="arch-item">Redis Cluster</span><span class="arch-item">RocketMQ ×3</span><span class="arch-item">ES ×3</span><span class="arch-item">Nacos ×3</span><span class="arch-item">Sentinel ×3</span><span class="arch-item">SkyWalking ×3</span></div></div><div class="layer layer-storage">数据存储集群 — MySQL(8主16从) · MongoDB(3节点) · MinIO(4节点) · ClickHouse(3节点)<div class="arch-items"><span class="arch-item">MySQL 8主16从</span><span class="arch-item">MongoDB ×3</span><span class="arch-item">MinIO ×4</span><span class="arch-item">ClickHouse ×3</span><span class="arch-item">Harbor ×3</span></div></div><div class="layer layer-infra">基础设施层 — GitLab(3节点) · GitLab Runner(动态伸缩) · Prometheus(3节点) · Grafana · Kibana<div class="arch-items"><span class="arch-item">GitLab ×3</span><span class="arch-item">GitLab Runner</span><span class="arch-item">Prometheus ×3</span><span class="arch-item">Grafana</span><span class="arch-item">Kibana</span><span class="arch-item">Dubbo Admin</span></div></div></div>
+<h2>九、落地实施建议</h2>
+<ol>
+<li><strong>先搭开发环境</strong>：优先使用Docker Compose搭建开发环境，让团队快速进入开发状态</li>
+<li><strong>统一开发规范</strong>：制定统一的代码规范、接口规范、日志规范和配置规范</li>
+<li><strong>分阶段开发</strong>：先开发核心服务（用户、商品、订单、支付），再开发非核心服务</li>
+<li><strong>同步建设测试环境</strong>：在开发进行到一定阶段后，搭建测试环境，进行集成测试</li>
+<li><strong>逐步迁移到生产</strong>：当核心功能开发完成并测试通过后，逐步迁移到生产K8s环境</li>
+<li><strong>自动化运维</strong>：利用GitLab CI/CD实现自动化构建和部署，减少人工操作</li>
+</ol>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

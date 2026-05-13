@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Market — 项目文档 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html" class="active">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+
+<h1>Super Market 项目文档</h1>
+<p class="subtitle">京东式商城系统 — 基于 Dubbo 3.x 的微服务电商平台</p>
+
+<section class="overview">
+  <h2>项目概况</h2>
+  <div class="stats">
+    <div class="stat-card"><strong>18</strong><span>微服务</span></div>
+    <div class="stat-card"><strong>JDK 21</strong><span>运行环境</span></div>
+    <div class="stat-card"><strong>Dubbo 3.2</strong><span>RPC 框架</span></div>
+    <div class="stat-card"><strong>3 已完成</strong><span>开发阶段</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>核心文档</h2>
+  <div class="doc-grid">
+    <a href="prd.html" class="doc-card">
+      <h3>PRD 产品需求文档</h3>
+      <p>业务目标、技术选型、部署架构、开发与生产双环境方案</p>
+      <span class="tag">业务架构</span><span class="tag">技术选型</span>
+    </a>
+    <a href="solution-design.html" class="doc-card">
+      <h3>Solution Design 方案设计</h3>
+      <p>需求分析、系统架构、数据库设计、缓存/消息队列/安全设计、关键场景技术方案</p>
+      <span class="tag">系统架构</span><span class="tag">数据库</span><span class="tag">安全</span>
+    </a>
+    <a href="service-registry.html" class="doc-card">
+      <h3>Service Registry 服务注册表</h3>
+      <p>18 个微服务清单：端口、数据库、包名映射关系</p>
+      <span class="tag">服务清单</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2>开发实施阶段</h2>
+  <div class="doc-grid">
+    <a href="phase1.html" class="doc-card">
+      <h3>Phase 1 — 基础设施搭建</h3>
+      <p>Docker Compose 中间件编排 · Maven 多模块工程 · 18 服务脚手架 · Spring Cloud Gateway · CI/CD 流水线 · K8s 基础配置</p>
+      <span class="tag">W1-W2</span><span class="tag">完成</span>
+    </a>
+    <a href="phase2.html" class="doc-card">
+      <h3>Phase 2 — 用户域 + 商品域</h3>
+      <p>user/auth/member/address/product/category/inventory/shop 共 8 个微服务完整实现，含 DDL、Entity、Service、Controller、单元测试</p>
+      <span class="tag">W3-W6</span><span class="tag">35+ 测试</span><span class="tag">完成</span>
+    </a>
+    <a href="phase3.html" class="doc-card">
+      <h3>Phase 3 — 交易域 + 支付域</h3>
+      <p>cart/order/payment 3 个微服务，Seata AT 分布式事务、RocketMQ 延迟消息、支付幂等</p>
+      <span class="tag">W7-W10</span><span class="tag">14 测试</span><span class="tag">完成</span>
+    </a>
+    <a href="phase4.html" class="doc-card">
+      <h3>Phase 4 — 搜索域 + 营销域</h3>
+      <p>search/coupon/seckill/review 4 个微服务，Canal ES 索引同步、优惠券、秒杀 Redis Lua、评价</p>
+      <span class="tag">W11-W13</span><span class="tag">设计完成</span>
+    </a>
+  </div>
+</section>
+
+<section>
+  <h2>系统分层架构</h2>
+  <div class="diagram layer-stack"><div class="layer layer-client">客户端层 — Vue3 + Element Plus（用户前台 / 商家后台 / 运营后台）<div class="arch-items"><span class="arch-item">Vue 3.4</span><span class="arch-item">Vite 5.0</span><span class="arch-item">Element Plus</span><span class="arch-item">Pinia</span><span class="arch-item">Axios</span></div></div><div class="layer layer-access">接入层 — 开发: localhost Nginx / 生产: MetalLB + Nginx Ingress + ModSecurity WAF<div class="arch-items"><span class="arch-item">Nginx</span><span class="arch-item">MetalLB</span><span class="arch-item">ModSecurity WAF</span></div></div><div class="layer layer-gateway">网关层 — Spring Cloud Gateway · JWT鉴权 · Sentinel限流熔断 · HTTP→Dubbo协议转换 · SkyWalking追踪<div class="arch-items"><span class="arch-item">鉴权认证</span><span class="arch-item">限流熔断</span><span class="arch-item">请求路由</span><span class="arch-item">协议转换</span><span class="arch-item">链路追踪</span></div></div><div class="layer layer-business">业务服务层 — Dubbo 3.x Triple Protocol · Nacos服务发现 · 18个微服务<div class="arch-items"><span class="arch-item">用户域(4)</span><span class="arch-item">商品域(4)</span><span class="arch-item">交易域(2)</span><span class="arch-item">支付</span><span class="arch-item">营销域(2)</span><span class="arch-item">搜索</span><span class="arch-item">商家域</span><span class="arch-item">平台域</span><span class="arch-item">基础支撑(3)</span></div></div><div class="layer layer-middleware">中间件层 — RocketMQ · Redis Cluster · Elasticsearch · Seata AT · Sentinel · XXL-Job · SkyWalking · Redisson<div class="arch-items"><span class="arch-item">RocketMQ 5.1</span><span class="arch-item">Redis 7.2</span><span class="arch-item">ES 7.17</span><span class="arch-item">Seata 1.7</span><span class="arch-item">Sentinel</span><span class="arch-item">SkyWalking 9.7</span></div></div><div class="layer layer-storage">数据存储层 — MySQL 8.0 (分库分表) · MongoDB · MinIO · ClickHouse · ShardingSphere-JDBC · Canal数据同步<div class="arch-items"><span class="arch-item">MySQL 8.0</span><span class="arch-item">MongoDB 7.0</span><span class="arch-item">MinIO</span><span class="arch-item">ClickHouse</span><span class="arch-item">ShardingSphere</span><span class="arch-item">Canal</span></div></div><div class="layer layer-infra">基础设施层 — Docker Compose (开发) · Kubernetes 1.29 (生产) · GitLab CI/CD · Prometheus + Grafana<div class="arch-items"><span class="arch-item">Docker Compose</span><span class="arch-item">Kubernetes</span><span class="arch-item">GitLab CI/CD</span><span class="arch-item">Prometheus</span><span class="arch-item">Grafana</span></div></div></div>
+</section>
+
+<section>
+  <h2>实施进度</h2>
+  <div class="diagram timeline"><div class="timeline-phase done">
+      <span class="phase-num">Phase 1</span><span class="phase-date">W1-W2</span>
+      <div class="phase-title">基础设施搭建</div>
+      <div class="phase-detail">Docker Compose · Maven · Gateway · CI/CD · K8s</div>
+    </div><div class="timeline-phase done">
+      <span class="phase-num">Phase 2</span><span class="phase-date">W3-W6</span>
+      <div class="phase-title">用户域 + 商品域</div>
+      <div class="phase-detail">8个服务 · DDL · 35+测试</div>
+    </div><div class="timeline-phase done">
+      <span class="phase-num">Phase 3</span><span class="phase-date">W7-W10</span>
+      <div class="phase-title">交易域 + 支付域</div>
+      <div class="phase-detail">3个服务 · Seata · RocketMQ · 48测试</div>
+    </div><div class="timeline-phase done">
+      <span class="phase-num">Phase 4</span><span class="phase-date">W11-W13</span>
+      <div class="phase-title">搜索 + 营销域</div>
+      <div class="phase-detail">4个服务 · Canal ES同步 · 优惠券 · 秒杀 Redis Lua · 评价</div>
+    </div><div class="timeline-phase ">
+      <span class="phase-num">Phase 5</span><span class="phase-date">W14-W16</span>
+      <div class="phase-title">支撑服务 + 完善</div>
+      <div class="phase-detail">评价 · 通知 · 文件 · 运营后台 · 监控</div>
+    </div><div class="timeline-phase ">
+      <span class="phase-num">Phase 6</span><span class="phase-date">W17-W18</span>
+      <div class="phase-title">压测 + 优化</div>
+      <div class="phase-detail">JMeter · JVM调优 · 高可用演练</div>
+    </div></div>
+</section>
+
+<section>
+  <h2>微服务全景</h2>
+  <div class="diagram svc-mesh"><div class="svc-row"><span class="svc-chip gateway">Gateway :8999</span></div><div class="svc-row"><span class="svc-chip user">用户服务 :9301</span><span class="svc-chip user">认证授权 :9302</span><span class="svc-chip user">会员服务 :9303</span><span class="svc-chip user">地址服务 :9304</span></div><div class="svc-row"><span class="svc-chip product">商品服务 :9311</span><span class="svc-chip product">类目服务 :9312</span><span class="svc-chip product">库存服务 :9313</span><span class="svc-chip product">评价服务 :9314</span></div><div class="svc-row"><span class="svc-chip order">购物车 :9321</span><span class="svc-chip order">订单服务 :9322</span><span class="svc-chip pay">支付服务 :9331</span></div><div class="svc-row"><span class="svc-chip mid">商家店铺 :9341</span><span class="svc-chip mid">优惠券 :9351</span><span class="svc-chip mid">秒杀 :9352</span><span class="svc-chip mid">搜索 :9361</span></div><div class="svc-row"><span class="svc-chip mid">评价 :9314</span><span class="svc-chip mid">文件服务 :9371</span><span class="svc-chip mid">通知服务 :9372</span><span class="svc-chip mid">运营平台 :9381</span></div></div>
+</section>
+
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

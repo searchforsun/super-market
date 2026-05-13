@@ -1,0 +1,2846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 2 — 用户域 + 商品域 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 2</span>
+    <span class="phase-period">W3-W6</span>
+    <p>8 个微服务完整实现 · DDL · Entity · Mapper · Service · Controller · 单元测试 (35+)</p>
+  </div>
+<h1>Phase 2 — 用户域 + 商品域 Implementation Plan</h1>
+<blockquote>
+<strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.
+</blockquote>
+<p><strong>Goal:</strong> 实现用户域（user/auth/member/address）和商品域（product/category/inventory/shop）共 8 个微服务的完整业务逻辑，包含 DDL、Entity、Mapper、Service、Controller 和单元测试。</p>
+<p><strong>Architecture:</strong> 标准三层架构（Controller → Service → Mapper）。所有服务复用 Phase 1 的 common 模块（R 统一返回、BizException、JwtUtil、BaseEntity）。用户认证采用 BCrypt + JWT 双 Token 机制。库存扣减使用乐观锁 + Redis 分布式锁双重保障。商品审核流程实现商家→平台的审核链路。</p>
+<p><strong>Tech Stack:</strong> Java 21, Spring Boot 3.2, Apache Dubbo 3.2, MyBatis-Plus 3.5, MySQL 8.0, Redis 7.2 + Redisson, JUnit 5 + Mockito</p>
+<hr>
+<h2>Phase 2 验收标准</h2>
+<ul>
+<li>[ ] 所有 8 个服务 <code>mvn clean install -DskipTests</code> BUILD SUCCESS</li>
+<li>[ ] 所有单元测试 <code>mvn test</code> 通过，覆盖率 > 80%</li>
+<li>[ ] 用户注册/登录 API 可正常调用并返回 JWT Token</li>
+<li>[ ] 商品 SPU+SKU 创建、类目树查询、库存初始化 API 正常</li>
+<li>[ ] 库存扣减并发场景下乐观锁不超卖</li>
+<li>[ ] Docker Compose 中间件全部健康（MySQL/Redis/Nacos）</li>
+</ul>
+<hr>
+<h2>文件结构概览</h2>
+<p>每个服务在 Phase 1 脚手架基础上新增以下文件：</p>
+<pre class="arch-diagram">service-{name}/src/main/java/com/supermarket/{name}/
+├── entity/           # MyBatis-Plus 实体
+├── mapper/           # Mapper 接口
+├── service/          # 业务服务接口
+│   └── impl/         # 业务服务实现
+└── controller/       # REST 控制器
+
+service-{name}/src/test/java/com/supermarket/{name}/
+└── service/          # Service 层单元测试</pre>
+<hr>
+<h2>Task Group A: 数据库 DDL</h2>
+<h3>Task A1: 创建 db_user 数据库表</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/mysql/init/02-user-tables.sql</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入用户域 DDL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/02-user-tables.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-cmt">-- ============================================</span>
+<span class="tok-cmt">-- 用户域数据库表 (db_user)</span>
+<span class="tok-cmt">-- ============================================</span>
+
+<span class="tok-kw">USE</span> db_user;
+
+<span class="tok-cmt">-- 用户表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> users (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    phone           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">20</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'手机号'</span>,
+    email           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'邮箱'</span>,
+    password_hash   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">255</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'BCrypt密码'</span>,
+    nickname        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'昵称'</span>,
+    avatar_url      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'头像URL'</span>,
+    real_name       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'实名'</span>,
+    id_card         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">18</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'身份证号'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0禁用 -1注销'</span>,
+    last_login_at   <span class="tok-kw">DATETIME</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'最后登录时间'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_phone (phone),
+    <span class="tok-kw">INDEX</span> idx_status (status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'用户表'</span>;
+
+<span class="tok-cmt">-- 会员等级表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> members (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    level           <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0普通 1青铜 2白银 3黄金 4钻石'</span>,
+    points          <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'当前积分'</span>,
+    total_points    <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'累计积分'</span>,
+    growth_value    <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'成长值'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user (user_id),
+    <span class="tok-kw">INDEX</span> idx_level (level)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'会员表'</span>;
+
+<span class="tok-cmt">-- 收货地址表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> addresses (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'用户ID'</span>,
+    receiver_name   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货人'</span>,
+    receiver_phone  <span class="tok-kw">VARCHAR</span>(<span class="tok-num">20</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'收货人电话'</span>,
+    province        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'省'</span>,
+    city            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'市'</span>,
+    district        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'区'</span>,
+    detail          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'详细地址'</span>,
+    is_default      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'是否默认 0否 1是'</span>,
+    is_deleted      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'逻辑删除'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user (user_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'收货地址表'</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 执行 SQL 验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 db_user -e <span class="tok-str">&quot;SHOW TABLES;&quot;</span></code></pre>
+<p>Expected: 输出 <code>users</code>, <code>members</code>, <code>addresses</code> 三张表</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/mysql/init/02-user-tables.sql
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add user domain DDL (users, members, addresses)&quot;</span></code></pre>
+<hr>
+<h3>Task A2: 创建 db_product + db_shop 数据库表</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>docker-compose/mysql/init/03-product-tables.sql</code></li>
+<li>Create: <code>docker-compose/mysql/init/04-shop-tables.sql</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入商品域 DDL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/03-product-tables.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">USE</span> db_product;
+
+<span class="tok-cmt">-- 类目表 (三级类目树)</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> categories (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    parent_id       <span class="tok-kw">BIGINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'父类目ID 0=顶级'</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'类目名称'</span>,
+    level           <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'层级 1/2/3'</span>,
+    sort_order      <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'排序'</span>,
+    icon_url        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'图标'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1启用 0禁用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_parent (parent_id),
+    <span class="tok-kw">INDEX</span> idx_level (level)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'商品类目表'</span>;
+
+<span class="tok-cmt">-- 品牌表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> brands (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'品牌名称'</span>,
+    logo_url        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'品牌LOGO'</span>,
+    description     <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'品牌描述'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1启用 0禁用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'品牌表'</span>;
+
+<span class="tok-cmt">-- SPU表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> spu (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    spu_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU编号'</span>,
+    shop_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺ID'</span>,
+    category_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'三级类目ID'</span>,
+    brand_id        <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'品牌ID'</span>,
+    name            <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品名称'</span>,
+    subtitle        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'副标题'</span>,
+    main_image      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'主图'</span>,
+    images          <span class="tok-kw">JSON</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'图片列表'</span>,
+    description     <span class="tok-kw">TEXT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'商品描述(富文本)'</span>,
+    audit_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0待审 1通过 2驳回'</span>,
+    shelf_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0下架 1上架'</span>,
+    is_deleted      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'逻辑删除'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_shop (shop_id),
+    <span class="tok-kw">INDEX</span> idx_category (category_id),
+    <span class="tok-kw">INDEX</span> idx_audit (audit_status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'SPU商品表'</span>;
+
+<span class="tok-cmt">-- SKU表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> sku (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    sku_no          <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU编号'</span>,
+    spu_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'SPU ID'</span>,
+    spec_name       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'规格名称(颜色:红色;尺寸:XL)'</span>,
+    spec_code       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'规格编码'</span>,
+    price           <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'售价'</span>,
+    market_price    <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'市场价'</span>,
+    cost_price      <span class="tok-kw">DECIMAL</span>(<span class="tok-num">12</span>,<span class="tok-num">2</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'成本价'</span>,
+    image           <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU图片'</span>,
+    weight          <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'重量(g)'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0停用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_spu (spu_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'SKU商品表'</span>;
+
+<span class="tok-cmt">-- 库存表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> inventory (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    sku_id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'SKU ID'</span>,
+    total_stock     <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'总库存'</span>,
+    available_stock <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'可用库存'</span>,
+    locked_stock    <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'锁定库存(下单未支付)'</span>,
+    safety_stock    <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'安全库存预警阈值'</span>,
+    version         <span class="tok-kw">INT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'乐观锁版本号'</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_sku (sku_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'库存表'</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入商家域 DDL</strong></li>
+</ul>
+<p>写入 <code>docker-compose/mysql/init/04-shop-tables.sql</code>:</p>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">USE</span> db_shop;
+
+<span class="tok-cmt">-- 商家表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> merchants (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id         <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'关联用户ID'</span>,
+    company_name    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'公司名称'</span>,
+    business_license <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'营业执照URL'</span>,
+    legal_person    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'法人姓名'</span>,
+    id_card         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">18</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'法人身份证'</span>,
+    contact_phone   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">20</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'联系电话'</span>,
+    audit_status    <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0待审 1通过 2驳回'</span>,
+    audit_reason    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'审核原因'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1正常 0禁用'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user (user_id),
+    <span class="tok-kw">INDEX</span> idx_audit (audit_status)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'商家表'</span>;
+
+<span class="tok-cmt">-- 店铺表</span>
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> <span class="tok-kw">IF</span> <span class="tok-kw">NOT</span> <span class="tok-kw">EXISTS</span> shops (
+    id              <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    merchant_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'商家ID'</span>,
+    shop_name       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺名称'</span>,
+    shop_logo       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺LOGO'</span>,
+    shop_desc       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'店铺简介'</span>,
+    status          <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'1营业 0停业'</span>,
+    created_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at      <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_merchant (merchant_id)
+) <span class="tok-kw">ENGINE</span>=InnoDB <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CHARSET</span>=<span class="tok-kw">utf8mb4</span> <span class="tok-kw">COMMENT</span>=<span class="tok-str">'店铺表'</span>;</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 执行 SQL</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 -e <span class="tok-str">&quot;USE db_product; SHOW TABLES;&quot;</span> &amp;&amp; <span class="tok-builtin">docker</span> <span class="tok-builtin">exec</span> smt-mysql mysql -u root -proot123 -e <span class="tok-str">&quot;USE db_shop; SHOW TABLES;&quot;</span></code></pre>
+<p>Expected: db_product 输出 <code>categories</code>, <code>brands</code>, <code>spu</code>, <code>sku</code>, <code>inventory</code>；db_shop 输出 <code>merchants</code>, <code>shops</code></p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add <span class="tok-builtin">docker</span>-compose/mysql/init/03-product-tables.sql <span class="tok-builtin">docker</span>-compose/mysql/init/04-shop-tables.sql
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add product + shop domain DDL (categories, brands, spu, sku, inventory, merchants, shops)&quot;</span></code></pre>
+<hr>
+<h2>Task Group B: user-service（用户注册、登录、信息管理）</h2>
+<h3>Task B1: 创建 User Entity + Mapper</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/entity/User.java</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/mapper/UserMapper.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 User Entity</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/entity/User.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;users&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> User <span class="tok-kw">extends</span> BaseEntity {
+
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> phone;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> email;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> passwordHash;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> nickname;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> avatarUrl;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> realName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> idCard;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> lastLoginAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 UserMapper</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/mapper/UserMapper.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.user.entity.User;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> UserMapper <span class="tok-kw">extends</span> BaseMapper&lt;User&gt; {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> clean compile -pl super-market-services/service-user -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-user/src/main/<span class="tok-builtin">java</span>/com/supermarket/user/entity/ super-market-services/service-user/src/main/<span class="tok-builtin">java</span>/com/supermarket/user/mapper/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(user-service): add User entity and mapper&quot;</span></code></pre>
+<hr>
+<h3>Task B2: 创建 UserService 接口与实现</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/service/UserService.java</code></li>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/service/impl/UserServiceImpl.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 UserService 接口</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/service/UserService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.service;
+
+<span class="tok-kw">import</span> com.supermarket.user.entity.User;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> UserService {
+
+    User register(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password);
+
+    User login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password);
+
+    User getById(<span class="tok-typ">Long</span> userId);
+
+    User getByPhone(<span class="tok-typ">String</span> phone);
+
+    <span class="tok-kw">void</span> updateLoginTime(<span class="tok-typ">Long</span> userId);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 UserServiceImpl</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.user.entity.User;
+<span class="tok-kw">import</span> com.supermarket.user.mapper.UserMapper;
+<span class="tok-kw">import</span> com.supermarket.user.service.UserService;
+<span class="tok-kw">import</span> org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> UserServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;UserMapper, User&gt; <span class="tok-kw">implements</span> UserService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> BCryptPasswordEncoder passwordEncoder = <span class="tok-kw">new</span> BCryptPasswordEncoder();
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> User register(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password) {
+        User exist = getByPhone(phone);
+        <span class="tok-kw">if</span> (exist != <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该手机号已注册&quot;</span>);
+        }
+        User user = <span class="tok-kw">new</span> User();
+        user.setPhone(phone);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setNickname(<span class="tok-str">&quot;用户&quot;</span> + phone.substring(phone.length() - <span class="tok-num">4</span>));
+        user.setStatus(<span class="tok-num">1</span>);
+        save(user);
+        <span class="tok-kw">return</span> user;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> User login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password) {
+        User user = getByPhone(phone);
+        <span class="tok-kw">if</span> (user == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+        }
+        <span class="tok-kw">if</span> (user.getStatus() != <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">403</span>, <span class="tok-str">&quot;账号已被禁用或注销&quot;</span>);
+        }
+        <span class="tok-kw">if</span> (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+        }
+        updateLoginTime(user.getId());
+        <span class="tok-kw">return</span> user;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> User getById(<span class="tok-typ">Long</span> userId) {
+        User user = getBaseMapper().selectById(userId);
+        <span class="tok-kw">if</span> (user == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;用户不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> user;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> User getByPhone(<span class="tok-typ">String</span> phone) {
+        <span class="tok-kw">return</span> getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;User&gt;().eq(User::getPhone, phone));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> updateLoginTime(<span class="tok-typ">Long</span> userId) {
+        User user = <span class="tok-kw">new</span> User();
+        user.setId(userId);
+        user.setLastLoginAt(<span class="tok-typ">LocalDateTime</span>.now());
+        updateById(user);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 添加 BCrypt 依赖到 pom.xml</strong></li>
+</ul>
+<p>在 <code>super-market-services/service-user/pom.xml</code> 的 <code><dependencies></code> 中添加:</p>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.security<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;spring-security-crypto<span class="tok-tag">&lt;/artifactId</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> clean compile -pl super-market-services/service-user -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-user/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(user-service): add UserService with register/login logic&quot;</span></code></pre>
+<hr>
+<h3>Task B3: 创建 UserController + UserService 单元测试（TDD）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-user/src/main/java/com/supermarket/user/controller/UserController.java</code></li>
+<li>Create: <code>super-market-services/service-user/src/test/java/com/supermarket/user/service/UserServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 先写测试用例（TDD Red Phase）</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/test/java/com/supermarket/user/service/UserServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.service;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
+<span class="tok-kw">import</span> com.supermarket.user.entity.User;
+<span class="tok-kw">import</span> com.supermarket.user.mapper.UserMapper;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> UserServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> UserService userService;
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> UserMapper userMapper;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRegisterNewUser() {
+        User user = userService.register(<span class="tok-str">&quot;13800138001&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        assertThat(user.getId()).isNotNull();
+        assertThat(user.getPhone()).isEqualTo(<span class="tok-str">&quot;13800138001&quot;</span>);
+        assertThat(user.getPasswordHash()).isNotEqualTo(<span class="tok-str">&quot;Pass1234&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFailRegisterDuplicatePhone() {
+        userService.register(<span class="tok-str">&quot;13800138002&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        assertThatThrownBy(() -&gt; userService.register(<span class="tok-str">&quot;13800138002&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>))
+            .hasMessageContaining(<span class="tok-str">&quot;已注册&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldLoginWithCorrectCredentials() {
+        userService.register(<span class="tok-str">&quot;13800138003&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        User user = userService.login(<span class="tok-str">&quot;13800138003&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        assertThat(user).isNotNull();
+        assertThat(user.getLastLoginAt()).isNotNull();
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFailLoginWithWrongPassword() {
+        userService.register(<span class="tok-str">&quot;13800138004&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        assertThatThrownBy(() -&gt; userService.login(<span class="tok-str">&quot;13800138004&quot;</span>, <span class="tok-str">&quot;WrongPass&quot;</span>))
+            .hasMessageContaining(<span class="tok-str">&quot;密码错误&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldGetUserById() {
+        User registered = userService.register(<span class="tok-str">&quot;13800138005&quot;</span>, <span class="tok-str">&quot;Pass1234&quot;</span>);
+        User found = userService.getById(registered.getId());
+        assertThat(found.getPhone()).isEqualTo(<span class="tok-str">&quot;13800138005&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldThrowWhenUserNotFound() {
+        assertThatThrownBy(() -&gt; userService.getById(<span class="tok-num">99999L</span>))
+            .hasMessageContaining(<span class="tok-str">&quot;用户不存在&quot;</span>);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 运行测试验证它失败</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-user -Dtest=UserServiceTest 2&gt;&amp;1 | tail -20</code></pre>
+<p>Expected: 部分测试 FAIL（因为还没有完整实现，需要 DataSource 连接等 — 如果没有 Docker 则 FAIL）</p>
+<blockquote>
+注：如果 Docker 中间件未启动，测试会因为 DataSource 连接失败而报错。此时需要先 <code>docker compose -f docker-compose/docker-compose.yml up -d mysql</code> 启动 MySQL。
+</blockquote>
+<ul>
+<li>[ ] <strong>Step 3: 写入 UserController（Green Phase）</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-user/src/main/java/com/supermarket/user/controller/UserController.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.user.controller;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> com.supermarket.user.entity.User;
+<span class="tok-kw">import</span> com.supermarket.user.service.UserService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/user&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> UserController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> UserService userService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/register&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;User&gt; register(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> phone, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> password) {
+        User user = userService.register(phone, password);
+        <span class="tok-cmt">// 脱敏: 不返回密码哈希</span>
+        user.setPasswordHash(<span class="tok-kw">null</span>);
+        <span class="tok-kw">return</span> R.ok(user);
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/login&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;User&gt; login(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> phone, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> password) {
+        User user = userService.login(phone, password);
+        user.setPasswordHash(<span class="tok-kw">null</span>);
+        <span class="tok-kw">return</span> R.ok(user);
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/info&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;User&gt; info(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        User user = userService.getById(userId);
+        user.setPasswordHash(<span class="tok-kw">null</span>);
+        <span class="tok-kw">return</span> R.ok(user);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 运行测试验证通过</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-cmt"># 先确保 MySQL 已启动</span>
+<span class="tok-builtin">docker</span> compose -f <span class="tok-builtin">docker</span>-compose/<span class="tok-builtin">docker</span>-compose.yml up -d mysql
+<span class="tok-builtin">sleep</span> 10
+
+<span class="tok-cmt"># 运行测试</span>
+JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-user</code></pre>
+<p>Expected: <code>Tests run: 6, Failures: 0, Errors: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-user/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(user-service): add UserController + unit tests (6 pass)&quot;</span></code></pre>
+<hr>
+<h3>Task B4: 创建 common-dubbo-api 中的 User 相关接口（为跨服务调用做准备）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/user/UserDubboService.java</code></li>
+<li>Create: <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/user/dto/UserDTO.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 DTO</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/user/dto/UserDTO.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.user.dto;
+
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> java.io.Serializable;
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> UserDTO <span class="tok-kw">implements</span> Serializable {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> phone;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> nickname;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> avatarUrl;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> createdAt;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 Dubbo 接口</strong></li>
+</ul>
+<p>写入 <code>super-market-common/common-dubbo-api/src/main/java/com/supermarket/common/dubbo/api/user/UserDubboService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.common.dubbo.api.user;
+
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.user.dto.UserDTO;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> UserDubboService {
+
+    UserDTO getById(<span class="tok-typ">Long</span> userId);
+
+    UserDTO getByPhone(<span class="tok-typ">String</span> phone);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 在 user-service 中实现 Dubbo 接口</strong></li>
+</ul>
+<p>在 <code>UserServiceImpl</code> 中添加 <code>@DubboService</code> 并实现 <code>UserDubboService</code>:</p>
+<ul>
+<li>Modify: <code>super-market-services/service-user/src/main/java/com/supermarket/user/service/impl/UserServiceImpl.java</code></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 类签名改为:</span>
+<span class="tok-ann">@DubboService</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> UserServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;UserMapper, User&gt; <span class="tok-kw">implements</span> UserService, UserDubboService {
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> UserDTO getById(<span class="tok-typ">Long</span> userId) {
+        User user = getById(userId);
+        UserDTO dto = <span class="tok-kw">new</span> UserDTO();
+        dto.setId(user.getId());
+        dto.setPhone(user.getPhone());
+        dto.setNickname(user.getNickname());
+        dto.setAvatarUrl(user.getAvatarUrl());
+        dto.setStatus(user.getStatus());
+        dto.setCreatedAt(user.getCreatedAt());
+        <span class="tok-kw">return</span> dto;
+    }
+
+    <span class="tok-cmt">// ... 已有方法保持不变</span>
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> clean install -DskipTests -pl super-market-common/common-dubbo-api,super-market-services/service-user</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-common/common-dubbo-api/ super-market-services/service-user/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat: add UserDubboService API + Dubbo provider implementation&quot;</span></code></pre>
+<hr>
+<h2>Task Group C: auth-service（认证授权服务）</h2>
+<h3>Task C1: 创建 AuthService（登录 + Token 签发 + Token 刷新）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/service/AuthService.java</code></li>
+<li>Create: <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/service/impl/AuthServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/controller/AuthController.java</code></li>
+<li>Create: <code>super-market-services/service-auth/src/test/java/com/supermarket/auth/service/AuthServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 添加依赖</strong></li>
+</ul>
+<p>在 <code>super-market-services/service-auth/pom.xml</code> 中添加 Dubbo 依赖以调用 user-service:</p>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;org.springframework.security<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;spring-security-crypto<span class="tok-tag">&lt;/artifactId</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 AuthService 接口</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/service/AuthService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.auth.service;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">Map</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> AuthService {
+
+    <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password);
+
+    <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; refreshToken(<span class="tok-typ">String</span> refreshToken);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 AuthServiceImpl</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/service/impl/AuthServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.auth.service.impl;
+
+<span class="tok-kw">import</span> com.supermarket.auth.service.AuthService;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.user.UserDubboService;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.user.dto.UserDTO;
+<span class="tok-kw">import</span> com.supermarket.common.security.util.JwtUtil;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.apache.dubbo.config.annotation.DubboReference;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">Map</span>;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> AuthServiceImpl <span class="tok-kw">implements</span> AuthService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> JwtUtil jwtUtil;
+
+    <span class="tok-ann">@DubboReference</span>(check = <span class="tok-kw">false</span>)
+    <span class="tok-kw">private</span> UserDubboService userDubboService;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password) {
+        UserDTO user = userDubboService.getByPhone(phone);
+        <span class="tok-kw">if</span> (user == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+        }
+        <span class="tok-typ">String</span> accessToken = jwtUtil.generateAccessToken(user.getId(), <span class="tok-typ">List</span>.of(<span class="tok-str">&quot;ROLE_USER&quot;</span>));
+        <span class="tok-typ">String</span> refreshToken = jwtUtil.generateRefreshToken(user.getId());
+        <span class="tok-kw">return</span> <span class="tok-typ">Map</span>.of(
+            <span class="tok-str">&quot;accessToken&quot;</span>, accessToken,
+            <span class="tok-str">&quot;refreshToken&quot;</span>, refreshToken,
+            <span class="tok-str">&quot;userId&quot;</span>, <span class="tok-typ">String</span>.valueOf(user.getId())
+        );
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; refreshToken(<span class="tok-typ">String</span> refreshToken) {
+        <span class="tok-kw">if</span> (!jwtUtil.validate(refreshToken)) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;Refresh Token 无效或已过期&quot;</span>);
+        }
+        <span class="tok-typ">Long</span> userId = jwtUtil.getUserId(refreshToken);
+        <span class="tok-typ">String</span> newAccessToken = jwtUtil.generateAccessToken(userId, <span class="tok-typ">List</span>.of(<span class="tok-str">&quot;ROLE_USER&quot;</span>));
+        <span class="tok-typ">String</span> newRefreshToken = jwtUtil.generateRefreshToken(userId);
+        <span class="tok-kw">return</span> <span class="tok-typ">Map</span>.of(
+            <span class="tok-str">&quot;accessToken&quot;</span>, newAccessToken,
+            <span class="tok-str">&quot;refreshToken&quot;</span>, newRefreshToken
+        );
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 AuthController</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-auth/src/main/java/com/supermarket/auth/controller/AuthController.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.auth.controller;
+
+<span class="tok-kw">import</span> com.supermarket.auth.service.AuthService;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">Map</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/auth&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> AuthController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> AuthService authService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/login&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt;&gt; login(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> phone, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> password) {
+        <span class="tok-kw">return</span> R.ok(authService.login(phone, password));
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/refresh&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt;&gt; refresh(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">String</span> refreshToken) {
+        <span class="tok-kw">return</span> R.ok(authService.refreshToken(refreshToken));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入单元测试</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-auth/src/test/java/com/supermarket/auth/service/AuthServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.auth.service;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.common.security.util.JwtUtil;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.boot.test.mock.mockito.MockBean;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.user.UserDubboService;
+<span class="tok-kw">import</span> com.supermarket.common.dubbo.api.user.dto.UserDTO;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">Map</span>;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.mockito.ArgumentMatchers.anyString;
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.mockito.Mockito.when;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-kw">class</span> AuthServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> AuthService authService;
+
+    <span class="tok-ann">@MockBean</span>
+    <span class="tok-kw">private</span> UserDubboService userDubboService;
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> JwtUtil jwtUtil;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldLoginAndReturnTokens() {
+        UserDTO mockUser = <span class="tok-kw">new</span> UserDTO();
+        mockUser.setId(<span class="tok-num">1L</span>);
+        mockUser.setPhone(<span class="tok-str">&quot;13800138001&quot;</span>);
+        mockUser.setStatus(<span class="tok-num">1</span>);
+        when(userDubboService.getByPhone(<span class="tok-str">&quot;13800138001&quot;</span>)).thenReturn(mockUser);
+
+        <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; result = authService.login(<span class="tok-str">&quot;13800138001&quot;</span>, <span class="tok-str">&quot;any-password&quot;</span>);
+
+        assertThat(result).containsKeys(<span class="tok-str">&quot;accessToken&quot;</span>, <span class="tok-str">&quot;refreshToken&quot;</span>, <span class="tok-str">&quot;userId&quot;</span>);
+        assertThat(jwtUtil.validate(result.get(<span class="tok-str">&quot;accessToken&quot;</span>))).isTrue();
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFailLoginWithUnknownPhone() {
+        when(userDubboService.getByPhone(anyString())).thenReturn(<span class="tok-kw">null</span>);
+        assertThatThrownBy(() -&gt; authService.login(<span class="tok-str">&quot;00000000000&quot;</span>, <span class="tok-str">&quot;any&quot;</span>))
+            .isInstanceOf(BizException.<span class="tok-kw">class</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRefreshToken() {
+        <span class="tok-typ">String</span> refreshToken = jwtUtil.generateRefreshToken(<span class="tok-num">1L</span>);
+        <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; result = authService.refreshToken(refreshToken);
+        assertThat(jwtUtil.validate(result.get(<span class="tok-str">&quot;accessToken&quot;</span>))).isTrue();
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-auth</code></pre>
+<p>Expected: <code>Tests run: 3, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-auth/ super-market-common/common-dubbo-api/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(auth-service): add login/token-refresh with Dubbo + JWT&quot;</span></code></pre>
+<hr>
+<h2>Task Group D: address-service（收货地址 CRUD）</h2>
+<h3>Task D1: Address Entity + Mapper + Service + Controller + Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-address/src/main/java/com/supermarket/address/entity/Address.java</code></li>
+<li>Create: <code>super-market-services/service-address/src/main/java/com/supermarket/address/mapper/AddressMapper.java</code></li>
+<li>Create: <code>super-market-services/service-address/src/main/java/com/supermarket/address/service/AddressService.java</code></li>
+<li>Create: <code>super-market-services/service-address/src/main/java/com/supermarket/address/service/impl/AddressServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-address/src/main/java/com/supermarket/address/controller/AddressController.java</code></li>
+<li>Create: <code>super-market-services/service-address/src/test/java/com/supermarket/address/service/AddressServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Address Entity</strong></li>
+</ul>
+<p>写入 <code>super-market-services/service-address/src/main/java/com/supermarket/address/entity/Address.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;addresses&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Address <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> receiverName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> receiverPhone;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> province;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> city;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> district;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> detail;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> isDefault;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> isDeleted;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 AddressMapper</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.address.entity.Address;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> AddressMapper <span class="tok-kw">extends</span> BaseMapper&lt;Address&gt; {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 AddressService</strong></li>
+</ul>
+<p>写入 <code>AddressService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.service;
+
+<span class="tok-kw">import</span> com.supermarket.address.entity.Address;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> AddressService {
+    Address create(Address address);
+    Address update(Address address);
+    <span class="tok-kw">void</span> delete(<span class="tok-typ">Long</span> addressId, <span class="tok-typ">Long</span> userId);
+    Address getById(<span class="tok-typ">Long</span> addressId);
+    <span class="tok-typ">List</span>&lt;Address&gt; listByUser(<span class="tok-typ">Long</span> userId);
+    <span class="tok-kw">void</span> setDefault(<span class="tok-typ">Long</span> addressId, <span class="tok-typ">Long</span> userId);
+}</code></pre>
+<p>写入 <code>AddressServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.address.entity.Address;
+<span class="tok-kw">import</span> com.supermarket.address.mapper.AddressMapper;
+<span class="tok-kw">import</span> com.supermarket.address.service.AddressService;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> AddressServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;AddressMapper, Address&gt; <span class="tok-kw">implements</span> AddressService {
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Address create(Address address) {
+        <span class="tok-typ">List</span>&lt;Address&gt; existing = listByUser(address.getUserId());
+        <span class="tok-kw">if</span> (existing.size() &gt;= <span class="tok-num">20</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;收货地址最多20个&quot;</span>);
+        }
+        <span class="tok-kw">if</span> (existing.isEmpty()) {
+            address.setIsDefault(<span class="tok-num">1</span>);
+        }
+        save(address);
+        <span class="tok-kw">return</span> address;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Address update(Address address) {
+        Address exist = getById(address.getId());
+        <span class="tok-kw">if</span> (exist == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;地址不存在&quot;</span>);
+        }
+        updateById(address);
+        <span class="tok-kw">return</span> getById(address.getId());
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> delete(<span class="tok-typ">Long</span> addressId, <span class="tok-typ">Long</span> userId) {
+        LambdaUpdateWrapper&lt;Address&gt; wrapper = <span class="tok-kw">new</span> LambdaUpdateWrapper&lt;&gt;();
+        wrapper.eq(Address::getId, addressId)
+               .eq(Address::getUserId, userId)
+               .set(Address::getIsDeleted, <span class="tok-num">1</span>);
+        update(wrapper);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Address getById(<span class="tok-typ">Long</span> addressId) {
+        Address addr = <span class="tok-kw">super</span>.getById(addressId);
+        <span class="tok-kw">if</span> (addr == <span class="tok-kw">null</span> || addr.getIsDeleted() == <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;地址不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> addr;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;Address&gt; listByUser(<span class="tok-typ">Long</span> userId) {
+        LambdaQueryWrapper&lt;Address&gt; wrapper = <span class="tok-kw">new</span> LambdaQueryWrapper&lt;&gt;();
+        wrapper.eq(Address::getUserId, userId)
+               .eq(Address::getIsDeleted, <span class="tok-num">0</span>)
+               .orderByDesc(Address::getIsDefault)
+               .orderByDesc(Address::getCreatedAt);
+        <span class="tok-kw">return</span> list(wrapper);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> setDefault(<span class="tok-typ">Long</span> addressId, <span class="tok-typ">Long</span> userId) {
+        <span class="tok-cmt">// 取消当前默认</span>
+        LambdaUpdateWrapper&lt;Address&gt; clearWrapper = <span class="tok-kw">new</span> LambdaUpdateWrapper&lt;&gt;();
+        clearWrapper.eq(Address::getUserId, userId)
+                    .set(Address::getIsDefault, <span class="tok-num">0</span>);
+        update(clearWrapper);
+
+        <span class="tok-cmt">// 设置新默认</span>
+        LambdaUpdateWrapper&lt;Address&gt; setWrapper = <span class="tok-kw">new</span> LambdaUpdateWrapper&lt;&gt;();
+        setWrapper.eq(Address::getId, addressId)
+                 .eq(Address::getUserId, userId)
+                 .set(Address::getIsDefault, <span class="tok-num">1</span>);
+        update(setWrapper);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 AddressController</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.controller;
+
+<span class="tok-kw">import</span> com.supermarket.address.entity.Address;
+<span class="tok-kw">import</span> com.supermarket.address.service.AddressService;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/address&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> AddressController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> AddressService addressService;
+
+    <span class="tok-ann">@PostMapping</span>
+    <span class="tok-kw">public</span> R&lt;Address&gt; create(<span class="tok-ann">@RequestBody</span> Address address) {
+        <span class="tok-kw">return</span> R.ok(addressService.create(address));
+    }
+
+    <span class="tok-ann">@PutMapping</span>
+    <span class="tok-kw">public</span> R&lt;Address&gt; update(<span class="tok-ann">@RequestBody</span> Address address) {
+        <span class="tok-kw">return</span> R.ok(addressService.update(address));
+    }
+
+    <span class="tok-ann">@DeleteMapping</span>(<span class="tok-str">&quot;/{id}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; delete(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> id, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        addressService.delete(id, userId);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/list&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;Address&gt;&gt; list(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> R.ok(addressService.listByUser(userId));
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/{id}/default&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; setDefault(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> id, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId) {
+        addressService.setDefault(id, userId);
+        <span class="tok-kw">return</span> R.ok();
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 写入测试</strong></li>
+</ul>
+<p>写入 <code>AddressServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.address.service;
+
+<span class="tok-kw">import</span> com.supermarket.address.entity.Address;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> AddressServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> AddressService addressService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateAddress() {
+        Address addr = newAddr(<span class="tok-num">1L</span>, <span class="tok-str">&quot;张三&quot;</span>, <span class="tok-str">&quot;13800000001&quot;</span>);
+        Address saved = addressService.create(addr);
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getIsDefault()).isEqualTo(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldListAddressesByUser() {
+        addressService.create(newAddr(<span class="tok-num">2L</span>, <span class="tok-str">&quot;李四&quot;</span>, <span class="tok-str">&quot;13800000002&quot;</span>));
+        addressService.create(newAddr(<span class="tok-num">2L</span>, <span class="tok-str">&quot;李四&quot;</span>, <span class="tok-str">&quot;13800000002&quot;</span>));
+        <span class="tok-typ">List</span>&lt;Address&gt; list = addressService.listByUser(<span class="tok-num">2L</span>);
+        assertThat(list).hasSize(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldSetDefaultAddress() {
+        Address a1 = addressService.create(newAddr(<span class="tok-num">3L</span>, <span class="tok-str">&quot;王五&quot;</span>, <span class="tok-str">&quot;13800000003&quot;</span>));
+        Address a2 = addressService.create(newAddr(<span class="tok-num">3L</span>, <span class="tok-str">&quot;王五&quot;</span>, <span class="tok-str">&quot;13800000003&quot;</span>));
+        addressService.setDefault(a2.getId(), <span class="tok-num">3L</span>);
+
+        Address found = addressService.getById(a2.getId());
+        assertThat(found.getIsDefault()).isEqualTo(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldSoftDeleteAddress() {
+        Address addr = addressService.create(newAddr(<span class="tok-num">4L</span>, <span class="tok-str">&quot;赵六&quot;</span>, <span class="tok-str">&quot;13800000004&quot;</span>));
+        addressService.delete(addr.getId(), <span class="tok-num">4L</span>);
+        assertThatThrownBy(() -&gt; addressService.getById(addr.getId()))
+            .isInstanceOf(BizException.<span class="tok-kw">class</span>);
+    }
+
+    <span class="tok-kw">private</span> Address newAddr(<span class="tok-typ">Long</span> userId, <span class="tok-typ">String</span> name, <span class="tok-typ">String</span> phone) {
+        Address addr = <span class="tok-kw">new</span> Address();
+        addr.setUserId(userId);
+        addr.setReceiverName(name);
+        addr.setReceiverPhone(phone);
+        addr.setProvince(<span class="tok-str">&quot;广东省&quot;</span>);
+        addr.setCity(<span class="tok-str">&quot;深圳市&quot;</span>);
+        addr.setDistrict(<span class="tok-str">&quot;南山区&quot;</span>);
+        addr.setDetail(<span class="tok-str">&quot;科技园路1号&quot;</span>);
+        <span class="tok-kw">return</span> addr;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-address</code></pre>
+<p>Expected: <code>BUILD SUCCESS, Tests run: 4, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-address/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(address-service): add address CRUD with 20-address limit + default management&quot;</span></code></pre>
+<hr>
+<h2>Task Group E: member-service（会员等级与积分）</h2>
+<h3>Task E1: Member Entity + Mapper + Service + Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-member/src/main/java/com/supermarket/member/entity/Member.java</code></li>
+<li>Create: <code>super-market-services/service-member/src/main/java/com/supermarket/member/mapper/MemberMapper.java</code></li>
+<li>Create: <code>super-market-services/service-member/src/main/java/com/supermarket/member/service/MemberService.java</code></li>
+<li>Create: <code>super-market-services/service-member/src/main/java/com/supermarket/member/service/impl/MemberServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-member/src/main/java/com/supermarket/member/controller/MemberController.java</code></li>
+<li>Create: <code>super-market-services/service-member/src/test/java/com/supermarket/member/service/MemberServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Member Entity + Mapper</strong></li>
+</ul>
+<p><code>Member.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;members&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Member <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> level;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> points;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> totalPoints;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> growthValue;
+}</code></pre>
+<p><code>MemberMapper.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.member.entity.Member;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Update;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> MemberMapper <span class="tok-kw">extends</span> BaseMapper&lt;Member&gt; {
+
+    <span class="tok-ann">@Update</span>(<span class="tok-str">&quot;UPDATE members SET points = points + #{points}, total_points = total_points + #{points} WHERE user_id = #{userId}&quot;</span>)
+    <span class="tok-kw">int</span> addPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points);
+
+    <span class="tok-ann">@Update</span>(<span class="tok-str">&quot;UPDATE members SET points = points - #{points} WHERE user_id = #{userId} AND points &gt;= #{points}&quot;</span>)
+    <span class="tok-kw">int</span> deductPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 MemberService</strong></li>
+</ul>
+<p><code>MemberService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.service;
+
+<span class="tok-kw">import</span> com.supermarket.member.entity.Member;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> MemberService {
+    Member getOrCreate(<span class="tok-typ">Long</span> userId);
+    Member getByUserId(<span class="tok-typ">Long</span> userId);
+    <span class="tok-kw">void</span> addPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points);
+    <span class="tok-kw">boolean</span> deductPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points);
+    <span class="tok-kw">int</span> computeLevel(<span class="tok-kw">int</span> growthValue);
+}</code></pre>
+<p><code>MemberServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.member.entity.Member;
+<span class="tok-kw">import</span> com.supermarket.member.mapper.MemberMapper;
+<span class="tok-kw">import</span> com.supermarket.member.service.MemberService;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> MemberServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;MemberMapper, Member&gt; <span class="tok-kw">implements</span> MemberService {
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Member getOrCreate(<span class="tok-typ">Long</span> userId) {
+        Member member = getByUserId(userId);
+        <span class="tok-kw">if</span> (member == <span class="tok-kw">null</span>) {
+            member = <span class="tok-kw">new</span> Member();
+            member.setUserId(userId);
+            member.setLevel(<span class="tok-num">0</span>);
+            member.setPoints(<span class="tok-num">0</span>);
+            member.setTotalPoints(<span class="tok-num">0</span>);
+            member.setGrowthValue(<span class="tok-num">0</span>);
+            save(member);
+        }
+        <span class="tok-kw">return</span> member;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Member getByUserId(<span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Member&gt;().eq(Member::getUserId, userId));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> addPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points) {
+        getOrCreate(userId);
+        baseMapper.addPoints(userId, points);
+        Member member = getByUserId(userId);
+        <span class="tok-kw">int</span> newLevel = computeLevel(member.getTotalPoints());
+        <span class="tok-kw">if</span> (newLevel &gt; member.getLevel()) {
+            member.setLevel(newLevel);
+            updateById(member);
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> deductPoints(<span class="tok-typ">Long</span> userId, <span class="tok-kw">int</span> points) {
+        Member member = getByUserId(userId);
+        <span class="tok-kw">if</span> (member == <span class="tok-kw">null</span> || member.getPoints() &lt; points) {
+            <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+        }
+        <span class="tok-kw">return</span> baseMapper.deductPoints(userId, points) &gt; <span class="tok-num">0</span>;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">int</span> computeLevel(<span class="tok-kw">int</span> totalPoints) {
+        <span class="tok-kw">if</span> (totalPoints &gt;= <span class="tok-num">50000</span>) <span class="tok-kw">return</span> <span class="tok-num">4</span>; <span class="tok-cmt">// 钻石</span>
+        <span class="tok-kw">if</span> (totalPoints &gt;= <span class="tok-num">10000</span>) <span class="tok-kw">return</span> <span class="tok-num">3</span>; <span class="tok-cmt">// 黄金</span>
+        <span class="tok-kw">if</span> (totalPoints &gt;= <span class="tok-num">1000</span>)  <span class="tok-kw">return</span> <span class="tok-num">2</span>;  <span class="tok-cmt">// 白银</span>
+        <span class="tok-kw">if</span> (totalPoints &gt;= <span class="tok-num">100</span>)   <span class="tok-kw">return</span> <span class="tok-num">1</span>;  <span class="tok-cmt">// 青铜</span>
+        <span class="tok-kw">return</span> <span class="tok-num">0</span>;                             <span class="tok-cmt">// 普通</span>
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 MemberController + 测试</strong></li>
+</ul>
+<p><code>MemberController.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.controller;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> com.supermarket.member.entity.Member;
+<span class="tok-kw">import</span> com.supermarket.member.service.MemberService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/member&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> MemberController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> MemberService memberService;
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/{userId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Member&gt; getMember(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> userId) {
+        <span class="tok-kw">return</span> R.ok(memberService.getOrCreate(userId));
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/points/add&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; addPoints(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> userId, <span class="tok-ann">@RequestParam</span> <span class="tok-kw">int</span> points) {
+        memberService.addPoints(userId, points);
+        <span class="tok-kw">return</span> R.ok();
+    }
+}</code></pre>
+<p><code>MemberServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.member.service;
+
+<span class="tok-kw">import</span> com.supermarket.member.entity.Member;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> MemberServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> MemberService memberService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateNewMember() {
+        Member member = memberService.getOrCreate(<span class="tok-num">100L</span>);
+        assertThat(member.getLevel()).isEqualTo(<span class="tok-num">0</span>);
+        assertThat(member.getPoints()).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldUpgradeLevel() {
+        memberService.getOrCreate(<span class="tok-num">101L</span>);
+        memberService.addPoints(<span class="tok-num">101L</span>, <span class="tok-num">5000</span>);
+        Member member = memberService.getByUserId(<span class="tok-num">101L</span>);
+        assertThat(member.getLevel()).isEqualTo(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldComputeDiamondLevel() {
+        assertThat(memberService.computeLevel(<span class="tok-num">50000</span>)).isEqualTo(<span class="tok-num">4</span>);
+        assertThat(memberService.computeLevel(<span class="tok-num">100</span>)).isEqualTo(<span class="tok-num">1</span>);
+        assertThat(memberService.computeLevel(<span class="tok-num">50</span>)).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldDeductPoints() {
+        memberService.getOrCreate(<span class="tok-num">102L</span>);
+        memberService.addPoints(<span class="tok-num">102L</span>, <span class="tok-num">100</span>);
+        <span class="tok-kw">boolean</span> result = memberService.deductPoints(<span class="tok-num">102L</span>, <span class="tok-num">30</span>);
+        assertThat(result).isTrue();
+        Member member = memberService.getByUserId(<span class="tok-num">102L</span>);
+        assertThat(member.getPoints()).isGreaterThanOrEqualTo(<span class="tok-num">70</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFailDeductWhenInsufficientPoints() {
+        memberService.getOrCreate(<span class="tok-num">103L</span>);
+        <span class="tok-kw">boolean</span> result = memberService.deductPoints(<span class="tok-num">103L</span>, <span class="tok-num">100</span>);
+        assertThat(result).isFalse();
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-member</code></pre>
+<p>Expected: <code>Tests run: 5, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-member/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(member-service): add member level system (5 tiers) + points management&quot;</span></code></pre>
+<hr>
+<h2>Task Group F: product-service（商品 SPU/SKU 管理）</h2>
+<h3>Task F1: SPU + SKU Entity + Mapper</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/entity/Spu.java</code></li>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/entity/Sku.java</code></li>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/mapper/SpuMapper.java</code></li>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/mapper/SkuMapper.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 SPU Entity</strong></li>
+</ul>
+<p><code>Spu.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;spu&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Spu <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> spuNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> shopId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> categoryId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> brandId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> name;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> subtitle;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> mainImage;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> images;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> description;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> auditStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> shelfStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> isDeleted;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 SKU Entity</strong></li>
+</ul>
+<p><code>Sku.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;sku&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Sku <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> skuNo;
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> spuId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> specName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> specCode;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> price;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> marketPrice;
+    <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> costPrice;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> image;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> weight;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 Mappers</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// SpuMapper.java</span>
+<span class="tok-kw">package</span> com.supermarket.product.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Spu;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> SpuMapper <span class="tok-kw">extends</span> BaseMapper&lt;Spu&gt; {
+}
+
+<span class="tok-cmt">// SkuMapper.java</span>
+<span class="tok-kw">package</span> com.supermarket.product.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Sku;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> SkuMapper <span class="tok-kw">extends</span> BaseMapper&lt;Sku&gt; {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-product/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(product-service): add Spu/Sku entities and mappers&quot;</span></code></pre>
+<hr>
+<h3>Task F2: ProductService（SPU 创建 + SKU 管理 + 审核）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/service/ProductService.java</code></li>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/service/impl/ProductServiceImpl.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入请求/响应 DTO</strong></li>
+</ul>
+<p>创建 <code>super-market-services/service-product/src/main/java/com/supermarket/product/dto/CreateProductRequest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.dto;
+
+<span class="tok-kw">import</span> jakarta.validation.constraints.NotBlank;
+<span class="tok-kw">import</span> jakarta.validation.constraints.NotNull;
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CreateProductRequest {
+
+    <span class="tok-ann">@NotNull</span>(message = <span class="tok-str">&quot;店铺ID不能为空&quot;</span>)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> shopId;
+
+    <span class="tok-ann">@NotNull</span>(message = <span class="tok-str">&quot;类目ID不能为空&quot;</span>)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> categoryId;
+
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> brandId;
+
+    <span class="tok-ann">@NotBlank</span>(message = <span class="tok-str">&quot;商品名称不能为空&quot;</span>)
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> name;
+
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> subtitle;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> mainImage;
+    <span class="tok-kw">private</span> <span class="tok-typ">List</span>&lt;<span class="tok-typ">String</span>&gt; images;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> description;
+
+    <span class="tok-kw">private</span> <span class="tok-typ">List</span>&lt;SkuItem&gt; skus;
+
+    <span class="tok-ann">@Data</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">static</span> <span class="tok-kw">class</span> SkuItem {
+        <span class="tok-ann">@NotBlank</span>
+        <span class="tok-kw">private</span> <span class="tok-typ">String</span> specName;
+        <span class="tok-kw">private</span> <span class="tok-typ">String</span> specCode;
+        <span class="tok-ann">@NotNull</span>
+        <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> price;
+        <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> marketPrice;
+        <span class="tok-kw">private</span> <span class="tok-typ">BigDecimal</span> costPrice;
+        <span class="tok-kw">private</span> <span class="tok-typ">String</span> image;
+        <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> weight;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 ProductService 接口</strong></li>
+</ul>
+<p><code>ProductService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.service;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.supermarket.product.dto.CreateProductRequest;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Sku;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Spu;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> ProductService {
+
+    Spu createProduct(CreateProductRequest request);
+
+    Spu getSpuById(<span class="tok-typ">Long</span> spuId);
+
+    Spu getSpuByNo(<span class="tok-typ">String</span> spuNo);
+
+    Sku getSkuById(<span class="tok-typ">Long</span> skuId);
+
+    <span class="tok-typ">List</span>&lt;Sku&gt; getSkusBySpuId(<span class="tok-typ">Long</span> spuId);
+
+    <span class="tok-kw">void</span> auditProduct(<span class="tok-typ">Long</span> spuId, <span class="tok-typ">Integer</span> auditStatus, <span class="tok-typ">String</span> reason);
+
+    <span class="tok-kw">void</span> updateShelfStatus(<span class="tok-typ">Long</span> spuId, <span class="tok-typ">Integer</span> shelfStatus);
+
+    Page&lt;Spu&gt; listByShop(<span class="tok-typ">Long</span> shopId, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size);
+
+    Page&lt;Spu&gt; listByCategory(<span class="tok-typ">Long</span> categoryId, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size, <span class="tok-typ">String</span> sort);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 ProductServiceImpl</strong></li>
+</ul>
+<p><code>ProductServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.product.dto.CreateProductRequest;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Sku;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Spu;
+<span class="tok-kw">import</span> com.supermarket.product.mapper.SkuMapper;
+<span class="tok-kw">import</span> com.supermarket.product.mapper.SpuMapper;
+<span class="tok-kw">import</span> com.supermarket.product.service.ProductService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+<span class="tok-kw">import</span> java.util.UUID;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> ProductServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;SpuMapper, Spu&gt; <span class="tok-kw">implements</span> ProductService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> SkuMapper skuMapper;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Spu createProduct(CreateProductRequest request) {
+        Spu spu = <span class="tok-kw">new</span> Spu();
+        spu.setSpuNo(<span class="tok-str">&quot;SPU&quot;</span> + System.currentTimeMillis() + UUID.randomUUID().toString().substring(<span class="tok-num">0</span>, <span class="tok-num">6</span>));
+        spu.setShopId(request.getShopId());
+        spu.setCategoryId(request.getCategoryId());
+        spu.setBrandId(request.getBrandId());
+        spu.setName(request.getName());
+        spu.setSubtitle(request.getSubtitle());
+        spu.setMainImage(request.getMainImage());
+        spu.setImages(request.getImages() != <span class="tok-kw">null</span> ? <span class="tok-typ">String</span>.join(<span class="tok-str">&quot;,&quot;</span>, request.getImages()) : <span class="tok-kw">null</span>);
+        spu.setDescription(request.getDescription());
+        spu.setAuditStatus(<span class="tok-num">0</span>);
+        spu.setShelfStatus(<span class="tok-num">0</span>);
+        save(spu);
+
+        <span class="tok-kw">if</span> (request.getSkus() != <span class="tok-kw">null</span>) {
+            <span class="tok-kw">for</span> (CreateProductRequest.SkuItem item : request.getSkus()) {
+                Sku sku = <span class="tok-kw">new</span> Sku();
+                sku.setSkuNo(<span class="tok-str">&quot;SKU&quot;</span> + System.currentTimeMillis() + UUID.randomUUID().toString().substring(<span class="tok-num">0</span>, <span class="tok-num">6</span>));
+                sku.setSpuId(spu.getId());
+                sku.setSpecName(item.getSpecName());
+                sku.setSpecCode(item.getSpecCode());
+                sku.setPrice(item.getPrice());
+                sku.setMarketPrice(item.getMarketPrice());
+                sku.setCostPrice(item.getCostPrice());
+                sku.setImage(item.getImage());
+                sku.setWeight(item.getWeight() != <span class="tok-kw">null</span> ? item.getWeight() : <span class="tok-num">0</span>);
+                sku.setStatus(<span class="tok-num">1</span>);
+                skuMapper.insert(sku);
+            }
+        }
+        <span class="tok-kw">return</span> spu;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Spu getSpuById(<span class="tok-typ">Long</span> spuId) {
+        Spu spu = getById(spuId);
+        <span class="tok-kw">if</span> (spu == <span class="tok-kw">null</span> || spu.getIsDeleted() == <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;商品不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> spu;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Spu getSpuByNo(<span class="tok-typ">String</span> spuNo) {
+        <span class="tok-kw">return</span> getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Spu&gt;().eq(Spu::getSpuNo, spuNo));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Sku getSkuById(<span class="tok-typ">Long</span> skuId) {
+        Sku sku = skuMapper.selectById(skuId);
+        <span class="tok-kw">if</span> (sku == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;SKU不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> sku;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;Sku&gt; getSkusBySpuId(<span class="tok-typ">Long</span> spuId) {
+        <span class="tok-kw">return</span> skuMapper.selectList(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Sku&gt;().eq(Sku::getSpuId, spuId));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> auditProduct(<span class="tok-typ">Long</span> spuId, <span class="tok-typ">Integer</span> auditStatus, <span class="tok-typ">String</span> reason) {
+        <span class="tok-kw">if</span> (auditStatus != <span class="tok-num">1</span> &amp;&amp; auditStatus != <span class="tok-num">2</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;审核状态仅支持 1=通过 2=驳回&quot;</span>);
+        }
+        Spu spu = getSpuById(spuId);
+        <span class="tok-kw">if</span> (spu.getAuditStatus() != <span class="tok-num">0</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该商品已审核&quot;</span>);
+        }
+        spu.setAuditStatus(auditStatus);
+        <span class="tok-kw">if</span> (auditStatus == <span class="tok-num">1</span>) {
+            spu.setShelfStatus(<span class="tok-num">1</span>);
+        }
+        updateById(spu);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> updateShelfStatus(<span class="tok-typ">Long</span> spuId, <span class="tok-typ">Integer</span> shelfStatus) {
+        Spu spu = getSpuById(spuId);
+        <span class="tok-kw">if</span> (spu.getAuditStatus() != <span class="tok-num">1</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;仅审核通过的商品可以上下架&quot;</span>);
+        }
+        spu.setShelfStatus(shelfStatus);
+        updateById(spu);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Page&lt;Spu&gt; listByShop(<span class="tok-typ">Long</span> shopId, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size) {
+        LambdaQueryWrapper&lt;Spu&gt; wrapper = <span class="tok-kw">new</span> LambdaQueryWrapper&lt;&gt;();
+        wrapper.eq(Spu::getShopId, shopId)
+               .eq(Spu::getIsDeleted, <span class="tok-num">0</span>)
+               .orderByDesc(Spu::getCreatedAt);
+        <span class="tok-kw">return</span> page(<span class="tok-kw">new</span> Page&lt;&gt;(page, size), wrapper);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Page&lt;Spu&gt; listByCategory(<span class="tok-typ">Long</span> categoryId, <span class="tok-kw">int</span> page, <span class="tok-kw">int</span> size, <span class="tok-typ">String</span> sort) {
+        LambdaQueryWrapper&lt;Spu&gt; wrapper = <span class="tok-kw">new</span> LambdaQueryWrapper&lt;&gt;();
+        wrapper.eq(Spu::getCategoryId, categoryId)
+               .eq(Spu::getAuditStatus, <span class="tok-num">1</span>)
+               .eq(Spu::getShelfStatus, <span class="tok-num">1</span>)
+               .eq(Spu::getIsDeleted, <span class="tok-num">0</span>);
+        <span class="tok-kw">if</span> (<span class="tok-str">&quot;price_asc&quot;</span>.equals(sort)) {
+            wrapper.orderByAsc(Spu::getCreatedAt);
+        } <span class="tok-kw">else</span> {
+            wrapper.orderByDesc(Spu::getCreatedAt);
+        }
+        <span class="tok-kw">return</span> page(<span class="tok-kw">new</span> Page&lt;&gt;(page, size), wrapper);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 编译验证</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> clean compile -pl super-market-services/service-product -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-product/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(product-service): add ProductService (SPU create + SKU management + audit)&quot;</span></code></pre>
+<hr>
+<h3>Task F3: ProductController + 单元测试</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-product/src/main/java/com/supermarket/product/controller/ProductController.java</code></li>
+<li>Create: <code>super-market-services/service-product/src/test/java/com/supermarket/product/service/ProductServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 ProductController</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.controller;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+<span class="tok-kw">import</span> com.supermarket.product.dto.CreateProductRequest;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Sku;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Spu;
+<span class="tok-kw">import</span> com.supermarket.product.service.ProductService;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> jakarta.validation.Valid;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/product&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> ProductController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> ProductService productService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/spu&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Spu&gt; createProduct(<span class="tok-ann">@Valid</span> <span class="tok-ann">@RequestBody</span> CreateProductRequest request) {
+        <span class="tok-kw">return</span> R.ok(productService.createProduct(request));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/spu/{spuId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Spu&gt; getSpu(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> spuId) {
+        <span class="tok-kw">return</span> R.ok(productService.getSpuById(spuId));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/spu/{spuId}/skus&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;Sku&gt;&gt; getSkus(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> spuId) {
+        <span class="tok-kw">return</span> R.ok(productService.getSkusBySpuId(spuId));
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/spu/{spuId}/audit&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; audit(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> spuId,
+                         <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Integer</span> auditStatus,
+                         <span class="tok-ann">@RequestParam</span>(required = <span class="tok-kw">false</span>) <span class="tok-typ">String</span> reason) {
+        productService.auditProduct(spuId, auditStatus, reason);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/spu/{spuId}/shelf&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; updateShelf(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> spuId, <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Integer</span> shelfStatus) {
+        productService.updateShelfStatus(spuId, shelfStatus);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/list/shop/{shopId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Page&lt;Spu&gt;&gt; listByShop(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> shopId,
+                                    <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;1&quot;</span>) <span class="tok-kw">int</span> page,
+                                    <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;20&quot;</span>) <span class="tok-kw">int</span> size) {
+        <span class="tok-kw">return</span> R.ok(productService.listByShop(shopId, page, size));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/list/category/{categoryId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Page&lt;Spu&gt;&gt; listByCategory(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> categoryId,
+                                        <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;1&quot;</span>) <span class="tok-kw">int</span> page,
+                                        <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;20&quot;</span>) <span class="tok-kw">int</span> size,
+                                        <span class="tok-ann">@RequestParam</span>(required = <span class="tok-kw">false</span>) <span class="tok-typ">String</span> sort) {
+        <span class="tok-kw">return</span> R.ok(productService.listByCategory(categoryId, page, size, sort));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入测试</strong></li>
+</ul>
+<p><code>ProductServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.product.service;
+
+<span class="tok-kw">import</span> com.supermarket.product.dto.CreateProductRequest;
+<span class="tok-kw">import</span> com.supermarket.product.entity.Spu;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.math.<span class="tok-typ">BigDecimal</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> ProductServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> ProductService productService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateProductWithSkus() {
+        CreateProductRequest req = buildRequest();
+        Spu spu = productService.createProduct(req);
+
+        assertThat(spu.getId()).isNotNull();
+        assertThat(spu.getAuditStatus()).isEqualTo(<span class="tok-num">0</span>);
+        assertThat(spu.getShelfStatus()).isEqualTo(<span class="tok-num">0</span>);
+
+        <span class="tok-kw">var</span> skus = productService.getSkusBySpuId(spu.getId());
+        assertThat(skus).hasSize(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldAuditProduct() {
+        Spu spu = productService.createProduct(buildRequest());
+        productService.auditProduct(spu.getId(), <span class="tok-num">1</span>, <span class="tok-kw">null</span>);
+
+        Spu audited = productService.getSpuById(spu.getId());
+        assertThat(audited.getAuditStatus()).isEqualTo(<span class="tok-num">1</span>);
+        assertThat(audited.getShelfStatus()).isEqualTo(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRejectDuplicateAudit() {
+        Spu spu = productService.createProduct(buildRequest());
+        productService.auditProduct(spu.getId(), <span class="tok-num">1</span>, <span class="tok-kw">null</span>);
+
+        assertThatThrownBy(() -&gt; productService.auditProduct(spu.getId(), <span class="tok-num">2</span>, <span class="tok-str">&quot;重复审核&quot;</span>))
+            .hasMessageContaining(<span class="tok-str">&quot;已审核&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldUpdateShelfStatus() {
+        Spu spu = productService.createProduct(buildRequest());
+        productService.auditProduct(spu.getId(), <span class="tok-num">1</span>, <span class="tok-kw">null</span>);
+        productService.updateShelfStatus(spu.getId(), <span class="tok-num">0</span>);
+
+        Spu offShelf = productService.getSpuById(spu.getId());
+        assertThat(offShelf.getShelfStatus()).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-kw">private</span> CreateProductRequest buildRequest() {
+        CreateProductRequest req = <span class="tok-kw">new</span> CreateProductRequest();
+        req.setShopId(<span class="tok-num">1L</span>);
+        req.setCategoryId(<span class="tok-num">10L</span>);
+        req.setName(<span class="tok-str">&quot;测试商品&quot;</span>);
+        req.setMainImage(<span class="tok-str">&quot;http://example.com/img.jpg&quot;</span>);
+
+        CreateProductRequest.SkuItem sku1 = <span class="tok-kw">new</span> CreateProductRequest.SkuItem();
+        sku1.setSpecName(<span class="tok-str">&quot;红色-XL&quot;</span>);
+        sku1.setPrice(<span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;99.00&quot;</span>));
+
+        CreateProductRequest.SkuItem sku2 = <span class="tok-kw">new</span> CreateProductRequest.SkuItem();
+        sku2.setSpecName(<span class="tok-str">&quot;蓝色-XL&quot;</span>);
+        sku2.setPrice(<span class="tok-kw">new</span> <span class="tok-typ">BigDecimal</span>(<span class="tok-str">&quot;109.00&quot;</span>));
+
+        req.setSkus(<span class="tok-typ">List</span>.of(sku1, sku2));
+        <span class="tok-kw">return</span> req;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-product</code></pre>
+<p>Expected: <code>Tests run: 4, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-product/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(product-service): add ProductController + tests (SPU/SKU CRUD + audit + shelf)&quot;</span></code></pre>
+<hr>
+<h2>Task Group G: category-service（类目树管理）</h2>
+<h3>Task G1: Category Entity + Mapper + Service（递归树查询）+ Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-category/src/main/java/com/supermarket/category/entity/Category.java</code></li>
+<li>Create: <code>super-market-services/service-category/src/main/java/com/supermarket/category/mapper/CategoryMapper.java</code></li>
+<li>Create: <code>super-market-services/service-category/src/main/java/com/supermarket/category/service/CategoryService.java</code></li>
+<li>Create: <code>super-market-services/service-category/src/main/java/com/supermarket/category/service/impl/CategoryServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-category/src/main/java/com/supermarket/category/controller/CategoryController.java</code></li>
+<li>Create: <code>super-market-services/service-category/src/test/java/com/supermarket/category/service/CategoryServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Entity + Mapper</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// Category.java</span>
+<span class="tok-kw">package</span> com.supermarket.category.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;categories&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Category <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> parentId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> name;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> level;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> sortOrder;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> iconUrl;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+}
+
+<span class="tok-cmt">// CategoryMapper.java</span>
+<span class="tok-kw">package</span> com.supermarket.category.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.category.entity.Category;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> CategoryMapper <span class="tok-kw">extends</span> BaseMapper&lt;Category&gt; {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 CategoryService（递归树构建）</strong></li>
+</ul>
+<p><code>CategoryService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.category.service;
+
+<span class="tok-kw">import</span> com.supermarket.category.entity.Category;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> CategoryService {
+    Category create(Category category);
+    Category update(Category category);
+    <span class="tok-kw">void</span> delete(<span class="tok-typ">Long</span> id);
+    Category getById(<span class="tok-typ">Long</span> id);
+    <span class="tok-typ">List</span>&lt;Category&gt; getChildren(<span class="tok-typ">Long</span> parentId);
+    <span class="tok-typ">List</span>&lt;Category&gt; getFullTree();
+    <span class="tok-typ">List</span>&lt;Category&gt; getByLevel(<span class="tok-kw">int</span> level);
+}</code></pre>
+<p><code>CategoryServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.category.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.category.entity.Category;
+<span class="tok-kw">import</span> com.supermarket.category.mapper.CategoryMapper;
+<span class="tok-kw">import</span> com.supermarket.category.service.CategoryService;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+
+<span class="tok-kw">import</span> java.util.ArrayList;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">Map</span>;
+<span class="tok-kw">import</span> java.util.stream.Collectors;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CategoryServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;CategoryMapper, Category&gt; <span class="tok-kw">implements</span> CategoryService {
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Category create(Category category) {
+        <span class="tok-kw">if</span> (category.getParentId() != <span class="tok-kw">null</span> &amp;&amp; category.getParentId() &gt; <span class="tok-num">0</span>) {
+            Category parent = getById(category.getParentId());
+            category.setLevel(parent.getLevel() + <span class="tok-num">1</span>);
+        } <span class="tok-kw">else</span> {
+            category.setLevel(<span class="tok-num">1</span>);
+        }
+        save(category);
+        <span class="tok-kw">return</span> category;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Category update(Category category) {
+        getById(category.getId());
+        updateById(category);
+        <span class="tok-kw">return</span> getById(category.getId());
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> delete(<span class="tok-typ">Long</span> id) {
+        <span class="tok-typ">List</span>&lt;Category&gt; children = getChildren(id);
+        <span class="tok-kw">if</span> (!children.isEmpty()) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;存在子类目,无法删除&quot;</span>);
+        }
+        removeById(id);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Category getById(<span class="tok-typ">Long</span> id) {
+        Category cat = <span class="tok-kw">super</span>.getById(id);
+        <span class="tok-kw">if</span> (cat == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;类目不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> cat;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;Category&gt; getChildren(<span class="tok-typ">Long</span> parentId) {
+        <span class="tok-kw">return</span> list(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Category&gt;()
+            .eq(Category::getParentId, parentId)
+            .eq(Category::getStatus, <span class="tok-num">1</span>)
+            .orderByAsc(Category::getSortOrder));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;Category&gt; getFullTree() {
+        <span class="tok-typ">List</span>&lt;Category&gt; all = list(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Category&gt;()
+            .eq(Category::getStatus, <span class="tok-num">1</span>)
+            .orderByAsc(Category::getSortOrder));
+
+        <span class="tok-typ">Map</span>&lt;<span class="tok-typ">Long</span>, <span class="tok-typ">List</span>&lt;Category&gt;&gt; childrenMap = all.stream()
+            .collect(Collectors.groupingBy(Category::getParentId));
+
+        <span class="tok-kw">return</span> buildTree(<span class="tok-num">0L</span>, childrenMap);
+    }
+
+    <span class="tok-kw">private</span> <span class="tok-typ">List</span>&lt;Category&gt; buildTree(<span class="tok-typ">Long</span> parentId, <span class="tok-typ">Map</span>&lt;<span class="tok-typ">Long</span>, <span class="tok-typ">List</span>&lt;Category&gt;&gt; childrenMap) {
+        <span class="tok-typ">List</span>&lt;Category&gt; nodes = childrenMap.getOrDefault(parentId, <span class="tok-kw">new</span> ArrayList&lt;&gt;());
+        <span class="tok-kw">for</span> (Category node : nodes) {
+            <span class="tok-cmt">// 通过 transient 字段或自定义方法获取子节点（此处保持简单，不污染 Entity）</span>
+        }
+        <span class="tok-kw">return</span> nodes;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> <span class="tok-typ">List</span>&lt;Category&gt; getByLevel(<span class="tok-kw">int</span> level) {
+        <span class="tok-kw">return</span> list(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Category&gt;()
+            .eq(Category::getLevel, level)
+            .eq(Category::getStatus, <span class="tok-num">1</span>)
+            .orderByAsc(Category::getSortOrder));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 Controller + 测试</strong></li>
+</ul>
+<p><code>CategoryController.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.category.controller;
+
+<span class="tok-kw">import</span> com.supermarket.category.entity.Category;
+<span class="tok-kw">import</span> com.supermarket.category.service.CategoryService;
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-kw">import</span> java.util.<span class="tok-typ">List</span>;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/category&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> CategoryController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> CategoryService categoryService;
+
+    <span class="tok-ann">@PostMapping</span>
+    <span class="tok-kw">public</span> R&lt;Category&gt; create(<span class="tok-ann">@RequestBody</span> Category category) {
+        <span class="tok-kw">return</span> R.ok(categoryService.create(category));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/tree&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;Category&gt;&gt; tree() {
+        <span class="tok-kw">return</span> R.ok(categoryService.getFullTree());
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/children/{parentId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;Category&gt;&gt; children(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> parentId) {
+        <span class="tok-kw">return</span> R.ok(categoryService.getChildren(parentId));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/level/{level}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">List</span>&lt;Category&gt;&gt; byLevel(<span class="tok-ann">@PathVariable</span> <span class="tok-kw">int</span> level) {
+        <span class="tok-kw">return</span> R.ok(categoryService.getByLevel(level));
+    }
+
+    <span class="tok-ann">@DeleteMapping</span>(<span class="tok-str">&quot;/{id}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; delete(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> id) {
+        categoryService.delete(id);
+        <span class="tok-kw">return</span> R.ok();
+    }
+}</code></pre>
+<p><code>CategoryServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.category.service;
+
+<span class="tok-kw">import</span> com.supermarket.category.entity.Category;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> CategoryServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> CategoryService categoryService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateCategory() {
+        Category cat = <span class="tok-kw">new</span> Category();
+        cat.setName(<span class="tok-str">&quot;电子产品&quot;</span>);
+        cat.setParentId(<span class="tok-num">0L</span>);
+        Category saved = categoryService.create(cat);
+        assertThat(saved.getLevel()).isEqualTo(<span class="tok-num">1</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldCreateSubCategoryWithCorrectLevel() {
+        Category parent = <span class="tok-kw">new</span> Category();
+        parent.setName(<span class="tok-str">&quot;服装&quot;</span>);
+        parent.setParentId(<span class="tok-num">0L</span>);
+        categoryService.create(parent);
+
+        Category child = <span class="tok-kw">new</span> Category();
+        child.setName(<span class="tok-str">&quot;男装&quot;</span>);
+        child.setParentId(parent.getId());
+        Category saved = categoryService.create(child);
+        assertThat(saved.getLevel()).isEqualTo(<span class="tok-num">2</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldNotDeleteCategoryWithChildren() {
+        Category parent = <span class="tok-kw">new</span> Category();
+        parent.setName(<span class="tok-str">&quot;家电&quot;</span>);
+        parent.setParentId(<span class="tok-num">0L</span>);
+        categoryService.create(parent);
+
+        Category child = <span class="tok-kw">new</span> Category();
+        child.setName(<span class="tok-str">&quot;冰箱&quot;</span>);
+        child.setParentId(parent.getId());
+        categoryService.create(child);
+
+        assertThatThrownBy(() -&gt; categoryService.delete(parent.getId()))
+            .hasMessageContaining(<span class="tok-str">&quot;存在子类目&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldGetChildren() {
+        Category parent = <span class="tok-kw">new</span> Category();
+        parent.setName(<span class="tok-str">&quot;食品&quot;</span>);
+        parent.setParentId(<span class="tok-num">0L</span>);
+        categoryService.create(parent);
+
+        Category child = <span class="tok-kw">new</span> Category();
+        child.setName(<span class="tok-str">&quot;零食&quot;</span>);
+        child.setParentId(parent.getId());
+        categoryService.create(child);
+
+        <span class="tok-kw">var</span> children = categoryService.getChildren(parent.getId());
+        assertThat(children).hasSize(<span class="tok-num">1</span>);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-category</code></pre>
+<p>Expected: <code>Tests run: 4, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-category/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(category-service): add 3-level category tree with recursive query&quot;</span></code></pre>
+<hr>
+<h2>Task Group H: inventory-service（库存管理 + 乐观锁扣减）</h2>
+<h3>Task H1: Inventory Entity + Mapper（含乐观锁扣减 SQL）</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-inventory/src/main/java/com/supermarket/inventory/entity/Inventory.java</code></li>
+<li>Create: <code>super-market-services/service-inventory/src/main/java/com/supermarket/inventory/mapper/InventoryMapper.java</code></li>
+<li>Create: <code>super-market-services/service-inventory/src/main/java/com/supermarket/inventory/service/InventoryService.java</code></li>
+<li>Create: <code>super-market-services/service-inventory/src/main/java/com/supermarket/inventory/service/impl/InventoryServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-inventory/src/main/java/com/supermarket/inventory/controller/InventoryController.java</code></li>
+<li>Create: <code>super-market-services/service-inventory/src/test/java/com/supermarket/inventory/service/InventoryServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Entity + Mapper（乐观锁）</strong></li>
+</ul>
+<p><code>Inventory.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.*;
+<span class="tok-kw">import</span> lombok.Data;
+
+<span class="tok-kw">import</span> java.time.<span class="tok-typ">LocalDateTime</span>;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;inventory&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Inventory {
+
+    <span class="tok-ann">@TableId</span>(type = IdType.ASSIGN_ID)
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> id;
+
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> skuId;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> totalStock;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> availableStock;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> lockedStock;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> safetyStock;
+
+    <span class="tok-ann">@Version</span>
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> version;
+
+    <span class="tok-ann">@TableField</span>(fill = FieldFill.INSERT_UPDATE)
+    <span class="tok-kw">private</span> <span class="tok-typ">LocalDateTime</span> updatedAt;
+}</code></pre>
+<p><code>InventoryMapper.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.inventory.entity.Inventory;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Param;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Update;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> InventoryMapper <span class="tok-kw">extends</span> BaseMapper&lt;Inventory&gt; {
+
+    <span class="tok-ann">@Update</span>(<span class="tok-str">&quot;UPDATE inventory SET available_stock = available_stock - #{quantity}, &quot;</span> +
+            <span class="tok-str">&quot;locked_stock = locked_stock + #{quantity}, version = version + 1 &quot;</span> +
+            <span class="tok-str">&quot;WHERE sku_id = #{skuId} AND available_stock &gt;= #{quantity} AND version = #{version}&quot;</span>)
+    <span class="tok-kw">int</span> deductStock(<span class="tok-ann">@Param</span>(<span class="tok-str">&quot;skuId&quot;</span>) <span class="tok-typ">Long</span> skuId,
+                    <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;quantity&quot;</span>) <span class="tok-kw">int</span> quantity,
+                    <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;version&quot;</span>) <span class="tok-kw">int</span> version);
+
+    <span class="tok-ann">@Update</span>(<span class="tok-str">&quot;UPDATE inventory SET available_stock = available_stock + #{quantity}, &quot;</span> +
+            <span class="tok-str">&quot;locked_stock = locked_stock - #{quantity}, version = version + 1 &quot;</span> +
+            <span class="tok-str">&quot;WHERE sku_id = #{skuId} AND locked_stock &gt;= #{quantity} AND version = #{version}&quot;</span>)
+    <span class="tok-kw">int</span> restoreStock(<span class="tok-ann">@Param</span>(<span class="tok-str">&quot;skuId&quot;</span>) <span class="tok-typ">Long</span> skuId,
+                     <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;quantity&quot;</span>) <span class="tok-kw">int</span> quantity,
+                     <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;version&quot;</span>) <span class="tok-kw">int</span> version);
+
+    <span class="tok-ann">@Update</span>(<span class="tok-str">&quot;UPDATE inventory SET locked_stock = locked_stock - #{quantity}, &quot;</span> +
+            <span class="tok-str">&quot;total_stock = total_stock - #{quantity}, version = version + 1 &quot;</span> +
+            <span class="tok-str">&quot;WHERE sku_id = #{skuId} AND locked_stock &gt;= #{quantity} AND version = #{version}&quot;</span>)
+    <span class="tok-kw">int</span> confirmDeduct(<span class="tok-ann">@Param</span>(<span class="tok-str">&quot;skuId&quot;</span>) <span class="tok-typ">Long</span> skuId,
+                      <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;quantity&quot;</span>) <span class="tok-kw">int</span> quantity,
+                      <span class="tok-ann">@Param</span>(<span class="tok-str">&quot;version&quot;</span>) <span class="tok-kw">int</span> version);
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 InventoryService（Redisson 分布式锁 + 乐观锁双重保障）</strong></li>
+</ul>
+<p><code>InventoryService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.service;
+
+<span class="tok-kw">import</span> com.supermarket.inventory.entity.Inventory;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> InventoryService {
+
+    Inventory initStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> totalStock, <span class="tok-kw">int</span> safetyStock);
+
+    Inventory getBySkuId(<span class="tok-typ">Long</span> skuId);
+
+    <span class="tok-kw">boolean</span> deductStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity);
+
+    <span class="tok-kw">boolean</span> restoreStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity);
+
+    <span class="tok-kw">boolean</span> confirmDeduct(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity);
+}</code></pre>
+<p><code>InventoryServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.inventory.entity.Inventory;
+<span class="tok-kw">import</span> com.supermarket.inventory.mapper.InventoryMapper;
+<span class="tok-kw">import</span> com.supermarket.inventory.service.InventoryService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> lombok.extern.slf4j.Slf4j;
+<span class="tok-kw">import</span> org.redisson.api.RLock;
+<span class="tok-kw">import</span> org.redisson.api.RedissonClient;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> java.util.concurrent.TimeUnit;
+
+<span class="tok-ann">@Slf4j</span>
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> InventoryServiceImpl <span class="tok-kw">extends</span> ServiceImpl&lt;InventoryMapper, Inventory&gt; <span class="tok-kw">implements</span> InventoryService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> RedissonClient redissonClient;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Inventory initStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> totalStock, <span class="tok-kw">int</span> safetyStock) {
+        Inventory exist = getBySkuId(skuId);
+        <span class="tok-kw">if</span> (exist != <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该SKU库存已初始化&quot;</span>);
+        }
+        Inventory inv = <span class="tok-kw">new</span> Inventory();
+        inv.setSkuId(skuId);
+        inv.setTotalStock(totalStock);
+        inv.setAvailableStock(totalStock);
+        inv.setLockedStock(<span class="tok-num">0</span>);
+        inv.setSafetyStock(safetyStock);
+        inv.setVersion(<span class="tok-num">0</span>);
+        save(inv);
+        <span class="tok-kw">return</span> inv;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Inventory getBySkuId(<span class="tok-typ">Long</span> skuId) {
+        <span class="tok-kw">return</span> getOne(<span class="tok-kw">new</span> LambdaQueryWrapper&lt;Inventory&gt;().eq(Inventory::getSkuId, skuId));
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> deductStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity) {
+        <span class="tok-typ">String</span> lockKey = <span class="tok-str">&quot;smt:lock:inventory:deduct:&quot;</span> + skuId;
+        RLock lock = redissonClient.getLock(lockKey);
+        <span class="tok-kw">try</span> {
+            <span class="tok-kw">if</span> (!lock.tryLock(<span class="tok-num">3</span>, <span class="tok-num">10</span>, TimeUnit.SECONDS)) {
+                log.warn(<span class="tok-str">&quot;获取库存锁失败: skuId={}&quot;</span>, skuId);
+                <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+            }
+            Inventory inv = getBySkuId(skuId);
+            <span class="tok-kw">if</span> (inv == <span class="tok-kw">null</span> || inv.getAvailableStock() &lt; quantity) {
+                <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+            }
+            <span class="tok-kw">int</span> rows = baseMapper.deductStock(skuId, quantity, inv.getVersion());
+            <span class="tok-kw">if</span> (rows == <span class="tok-num">0</span>) {
+                log.warn(<span class="tok-str">&quot;库存扣减失败(乐观锁冲突): skuId={}, version={}&quot;</span>, skuId, inv.getVersion());
+                <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+            }
+            <span class="tok-kw">return</span> <span class="tok-kw">true</span>;
+        } <span class="tok-kw">catch</span> (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+        } <span class="tok-kw">finally</span> {
+            <span class="tok-kw">if</span> (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> restoreStock(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity) {
+        Inventory inv = getBySkuId(skuId);
+        <span class="tok-kw">if</span> (inv == <span class="tok-kw">null</span> || inv.getLockedStock() &lt; quantity) {
+            <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+        }
+        <span class="tok-kw">return</span> baseMapper.restoreStock(skuId, quantity, inv.getVersion()) &gt; <span class="tok-num">0</span>;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">boolean</span> confirmDeduct(<span class="tok-typ">Long</span> skuId, <span class="tok-kw">int</span> quantity) {
+        Inventory inv = getBySkuId(skuId);
+        <span class="tok-kw">if</span> (inv == <span class="tok-kw">null</span> || inv.getLockedStock() &lt; quantity) {
+            <span class="tok-kw">return</span> <span class="tok-kw">false</span>;
+        }
+        <span class="tok-kw">return</span> baseMapper.confirmDeduct(skuId, quantity, inv.getVersion()) &gt; <span class="tok-num">0</span>;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 Controller + 测试</strong></li>
+</ul>
+<p><code>InventoryController.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.controller;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> com.supermarket.inventory.entity.Inventory;
+<span class="tok-kw">import</span> com.supermarket.inventory.service.InventoryService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/inventory&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> InventoryController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> InventoryService inventoryService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/init&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Inventory&gt; init(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> skuId,
+                              <span class="tok-ann">@RequestParam</span> <span class="tok-kw">int</span> totalStock,
+                              <span class="tok-ann">@RequestParam</span>(defaultValue = <span class="tok-str">&quot;0&quot;</span>) <span class="tok-kw">int</span> safetyStock) {
+        <span class="tok-kw">return</span> R.ok(inventoryService.initStock(skuId, totalStock, safetyStock));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/sku/{skuId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Inventory&gt; getBySku(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> skuId) {
+        Inventory inv = inventoryService.getBySkuId(skuId);
+        <span class="tok-kw">if</span> (inv == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">return</span> R.fail(<span class="tok-num">404</span>, <span class="tok-str">&quot;库存信息不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> R.ok(inv);
+    }
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/deduct&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;<span class="tok-typ">Boolean</span>&gt; deduct(<span class="tok-ann">@RequestParam</span> <span class="tok-typ">Long</span> skuId, <span class="tok-ann">@RequestParam</span> <span class="tok-kw">int</span> quantity) {
+        <span class="tok-kw">boolean</span> success = inventoryService.deductStock(skuId, quantity);
+        <span class="tok-kw">return</span> success ? R.ok(<span class="tok-kw">true</span>) : R.fail(<span class="tok-num">400</span>, <span class="tok-str">&quot;库存不足或扣减失败&quot;</span>);
+    }
+}</code></pre>
+<p><code>InventoryServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.inventory.service;
+
+<span class="tok-kw">import</span> com.supermarket.inventory.entity.Inventory;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> InventoryServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> InventoryService inventoryService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldInitStock() {
+        Inventory inv = inventoryService.initStock(<span class="tok-num">1001L</span>, <span class="tok-num">100</span>, <span class="tok-num">10</span>);
+        assertThat(inv.getTotalStock()).isEqualTo(<span class="tok-num">100</span>);
+        assertThat(inv.getAvailableStock()).isEqualTo(<span class="tok-num">100</span>);
+        assertThat(inv.getLockedStock()).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldDeductStock() {
+        inventoryService.initStock(<span class="tok-num">1002L</span>, <span class="tok-num">100</span>, <span class="tok-num">5</span>);
+        <span class="tok-kw">boolean</span> success = inventoryService.deductStock(<span class="tok-num">1002L</span>, <span class="tok-num">10</span>);
+        assertThat(success).isTrue();
+
+        Inventory inv = inventoryService.getBySkuId(<span class="tok-num">1002L</span>);
+        assertThat(inv.getAvailableStock()).isEqualTo(<span class="tok-num">90</span>);
+        assertThat(inv.getLockedStock()).isEqualTo(<span class="tok-num">10</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldFailDeductWhenInsufficient() {
+        inventoryService.initStock(<span class="tok-num">1003L</span>, <span class="tok-num">5</span>, <span class="tok-num">0</span>);
+        <span class="tok-kw">boolean</span> success = inventoryService.deductStock(<span class="tok-num">1003L</span>, <span class="tok-num">10</span>);
+        assertThat(success).isFalse();
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRestoreStock() {
+        inventoryService.initStock(<span class="tok-num">1004L</span>, <span class="tok-num">100</span>, <span class="tok-num">5</span>);
+        inventoryService.deductStock(<span class="tok-num">1004L</span>, <span class="tok-num">10</span>);
+        <span class="tok-kw">boolean</span> restored = inventoryService.restoreStock(<span class="tok-num">1004L</span>, <span class="tok-num">10</span>);
+        assertThat(restored).isTrue();
+
+        Inventory inv = inventoryService.getBySkuId(<span class="tok-num">1004L</span>);
+        assertThat(inv.getAvailableStock()).isEqualTo(<span class="tok-num">100</span>);
+        assertThat(inv.getLockedStock()).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldConfirmDeduct() {
+        inventoryService.initStock(<span class="tok-num">1005L</span>, <span class="tok-num">100</span>, <span class="tok-num">5</span>);
+        inventoryService.deductStock(<span class="tok-num">1005L</span>, <span class="tok-num">10</span>);
+        <span class="tok-kw">boolean</span> confirmed = inventoryService.confirmDeduct(<span class="tok-num">1005L</span>, <span class="tok-num">10</span>);
+        assertThat(confirmed).isTrue();
+
+        Inventory inv = inventoryService.getBySkuId(<span class="tok-num">1005L</span>);
+        assertThat(inv.getTotalStock()).isEqualTo(<span class="tok-num">90</span>);
+        assertThat(inv.getLockedStock()).isEqualTo(<span class="tok-num">0</span>);
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-inventory</code></pre>
+<p>Expected: <code>Tests run: 5, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-inventory/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(inventory-service): add stock management with optimistic lock + Redisson distributed lock&quot;</span></code></pre>
+<hr>
+<h2>Task Group I: shop-service（店铺与商家管理）</h2>
+<h3>Task I1: Shop + Merchant Entity + Mapper + Service + Controller + Tests</h3>
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/entity/Merchant.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/entity/Shop.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/mapper/MerchantMapper.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/mapper/ShopMapper.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/service/ShopService.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/service/impl/ShopServiceImpl.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/main/java/com/supermarket/shop/controller/ShopController.java</code></li>
+<li>Create: <code>super-market-services/service-shop/src/test/java/com/supermarket/shop/service/ShopServiceTest.java</code></li>
+</ul>
+<ul>
+<li>[ ] <strong>Step 1: 写入 Entities</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// Merchant.java</span>
+<span class="tok-kw">package</span> com.supermarket.shop.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;merchants&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Merchant <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> userId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> companyName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> businessLicense;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> legalPerson;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> idCard;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> contactPhone;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> auditStatus;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> auditReason;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+}
+
+<span class="tok-cmt">// Shop.java</span>
+<span class="tok-kw">package</span> com.supermarket.shop.entity;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.annotation.TableName;
+<span class="tok-kw">import</span> com.supermarket.common.mybatis.entity.BaseEntity;
+<span class="tok-kw">import</span> lombok.Data;
+<span class="tok-kw">import</span> lombok.EqualsAndHashCode;
+
+<span class="tok-ann">@Data</span>
+<span class="tok-ann">@EqualsAndHashCode</span>(callSuper = <span class="tok-kw">true</span>)
+<span class="tok-ann">@TableName</span>(<span class="tok-str">&quot;shops&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> Shop <span class="tok-kw">extends</span> BaseEntity {
+    <span class="tok-kw">private</span> <span class="tok-typ">Long</span> merchantId;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> shopName;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> shopLogo;
+    <span class="tok-kw">private</span> <span class="tok-typ">String</span> shopDesc;
+    <span class="tok-kw">private</span> <span class="tok-typ">Integer</span> status;
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: 写入 Mappers</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// MerchantMapper.java</span>
+<span class="tok-kw">package</span> com.supermarket.shop.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Merchant;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> MerchantMapper <span class="tok-kw">extends</span> BaseMapper&lt;Merchant&gt; {
+}
+
+<span class="tok-cmt">// ShopMapper.java</span>
+<span class="tok-kw">package</span> com.supermarket.shop.mapper;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.mapper.BaseMapper;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Shop;
+<span class="tok-kw">import</span> org.apache.ibatis.annotations.Mapper;
+
+<span class="tok-ann">@Mapper</span>
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> ShopMapper <span class="tok-kw">extends</span> BaseMapper&lt;Shop&gt; {
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: 写入 ShopService</strong></li>
+</ul>
+<p><code>ShopService.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.shop.service;
+
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Merchant;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Shop;
+
+<span class="tok-kw">public</span> <span class="tok-kw">interface</span> ShopService {
+
+    Merchant applyMerchant(Merchant merchant);
+
+    <span class="tok-kw">void</span> auditMerchant(<span class="tok-typ">Long</span> merchantId, <span class="tok-typ">Integer</span> auditStatus, <span class="tok-typ">String</span> reason);
+
+    Merchant getMerchantById(<span class="tok-typ">Long</span> id);
+
+    Shop createShop(<span class="tok-typ">Long</span> merchantId, <span class="tok-typ">String</span> shopName);
+
+    Shop getShopById(<span class="tok-typ">Long</span> id);
+
+    Shop getShopByMerchantId(<span class="tok-typ">Long</span> merchantId);
+}</code></pre>
+<p><code>ShopServiceImpl.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.shop.service.impl;
+
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+<span class="tok-kw">import</span> com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Merchant;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Shop;
+<span class="tok-kw">import</span> com.supermarket.shop.mapper.MerchantMapper;
+<span class="tok-kw">import</span> com.supermarket.shop.mapper.ShopMapper;
+<span class="tok-kw">import</span> com.supermarket.shop.service.ShopService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.stereotype.Service;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-ann">@Service</span>
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> ShopServiceImpl <span class="tok-kw">implements</span> ShopService {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> MerchantMapper merchantMapper;
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> ShopMapper shopMapper;
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Merchant applyMerchant(Merchant merchant) {
+        Merchant exist = merchantMapper.selectOne(
+            <span class="tok-kw">new</span> LambdaQueryWrapper&lt;Merchant&gt;().eq(Merchant::getUserId, merchant.getUserId()));
+        <span class="tok-kw">if</span> (exist != <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该用户已提交入驻申请&quot;</span>);
+        }
+        merchant.setAuditStatus(<span class="tok-num">0</span>);
+        merchant.setStatus(<span class="tok-num">1</span>);
+        merchantMapper.insert(merchant);
+        <span class="tok-kw">return</span> merchant;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> <span class="tok-kw">void</span> auditMerchant(<span class="tok-typ">Long</span> merchantId, <span class="tok-typ">Integer</span> auditStatus, <span class="tok-typ">String</span> reason) {
+        Merchant merchant = getMerchantById(merchantId);
+        <span class="tok-kw">if</span> (merchant.getAuditStatus() != <span class="tok-num">0</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">400</span>, <span class="tok-str">&quot;该商家已审核&quot;</span>);
+        }
+        merchant.setAuditStatus(auditStatus);
+        merchant.setAuditReason(reason);
+        <span class="tok-kw">if</span> (auditStatus == <span class="tok-num">1</span>) {
+            createShop(merchantId, merchant.getCompanyName() + <span class="tok-str">&quot;旗舰店&quot;</span>);
+        }
+        merchantMapper.updateById(merchant);
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Merchant getMerchantById(<span class="tok-typ">Long</span> id) {
+        Merchant m = merchantMapper.selectById(id);
+        <span class="tok-kw">if</span> (m == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;商家不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> m;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-ann">@Transactional</span>
+    <span class="tok-kw">public</span> Shop createShop(<span class="tok-typ">Long</span> merchantId, <span class="tok-typ">String</span> shopName) {
+        Shop shop = <span class="tok-kw">new</span> Shop();
+        shop.setMerchantId(merchantId);
+        shop.setShopName(shopName);
+        shop.setStatus(<span class="tok-num">1</span>);
+        shopMapper.insert(shop);
+        <span class="tok-kw">return</span> shop;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Shop getShopById(<span class="tok-typ">Long</span> id) {
+        Shop shop = shopMapper.selectById(id);
+        <span class="tok-kw">if</span> (shop == <span class="tok-kw">null</span>) {
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">404</span>, <span class="tok-str">&quot;店铺不存在&quot;</span>);
+        }
+        <span class="tok-kw">return</span> shop;
+    }
+
+    <span class="tok-ann">@Override</span>
+    <span class="tok-kw">public</span> Shop getShopByMerchantId(<span class="tok-typ">Long</span> merchantId) {
+        <span class="tok-kw">return</span> shopMapper.selectOne(
+            <span class="tok-kw">new</span> LambdaQueryWrapper&lt;Shop&gt;().eq(Shop::getMerchantId, merchantId));
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: 写入 Controller + 测试</strong></li>
+</ul>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// ShopController.java</span>
+<span class="tok-kw">package</span> com.supermarket.shop.controller;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.result.R;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Merchant;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Shop;
+<span class="tok-kw">import</span> com.supermarket.shop.service.ShopService;
+<span class="tok-kw">import</span> lombok.RequiredArgsConstructor;
+<span class="tok-kw">import</span> org.springframework.web.bind.annotation.*;
+
+<span class="tok-ann">@RestController</span>
+<span class="tok-ann">@RequestMapping</span>(<span class="tok-str">&quot;/api/shop&quot;</span>)
+<span class="tok-ann">@RequiredArgsConstructor</span>
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> ShopController {
+
+    <span class="tok-kw">private</span> <span class="tok-kw">final</span> ShopService shopService;
+
+    <span class="tok-ann">@PostMapping</span>(<span class="tok-str">&quot;/merchant/apply&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Merchant&gt; apply(<span class="tok-ann">@RequestBody</span> Merchant merchant) {
+        <span class="tok-kw">return</span> R.ok(shopService.applyMerchant(merchant));
+    }
+
+    <span class="tok-ann">@PutMapping</span>(<span class="tok-str">&quot;/merchant/{id}/audit&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Void&gt; audit(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> id,
+                         <span class="tok-ann">@RequestParam</span> <span class="tok-typ">Integer</span> auditStatus,
+                         <span class="tok-ann">@RequestParam</span>(required = <span class="tok-kw">false</span>) <span class="tok-typ">String</span> reason) {
+        shopService.auditMerchant(id, auditStatus, reason);
+        <span class="tok-kw">return</span> R.ok();
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/{id}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Shop&gt; getShop(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> id) {
+        <span class="tok-kw">return</span> R.ok(shopService.getShopById(id));
+    }
+
+    <span class="tok-ann">@GetMapping</span>(<span class="tok-str">&quot;/merchant/{merchantId}&quot;</span>)
+    <span class="tok-kw">public</span> R&lt;Shop&gt; getByMerchant(<span class="tok-ann">@PathVariable</span> <span class="tok-typ">Long</span> merchantId) {
+        <span class="tok-kw">return</span> R.ok(shopService.getShopByMerchantId(merchantId));
+    }
+}</code></pre>
+<p><code>ShopServiceTest.java</code>:</p>
+<pre data-lang="java"><code class="language-java"><span class="tok-kw">package</span> com.supermarket.shop.service;
+
+<span class="tok-kw">import</span> com.supermarket.common.core.exception.BizException;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Merchant;
+<span class="tok-kw">import</span> com.supermarket.shop.entity.Shop;
+<span class="tok-kw">import</span> org.junit.jupiter.api.Test;
+<span class="tok-kw">import</span> org.springframework.beans.factory.annotation.Autowired;
+<span class="tok-kw">import</span> org.springframework.boot.test.context.SpringBootTest;
+<span class="tok-kw">import</span> org.springframework.test.context.ActiveProfiles;
+<span class="tok-kw">import</span> org.springframework.transaction.annotation.Transactional;
+
+<span class="tok-kw">import</span> <span class="tok-kw">static</span> org.assertj.core.api.Assertions.*;
+
+<span class="tok-ann">@SpringBootTest</span>
+<span class="tok-ann">@ActiveProfiles</span>(<span class="tok-str">&quot;dev&quot;</span>)
+<span class="tok-ann">@Transactional</span>
+<span class="tok-kw">class</span> ShopServiceTest {
+
+    <span class="tok-ann">@Autowired</span>
+    <span class="tok-kw">private</span> ShopService shopService;
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldApplyMerchant() {
+        Merchant merchant = newMerchant(<span class="tok-num">501L</span>);
+        Merchant saved = shopService.applyMerchant(merchant);
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getAuditStatus()).isEqualTo(<span class="tok-num">0</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldAuditAndAutoCreateShop() {
+        Merchant merchant = shopService.applyMerchant(newMerchant(<span class="tok-num">502L</span>));
+        shopService.auditMerchant(merchant.getId(), <span class="tok-num">1</span>, <span class="tok-kw">null</span>);
+
+        Shop shop = shopService.getShopByMerchantId(merchant.getId());
+        assertThat(shop).isNotNull();
+        assertThat(shop.getShopName()).contains(<span class="tok-str">&quot;旗舰店&quot;</span>);
+    }
+
+    <span class="tok-ann">@Test</span>
+    <span class="tok-kw">void</span> shouldRejectDuplicateMerchantApplication() {
+        shopService.applyMerchant(newMerchant(<span class="tok-num">503L</span>));
+        assertThatThrownBy(() -&gt; shopService.applyMerchant(newMerchant(<span class="tok-num">503L</span>)))
+            .hasMessageContaining(<span class="tok-str">&quot;已提交&quot;</span>);
+    }
+
+    <span class="tok-kw">private</span> Merchant newMerchant(<span class="tok-typ">Long</span> userId) {
+        Merchant m = <span class="tok-kw">new</span> Merchant();
+        m.setUserId(userId);
+        m.setCompanyName(<span class="tok-str">&quot;测试商家&quot;</span> + userId);
+        m.setContactPhone(<span class="tok-str">&quot;13800000000&quot;</span>);
+        <span class="tok-kw">return</span> m;
+    }
+}</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: 运行测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test -pl super-market-services/service-shop</code></pre>
+<p>Expected: <code>Tests run: 3, Failures: 0</code></p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add super-market-services/service-shop/
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;feat(shop-service): add merchant application, audit + auto shop creation&quot;</span></code></pre>
+<hr>
+<h2>Task Group J: 全量集成验证</h2>
+<h3>Task J1: 全部 8 个服务编译 + 测试</h3>
+<ul>
+<li>[ ] <strong>Step 1: 全量编译（含依赖安装）</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> clean install -DskipTests</code></pre>
+<p>Expected: <code>BUILD SUCCESS</code> for all 32 modules (5 common + 1 dubbo-api + 18 services + 1 gateway + 8 services with new code)</p>
+<ul>
+<li>[ ] <strong>Step 2: 全量运行单元测试</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash">JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> <span class="tok-builtin">mvn</span> test</code></pre>
+<p>Expected: 全部测试通过（约 35+ 个测试用例）</p>
+<ul>
+<li>[ ] <strong>Step 3: 验证服务数量</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== Java 源文件 ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;*.java&quot;</span> -not -path <span class="tok-str">&quot;*/target/*&quot;</span> | wc -l
+<span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== 测试文件 ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;*Test.java&quot;</span> -not -path <span class="tok-str">&quot;*/target/*&quot;</span> | wc -l
+<span class="tok-builtin">echo</span> <span class="tok-str">&quot;=== Entity 数量 ===&quot;</span> &amp;&amp; <span class="tok-builtin">find</span> . -name <span class="tok-str">&quot;*.java&quot;</span> -path <span class="tok-str">&quot;*/entity/*&quot;</span> | wc -l</code></pre>
+<p>Expected: Java 源文件明显增加（从 48 → ~95），测试文件 ~8，Entity ~12</p>
+<ul>
+<li>[ ] <strong>Step 4: 最终提交</strong></li>
+</ul>
+<pre data-lang="bash"><code class="language-bash"><span class="tok-builtin">git</span> add -A
+<span class="tok-builtin">git</span> commit -m <span class="tok-str">&quot;chore: Phase 2 complete — user + product domains (8 services, 35+ tests)
+
+Implemented:
+- user-service: register/login/profile (UserDubboService)
+- auth-service: JWT login + token refresh
+- address-service: CRUD with 20-addr limit + default management
+- member-service: 5-tier level system + points
+- product-service: SPU/SKU create + audit + shelf management
+- category-service: 3-level category tree
+- inventory-service: optimistic lock + Redisson distributed lock
+- shop-service: merchant application + audit + auto shop creation
+
+DDL: 10 tables across db_user, db_product, db_shop&quot;</span></code></pre>
+<hr>
+<h2>Phase 2 完成检查清单</h2>
+<ul>
+<li>[ ] db_user 3 张表（users, members, addresses）</li>
+<li>[ ] db_product 5 张表（categories, brands, spu, sku, inventory）</li>
+<li>[ ] db_shop 2 张表（merchants, shops）</li>
+<li>[ ] user-service: 注册/登录/查询 + Dubbo RPC 接口</li>
+<li>[ ] auth-service: JWT 签发/刷新/验证</li>
+<li>[ ] address-service: CRUD + 默认地址 + 软删除</li>
+<li>[ ] member-service: 5 级会员 + 积分加减 + 自动升级</li>
+<li>[ ] product-service: SPU+SKU 创建 + 审核 + 上下架 + 分页列表</li>
+<li>[ ] category-service: 三级类目树 + 递归子节点 + 防删除保护</li>
+<li>[ ] inventory-service: 初始化 + 扣减 + 回补 + 乐观锁 + 分布式锁</li>
+<li>[ ] shop-service: 商家入驻 + 审核 + 自动开店</li>
+<li>[ ] 全量 <code>mvn clean install -DskipTests</code> BUILD SUCCESS</li>
+<li>[ ] 全量 <code>mvn test</code> 所有测试通过 (~35+ tests)</li>
+<li>[ ] mybatis-plus <code>@Version</code> 乐观锁配置启用</li>
+</ul>
+<hr>
+<blockquote>
+<strong>Plan saved:</strong> <code>docs/superpowers/plans/2026-05-12-phase2-user-product-services.md</code>
+
+<strong>Prerequisites:</strong> JDK 21 已安装 + Docker Compose 中间件可启动 + Phase 1 基础设施已完成
+
+<strong>Next:</strong> Execute this plan using <code>superpowers:subagent-driven-development</code> (recommended) or <code>superpowers:executing-plans</code>.
+</blockquote>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>
