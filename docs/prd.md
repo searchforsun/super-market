@@ -105,11 +105,11 @@
 |----------|------|------|----------|----------|
 | **消息队列** | Apache RocketMQ | 5.1.x | Docker Compose单节点 | K8s StatefulSet 3节点集群 |
 | **分布式缓存** | Redis | 7.2.x | Docker Compose单节点 | K8s StatefulSet 3主3从集群 |
-| **搜索引擎** | Elasticsearch | 8.12.x | Docker Compose单节点 | K8s StatefulSet 3节点集群 |
+| **搜索引擎** | Elasticsearch | 7.17.x | Docker Compose单节点 | K8s StatefulSet 3节点集群 |
 | **分库分表** | ShardingSphere-JDBC | 5.4.x | 本地依赖 | 本地依赖 |
 | **分布式任务调度** | XXL-Job | 2.4.x | Docker Compose单节点 | K8s Deployment 3节点集群 |
 | **链路追踪** | Apache SkyWalking | 9.7.x | Docker Compose精简版 | K8s StatefulSet 3节点集群 |
-| **日志收集** | ELK Stack | 8.12.x | 开发阶段可选 | K8s StatefulSet 3节点集群 |
+| **日志收集** | ELK Stack | 7.17.x | 开发阶段可选 | K8s StatefulSet 3节点集群 |
 | **数据同步** | Canal | 1.1.x | Docker Compose单节点 | K8s Deployment 3节点集群 |
 
 ### 4.4 数据存储技术栈（双环境部署）
@@ -134,12 +134,40 @@
 | **负载均衡** | Nginx | Docker Compose | MetalLB + Nginx Ingress |
 
 ## 五、开发环境Docker Compose部署方案
+
 ### 5.1 核心优势
-- **一键启动**：一条命令启动所有中间件，5分钟内完成开发环境搭建
+- **一键启动**：一条命令启动所有中间件（13 个容器服务），5分钟内完成开发环境搭建
 - **资源占用少**：单节点部署，适合开发机配置
 - **环境一致**：所有开发者使用相同的中间件版本和配置
 - **快速重置**：数据保存在本地卷，可随时清理和重置
 - **平滑过渡**：技术栈与生产环境完全一致，部署时无需修改代码
+
+### 5.2 中间件清单（13 个容器服务）
+
+| 服务 | 镜像版本 | 主机端口 | 用途 |
+|------|---------|---------|------|
+| MySQL 8.0 | mysql:8.0.35 | 13306 | 关系型数据库（11 个数据库） |
+| Redis 7.2 | redis:7.2-alpine | 16379 | 分布式缓存（512MB，AOF） |
+| Nacos 2.3 | nacos/nacos-server:v2.3.1 | 8848 / 9848 | 服务注册发现 + 配置中心 |
+| RocketMQ 5.1 | apache/rocketmq:5.1.4 | 19876 / 20911 | 消息队列（NameServer + Broker） |
+| Elasticsearch 7.17 | elasticsearch:7.17.23 | 19200 / 19300 | 搜索引擎（固定 IP 10.10.5.20） |
+| MinIO | quay.io/minio/minio | 19000 / 19001 | 对象存储（API + Console） |
+| XXL-Job 2.4 | xuxueli/xxl-job-admin:2.4.1 | 18081 | 分布式任务调度 |
+| Sentinel 1.8 | bladex/sentinel-dashboard:1.8.6 | 18858 | 熔断降级控制台 |
+| SkyWalking 9.7 | apache/skywalking-oap-server:9.7.0 | 21800 / 22800 | 链路追踪（OAP + UI :18083） |
+| Seata 1.7 | seataio/seata-server:1.7.1 | 19091 / 19092 | 分布式事务（AT 模式，DB 存储） |
+| Canal 1.1 | canal/canal-server:v1.1.7 | 21111 | MySQL binlog 数据同步（含 Admin :18089） |
+
+> 端口选择高位段（1xxxx-2xxxx）以避免与本地常用服务冲突。开发环境 Nacos 鉴权关闭。ES 使用固定 IP 以解决 SkyWalking DNS 解析问题。
+
+### 5.3 数据库初始化（垂直分库）
+
+```
+业务库: db_user | db_product | db_order | db_payment | db_marketing | db_shop | db_platform
+基础库: xxl_job | seata | nacos | canal_manager
+```
+
+启动时 MySQL 自动执行 `docker-compose/mysql/init/` 目录下 10 个 SQL 脚本，完成建库建表。
 
 ## 六、GitLab CI/CD 全K8s部署方案
 ### 6.1 核心架构原理

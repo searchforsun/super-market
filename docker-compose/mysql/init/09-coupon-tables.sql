@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS coupon_batches (
     quantity        INT NOT NULL COMMENT '本批次发放数量',
     distribute_type TINYINT NOT NULL COMMENT '1平台发放 2用户领取 3活动赠送',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_template (template_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券批次表';
 
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS user_coupons (
     used_at         DATETIME COMMENT '使用时间',
     expire_time     DATETIME NOT NULL COMMENT '过期时间',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_status (user_id, status),
     INDEX idx_code (coupon_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户优惠券表';

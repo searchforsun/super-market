@@ -60,7 +60,7 @@ seata:
     vgroup-mapping:
       super-market-tx-group: default
     grouplist:
-      default: localhost:18091
+      default: localhost:19091
   data-source-proxy-mode: AT
 
 mybatis-plus:

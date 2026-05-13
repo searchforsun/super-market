@@ -130,9 +130,9 @@ services:
       - "${ES_TRANSPORT_PORT:-19300}:9300"
     volumes:
       - es-data:/usr/share/elasticsearch/data
-      - ./elasticsearch/config:/usr/share/elasticsearch/config
     networks:
-      - smt-net
+      smt-net:
+        ipv4_address: ${ES_CONTAINER_IP:-10.10.5.20}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
       interval: 15s
@@ -201,16 +201,24 @@ services:
     restart: unless-stopped
     environment:
       SW_STORAGE: elasticsearch
-      SW_STORAGE_ES_CLUSTER_NODES: elasticsearch:9200
-      JAVA_OPTS: "-Xms512m -Xmx512m"
+      # 使用固定 IP，避免 OAP（Netty DNS）在部分环境解析 elasticsearch 主机名超时
+      SW_STORAGE_ES_CLUSTER_NODES: ${ES_CONTAINER_IP:-10.10.5.20}:9200
+      JAVA_OPTS: "-Xms512m -Xmx512m -Djava.net.preferIPv4Stack=true"
     ports:
       - "${SKYWALKING_GRPC_PORT:-21800}:11800"
       - "${SKYWALKING_HTTP_PORT:-22800}:12800"
+    dns_search: []
     networks:
       - smt-net
     depends_on:
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:12800/internal/l7check >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 120s
 
   skywalking-ui:
     image: apache/skywalking-ui:9.7.0
@@ -219,18 +227,46 @@ services:
     environment:
       SW_OAP_ADDRESS: http://skywalking-oap:12800
     ports:
-      - "${SKYWALKING_UI_PORT:-18082}:8080"
+      - "${SKYWALKING_UI_PORT:-18083}:8080"
     networks:
       - smt-net
     depends_on:
-      - skywalking-oap
+      skywalking-oap:
+        condition: service_healthy
+
+  canal-admin:
+    image: canal/canal-admin:v1.1.7
+    container_name: smt-canal-admin
+    restart: unless-stopped
+    environment:
+      server.port: "8089"
+      spring.datasource.address: mysql:3306
+      spring.datasource.database: canal_manager
+      spring.datasource.username: root
+      spring.datasource.password: ${MYSQL_ROOT_PASSWORD:-root123}
+      canal.adminUser: admin
+      canal.adminPasswd: ${CANAL_ADMIN_PASSWORD:-123456}
+    ports:
+      - "${CANAL_ADMIN_PORT:-18089}:8089"
+    networks:
+      - smt-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8089 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 90s
 
   canal-server:
     image: canal/canal-server:v1.1.7
     container_name: smt-canal
     restart: unless-stopped
     environment:
-      CANAL_ADMIN_MANAGER: ""
+      canal.admin.manager: http://canal-admin:8089
+      canal.admin.port: "11110"
       canal.instance.master.address: mysql:3306
       canal.instance.dbUsername: root
       canal.instance.dbPassword: ${MYSQL_ROOT_PASSWORD:-root123}
@@ -242,16 +278,19 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      canal-admin:
+        condition: service_healthy
 
   seata-server:
     image: seataio/seata-server:1.7.1
     container_name: smt-seata
     restart: unless-stopped
     environment:
-      SEATA_PORT: ${SEATA_PORT:-18091}
+      SEATA_PORT: 8091
       STORE_MODE: db
     ports:
-      - "${SEATA_PORT:-18091}:18091"
+      - "${SEATA_PORT:-19091}:8091"
+      - "${SEATA_CONSOLE_PORT:-18092}:7091"
     volumes:
       - ./seata/application.yml:/seata-server/resources/application.yml
     networks:

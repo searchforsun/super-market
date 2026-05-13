@@ -139,8 +139,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
                 .eq(UserCoupon::getUserId, userId)
                 .orderByDesc(UserCoupon::getCreatedAt);
         if (status != null) wrapper.eq(UserCoupon::getStatus, status);
-        return new Page<UserCoupon>(page, size).setRecords(
-                userCouponMapper.selectPage(new Page<>(page, size), wrapper).getRecords());
+        return userCouponMapper.selectPage(new Page<>(page, size), wrapper);
     }
 
     @Override

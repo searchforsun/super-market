@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:nacos:localhost:8848
   cloud:
     nacos:
       config:
@@ -10,4 +12,4 @@ spring:
       discovery:
         server-addr: localhost:8848
         namespace: public
-        enabled: true
+        enabled: false

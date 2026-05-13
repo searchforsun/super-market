@@ -323,28 +323,28 @@
 服务总数: 16 个核心微服务
 
 基础服务 (P0):
-  ├── user-service       用户服务 (8001)
-  ├── auth-service       认证授权服务 (8002)
-  ├── member-service     会员服务 (8003)
-  ├── address-service    地址服务 (8004)
-  ├── product-service    商品基础服务 (8101)
-  ├── category-service   类目服务 (8102)
-  ├── inventory-service  库存服务 (8103)
-  ├── review-service     评价服务 (8104)
-  ├── cart-service       购物车服务 (8201)
-  ├── order-service      订单服务 (8202)
-  ├── payment-service    支付服务 (8301)
-  ├── shop-service       商家/店铺服务 (8401)
+  ├── user-service       用户服务 (9301)
+  ├── auth-service       认证授权服务 (9302)
+  ├── member-service     会员服务 (9303)
+  ├── address-service    地址服务 (9304)
+  ├── product-service    商品基础服务 (9311)
+  ├── category-service   类目服务 (9312)
+  ├── inventory-service  库存服务 (9313)
+  ├── review-service     评价服务 (9314)
+  ├── cart-service       购物车服务 (9321)
+  ├── order-service      订单服务 (9322)
+  ├── payment-service    支付服务 (9331)
+  ├── shop-service       商家/店铺服务 (9341)
 
 扩展服务 (P1):
-  ├── coupon-service     优惠券服务 (8501)
-  ├── seckill-service    秒杀服务 (8502)
-  ├── search-service     搜索服务 (8601)
+  ├── coupon-service     优惠券服务 (9351)
+  ├── seckill-service    秒杀服务 (9352)
+  ├── search-service     搜索服务 (9361)
 
 支撑服务 (P1):
-  ├── file-service       文件服务 (8701)
-  ├── notify-service     通知服务 (8702)
-  └── platform-service   运营/风控服务 (8801)
+  ├── file-service       文件服务 (9371)
+  ├── notify-service     通知服务 (9372)
+  └── platform-service   运营/风控服务 (9381)
 ```
 
 #### 2.2 核心服务接口定义
@@ -891,29 +891,55 @@ Access Token 过期 → 自动用 Refresh Token 换取新 Token
 ```yaml
 # 目录结构
 docker-compose/
-├── docker-compose.yml          # 主编排文件
-├── .env                        # 环境变量
+├── .env                          # 环境变量（端口映射、密码等）
+├── docker-compose.yml            # 主编排文件（13 个服务）
 ├── mysql/
-│   └── init/                   # 初始化SQL脚本
-├── nacos/
-│   └── conf/                   # Nacos配置
+│   └── init/                     # 初始化SQL脚本（10 个文件）
+│       ├── 01-init-databases.sql    # 11 个数据库创建（7 业务 + 4 基础设施）
+│       ├── 02-user-tables.sql       # db_user: users, members, addresses
+│       ├── 03-product-tables.sql    # db_product: categories, brands, spu, sku, inventory
+│       ├── 04-shop-tables.sql       # db_shop: merchants, shops
+│       ├── 05-nacos-mysql-schema.sql # Nacos 配置存储表
+│       ├── 05-order-tables.sql      # db_order: orders, order_items, undo_log
+│       ├── 06-payment-tables.sql    # db_payment: payments, payment_refunds, payment_idempotent, undo_log
+│       ├── 06-xxl-job-tables.sql    # XXL-Job 调度器表
+│       ├── 07-seata-tables.sql      # Seata: global_table, branch_table, lock_table
+│       └── 08-canal-manager.sql     # Canal Admin 管理表
 ├── rocketmq/
-│   └── conf/                   # RocketMQ配置
-└── nginx/
-    └── conf.d/                 # Nginx配置
+│   └── conf/broker.conf           # RocketMQ Broker 配置
+├── seata/
+│   └── application.yml            # Seata Server 1.7.1 配置
+└── elasticsearch/
+    └── config/                    # ES 配置文件
 
-# 开发环境中间件端口规划
-Nacos:            8848 (HTTP), 9848 (gRPC)
-MySQL:            3306
-Redis:            6379
-RocketMQ:         9876 (NameServer), 10911 (Broker)
-Elasticsearch:    9200
-MinIO:            9000 (API), 9001 (Console)
-XXL-Job:          8080
-SkyWalking:       11800 (gRPC), 12800 (HTTP)
-Sentinel:         8858
-Canal:            11111
+# 基础设施数据库
+db_user / db_product / db_order / db_payment / db_marketing / db_shop / db_platform
+xxl_job / seata / nacos / canal_manager
 ```
+
+### 开发环境中间件端口规划
+
+> 全部映射到高位端口（1xxxx-2xxxx），避免与本机常用服务冲突。
+
+| 中间件 | 容器内端口 | 主机映射端口 | 说明 |
+|--------|-----------|-------------|------|
+| **MySQL** | 3306 | **13306** | 8.0.35，11 个数据库 |
+| **Redis** | 6379 | **16379** | 7.2-alpine，512MB，AOF 持久化 |
+| **Nacos** | 8848 / 9848 | **8848** / **9848** | 2.3.1，standalone，鉴权关闭（开发环境） |
+| **RocketMQ NameServer** | 9876 | **19876** | 5.1.4 |
+| **RocketMQ Broker** | 10911 / 10909 | **20911** / **20909** | 5.1.4，ASYNC_MASTER |
+| **Elasticsearch** | 9200 / 9300 | **19200** / **19300** | 7.17.23，单节点，固定 IP 10.10.5.20 |
+| **MinIO** | 9000 / 9001 | **19000** / **19001** | API / Console |
+| **XXL-Job Admin** | 8080 | **18081** | 2.4.1 |
+| **Sentinel Dashboard** | 8858 | **18858** | 1.8.6，对接 Nacos |
+| **SkyWalking OAP** | 11800 / 12800 | **21800** / **22800** | 9.7.0，存储后端 ES |
+| **SkyWalking UI** | 8080 | **18083** | 9.7.0 |
+| **Seata Server** | 8091 / 7091 | **19091** / **19092** | 1.7.1，DB 存储模式，控制台 seata/seata |
+| **Canal Server** | 11111 | **21111** | 1.1.7，对接 Canal Admin 管理 |
+| **Canal Admin** | 8089 | **18089** | 1.1.7，管理 Canal Instance |
+
+> **总计 13 个容器服务**（14 个容器含 RocketMQ 双组件）。ES 分配固定 IP `10.10.5.20` 以解决 SkyWalking OAP Netty DNS 解析超时问题。开发环境 Nacos 鉴权关闭，Seata 使用 file 注册模式。</system-parameter>
+
 
 #### 8.2 K8s 生产部署
 

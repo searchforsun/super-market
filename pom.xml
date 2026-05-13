@@ -62,6 +62,8 @@
         <knife4j.version>4.3.0</knife4j.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <maven-surefire.version>3.2.5</maven-surefire.version>
+        <seata.version>1.7.1</seata.version>
+        <rocketmq-spring-boot.version>2.2.3</rocketmq-spring-boot.version>
     </properties>
 
     <dependencyManagement>
@@ -126,6 +128,16 @@
                 <groupId>org.mapstruct</groupId>
                 <artifactId>mapstruct-processor</artifactId>
                 <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.seata</groupId>
+                <artifactId>seata-spring-boot-starter</artifactId>
+                <version>${seata.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-spring-boot-starter</artifactId>
+                <version>${rocketmq-spring-boot.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

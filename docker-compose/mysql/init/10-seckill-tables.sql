@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS seckill_sessions (
     end_time        DATETIME NOT NULL COMMENT '结束时间',
     status          TINYINT DEFAULT 0 COMMENT '0未开始 1进行中 2已结束',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_time (start_time, end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒杀场次表';
 
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS seckill_products (
     limit_per_user  INT DEFAULT 1 COMMENT '每人限购数量',
     status          TINYINT DEFAULT 0 COMMENT '0未开始 1进行中 2已售罄 3已结束',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_session (session_id),
     INDEX idx_sku (sku_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒杀商品表';

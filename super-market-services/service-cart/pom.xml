@@ -31,11 +31,6 @@
         </dependency>
         <dependency>
             <groupId>com.supermarket</groupId>
-            <artifactId>common-mybatis</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.supermarket</groupId>
             <artifactId>common-dubbo-api</artifactId>
             <version>${project.version}</version>
         </dependency>

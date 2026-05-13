@@ -2,6 +2,7 @@ package com.supermarket.seckill.service;
 
 import com.supermarket.seckill.entity.SeckillProduct;
 import com.supermarket.seckill.entity.SeckillSession;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,9 @@ class SeckillServiceTest {
 
     @MockBean
     private StringRedisTemplate redisTemplate;
+
+    @MockBean
+    private RocketMQTemplate rocketMQTemplate;
 
     @Test
     void shouldCreateSession() {

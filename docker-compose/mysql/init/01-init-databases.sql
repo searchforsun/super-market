@@ -11,9 +11,9 @@ CREATE DATABASE IF NOT EXISTS db_platform   DEFAULT CHARACTER SET utf8mb4 COLLAT
 CREATE DATABASE IF NOT EXISTS xxl_job       DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS seata         DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS nacos         DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS canal_manager DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 创建只读用户（读写分离预留）
-CREATE USER IF NOT EXISTS 'app_user'@'%' IDENTIFIED BY 'app_user123';
 GRANT SELECT, INSERT, UPDATE, DELETE ON db_user.*       TO 'app_user'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON db_product.*    TO 'app_user'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON db_order.*      TO 'app_user'@'%';

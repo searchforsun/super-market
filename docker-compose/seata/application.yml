@@ -1,5 +1,6 @@
 server:
-  port: 18091
+  # Tomcat 控制台端口，须与 seata.server.service-port 不同
+  port: 7091
 
 spring:
   application:
@@ -45,4 +46,4 @@ seata:
       query-limit: 100
       max-wait: 5000
   server:
-    service-port: 18091
+    service-port: 8091

@@ -6,7 +6,7 @@
 
 **Architecture:** Maven 多模块父子工程架构。顶层 parent POM 统一管理 Spring Boot 3.2 / Dubbo 3.2 / Spring Cloud 2023.0 等全部依赖版本。common 层提供共享代码（DTO/异常/工具/安全/持久层配置）。每个微服务是独立 Spring Boot 模块，通过 Dubbo RPC 互调，通过 Nacos 注册发现。
 
-**Tech Stack:** Java 21, Spring Boot 3.2, Apache Dubbo 3.2, Nacos 2.3, Maven 3.9, Docker Compose, MySQL 8.0, Redis 7.2, RocketMQ 5.1, Elasticsearch 8.12
+**Tech Stack:** Java 21, Spring Boot 3.2, Apache Dubbo 3.2, Nacos 2.3, Maven 3.9, Docker Compose, MySQL 8.0, Redis 7.2, RocketMQ 5.1, Elasticsearch 7.17
 
 ---
 
@@ -308,17 +308,16 @@ services:
         condition: service_healthy
 
   # ============================
-  # Elasticsearch 8.12
+  # Elasticsearch 7.17（Docker Hub 官方镜像）
   # ============================
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    image: elasticsearch:7.17.23
     container_name: smt-elasticsearch
     restart: unless-stopped
     environment:
       discovery.type: single-node
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
       xpack.security.enabled: "false"
-      xpack.security.enrollment.enabled: "false"
       xpack.security.http.ssl.enabled: "false"
       xpack.security.transport.ssl.enabled: "false"
     ports:

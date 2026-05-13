@@ -1,0 +1,27 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+  autoconfigure:
+    exclude:
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBindingAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBinding2AutoConfiguration
+      - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
+      - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      password: redis123
+
+dubbo:
+  registry:
+    address: N/A
+  config-center:
+    address: N/A
