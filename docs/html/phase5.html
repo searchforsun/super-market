@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 5 — 支撑服务 + 可观测性 — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a>
+<a href="phase5.html">P5</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 5</span>
+    <span class="phase-period">W14-W16</span>
+    <p>3 个微服务 · MinIO 文件存储 · 多通道通知(站内信+邮件+短信) · 运营后台(Banner+风控+报表) · Prometheus+Grafana</p>
+  </div>
+<h1>Phase 5 — 支撑服务 + 可观测性 方案设计</h1>
+<blockquote>
+2026-05-13 | 基于 solution-design.md + PRD v1.0
+</blockquote>
+<h2>一、总览</h2>
+<h3>1.1 服务清单</h3>
+<table>
+<tr>
+  <th>服务</th>
+  <th>中文名称</th>
+  <th>端口</th>
+  <th>数据库</th>
+  <th>核心职责</th>
+</tr>
+<tr>
+  <td>file-service</td>
+  <td>文件服务</td>
+  <td>9371</td>
+  <td>db_product</td>
+  <td>MinIO 上传/下载、元数据管理、缩略图生成</td>
+</tr>
+<tr>
+  <td>notify-service</td>
+  <td>通知服务</td>
+  <td>9372</td>
+  <td>db_product</td>
+  <td>站内信 + 邮件 + 短信多通道通知、RocketMQ 事件驱动</td>
+</tr>
+<tr>
+  <td>platform-service</td>
+  <td>运营平台服务</td>
+  <td>9381</td>
+  <td>db_platform</td>
+  <td>Banner/广告位管理、首页推荐、刷单风控、数据报表</td>
+</tr>
+</table>
+<h3>1.2 基础设施新增</h3>
+<table>
+<tr>
+  <th>组件</th>
+  <th>新增内容</th>
+</tr>
+<tr>
+  <td><strong>MySQL</strong></td>
+  <td>7 张新表（file_records, notifications, notify_templates, banners, ad_positions, risk_rules, risk_logs）</td>
+</tr>
+<tr>
+  <td><strong>Docker</strong></td>
+  <td>Prometheus :19090 + Grafana :13000</td>
+</tr>
+<tr>
+  <td><strong>RocketMQ</strong></td>
+  <td><code>notify-event-topic</code> — 通知事件（订单状态变更触发）</td>
+</tr>
+<tr>
+  <td><strong>MinIO</strong></td>
+  <td>3 个 Bucket: <code>smt-product</code>, <code>smt-avatar</code>, <code>smt-document</code></td>
+</tr>
+<tr>
+  <td><strong>Spring Boot</strong></td>
+  <td>file-service 添加 MinIO SDK，notify-service 添加 Mail Starter</td>
+</tr>
+</table>
+<hr>
+<h2>二、Docker Compose — 监控基础设施</h2>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">prometheus:</span>
+<span class="tok-prop">  image:</span> prom/prometheus:v2.<span class="tok-num">51.2</span>
+<span class="tok-prop">  container_name:</span> smt-prometheus
+<span class="tok-prop">  ports:</span> - <span class="tok-str">&quot;19090:9090&quot;</span>
+<span class="tok-prop">  volumes:</span>
+    - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    - prometheus-data:/prometheus
+<span class="tok-prop">
+grafana:</span>
+<span class="tok-prop">  image:</span> grafana/grafana:<span class="tok-num">10.4</span>.<span class="tok-num">2</span>
+<span class="tok-prop">  container_name:</span> smt-grafana
+<span class="tok-prop">  environment:</span>
+<span class="tok-prop">    GF_SECURITY_ADMIN_USER:</span> admin
+<span class="tok-prop">    GF_SECURITY_ADMIN_PASSWORD:</span> admin123
+<span class="tok-prop">  ports:</span> - <span class="tok-str">&quot;13000:3000&quot;</span>
+<span class="tok-prop">  volumes:</span>
+    - grafana-data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning</code></pre>
+<p>Prometheus 默认配置了 <code>spring-boot-apps</code> job（通过 <code>/actuator/prometheus</code> 采集指标），Grafana 默认数据源指向 Prometheus。</p>
+<hr>
+<h2>三、数据库 DDL</h2>
+<h3>3.1 file_records (db_product)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> file_records (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    file_name   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">255</span>) <span class="tok-kw">NOT</span> NULL,
+    file_size   <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL,
+    md5         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">32</span>) <span class="tok-kw">NOT</span> NULL,
+    bucket      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL,
+    object_key  <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">NOT</span> NULL,
+    url         <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>),
+    thumb_url   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>),
+    uploader_id <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'上传者ID'</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_uploader (uploader_id),
+    <span class="tok-kw">INDEX</span> idx_md5 (md5)
+);</code></pre>
+<h3>3.2 notifications + notify_templates (db_product)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> notify_templates (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    code        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'模板编码(ORDER_CREATED等)'</span>,
+    name        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'模板名称'</span>,
+    channel     <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1站内信 2邮件 3短信'</span>,
+    title       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'标题模板'</span>,
+    content     <span class="tok-kw">TEXT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'内容模板(支持${变量})'</span>,
+    status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>
+);
+
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> notifications (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    user_id     <span class="tok-kw">BIGINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'接收用户ID'</span>,
+    template_id <span class="tok-kw">BIGINT</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'模板ID'</span>,
+    channel     <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1站内信 2邮件 3短信'</span>,
+    title       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>),
+    content     <span class="tok-kw">TEXT</span> <span class="tok-kw">NOT</span> NULL,
+    target      <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'邮件地址/手机号'</span>,
+    status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0未读 1已读'</span>,
+    send_status <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0待发送 1已发送 2发送失败'</span>,
+    send_at     <span class="tok-kw">DATETIME</span>,
+    read_at     <span class="tok-kw">DATETIME</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user (user_id, status),
+    <span class="tok-kw">INDEX</span> idx_send (send_status)
+);</code></pre>
+<h3>3.3 banners + ad_positions (db_platform)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> banners (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    title       <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL,
+    image_url   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>) <span class="tok-kw">NOT</span> NULL,
+    link_url    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">500</span>),
+    sort_order  <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span>,
+    position    <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">DEFAULT</span> <span class="tok-str">'HOME_TOP'</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'展示位置'</span>,
+    status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span>,
+    start_time  <span class="tok-kw">DATETIME</span>,
+    end_time    <span class="tok-kw">DATETIME</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_pos_status (position, status)
+);
+
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> ad_positions (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    code        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">50</span>) <span class="tok-kw">NOT</span> NULL <span class="tok-kw">UNIQUE</span>,
+    name        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL,
+    description <span class="tok-kw">VARCHAR</span>(<span class="tok-num">200</span>),
+    status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>
+);</code></pre>
+<h3>3.4 risk_rules + risk_logs (db_platform)</h3>
+<pre data-lang="sql"><code class="language-sql"><span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> risk_rules (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    name        <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">NOT</span> NULL,
+    type        <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'1刷单检测 2恶意退款 3IP黑名单 4频率限制'</span>,
+    config      <span class="tok-kw">JSON</span> <span class="tok-kw">NOT</span> NULL <span class="tok-kw">COMMENT</span> <span class="tok-str">'规则配置(阈值/条件)'</span>,
+    status      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">1</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    updated_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span> <span class="tok-kw">ON</span> <span class="tok-kw">UPDATE</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>
+);
+
+<span class="tok-kw">CREATE</span> <span class="tok-kw">TABLE</span> risk_logs (
+    id          <span class="tok-kw">BIGINT</span> <span class="tok-kw">PRIMARY</span> <span class="tok-kw">KEY</span> <span class="tok-kw">AUTO_INCREMENT</span>,
+    rule_id     <span class="tok-kw">BIGINT</span>,
+    user_id     <span class="tok-kw">BIGINT</span>,
+    target_id   <span class="tok-kw">VARCHAR</span>(<span class="tok-num">100</span>) <span class="tok-kw">COMMENT</span> <span class="tok-str">'目标(订单号/IP等)'</span>,
+    risk_type   <span class="tok-kw">TINYINT</span> <span class="tok-kw">NOT</span> NULL,
+    risk_score  <span class="tok-kw">INT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span>,
+    detail      <span class="tok-kw">JSON</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'检测详情'</span>,
+    action      <span class="tok-kw">TINYINT</span> <span class="tok-kw">DEFAULT</span> <span class="tok-num">0</span> <span class="tok-kw">COMMENT</span> <span class="tok-str">'0记录 1告警 2拦截'</span>,
+    created_at  <span class="tok-kw">DATETIME</span> <span class="tok-kw">DEFAULT</span> <span class="tok-kw">CURRENT_TIMESTAMP</span>,
+    <span class="tok-kw">INDEX</span> idx_user (user_id),
+    <span class="tok-kw">INDEX</span> idx_time (created_at)
+);</code></pre>
+<hr>
+<h2>四、file-service — 文件服务</h2>
+<h3>4.1 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 上传文件</span>
+POST /api/file/upload
+Request: multipart/form-data { file, bucket? }
+Response: { fileId, url, fileName, fileSize, md5 }
+
+<span class="tok-cmt">// 文件列表</span>
+GET /api/file/list?uploaderId=xxx&amp;page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">20</span>
+
+<span class="tok-cmt">// 删除</span>
+DELETE /api/file/{fileId}
+
+<span class="tok-cmt">// 详情</span>
+GET /api/file/{fileId}</code></pre>
+<h3>4.2 安全策略</h3>
+<ul>
+<li>类型白名单: jpg/jpeg/png/gif/webp/pdf/doc/docx/xlsx</li>
+<li>最大 10MB</li>
+<li>图片类自动生成 200x200 缩略图</li>
+<li>MD5 去重: 相同文件不重复上传</li>
+</ul>
+<h3>4.3 Bucket 规划</h3>
+<table>
+<tr>
+  <th>Bucket</th>
+  <th>用途</th>
+  <th>公开访问</th>
+</tr>
+<tr>
+  <td><code>smt-product</code></td>
+  <td>商品图片</td>
+  <td>是</td>
+</tr>
+<tr>
+  <td><code>smt-avatar</code></td>
+  <td>用户头像</td>
+  <td>是</td>
+</tr>
+<tr>
+  <td><code>smt-document</code></td>
+  <td>文档/附件</td>
+  <td>否（通过接口鉴权访问）</td>
+</tr>
+</table>
+<h3>4.4 MinIO 依赖</h3>
+<pre data-lang="xml"><code class="language-xml"><span class="tok-tag">&lt;dependency</span>&gt;
+    <span class="tok-tag">&lt;groupId</span>&gt;io.minio<span class="tok-tag">&lt;/groupId</span>&gt;
+    <span class="tok-tag">&lt;artifactId</span>&gt;minio<span class="tok-tag">&lt;/artifactId</span>&gt;
+    <span class="tok-tag">&lt;version</span>&gt;8.5.7<span class="tok-tag">&lt;/version</span>&gt;
+<span class="tok-tag">&lt;/dependency</span>&gt;</code></pre>
+<h3>4.5 关键实现</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// MinioConfig — MinioClient Bean</span>
+<span class="tok-ann">@Bean</span>
+<span class="tok-kw">public</span> MinioClient minioClient() {
+    <span class="tok-kw">return</span> MinioClient.builder()
+        .endpoint(<span class="tok-str">&quot;http://localhost:19000&quot;</span>)
+        .credentials(<span class="tok-str">&quot;minioadmin&quot;</span>, <span class="tok-str">&quot;minioadmin123&quot;</span>)
+        .build();
+}
+
+<span class="tok-cmt">// FileServiceImpl.upload()</span>
+<span class="tok-typ">String</span> objectKey = bucket + <span class="tok-str">&quot;/&quot;</span> + UUID.randomUUID() + <span class="tok-str">&quot;_&quot;</span> + originalName;
+minioClient.putObject(PutObjectArgs.builder()
+    .bucket(bucket).object(objectKey)
+    .stream(inputStream, fileSize, -<span class="tok-num">1</span>)
+    .contentType(contentType).build());
+<span class="tok-typ">String</span> url = minioEndpoint + <span class="tok-str">&quot;/&quot;</span> + bucket + <span class="tok-str">&quot;/&quot;</span> + objectKey;</code></pre>
+<hr>
+<h2>五、notify-service — 通知服务</h2>
+<h3>5.1 多通道架构</h3>
+<pre class="arch-diagram">事件源（订单/商品/系统）→ RocketMQ notify-event-topic
+  → notify-service 消费
+    → 查询 notify_templates 匹配模板
+    → 渲染内容（变量替换）
+    → 多通道分发:
+        ├── 站内信: INSERT notifications (user_id, channel=1)
+        ├── 邮件: JavaMailSender.send() (channel=2)
+        └── 短信: SmsProvider.send() 预留接口 (channel=3)</pre>
+<h3>5.2 通知模板</h3>
+<table>
+<tr>
+  <th>编码</th>
+  <th>通道</th>
+  <th>触发事件</th>
+  <th>模板内容示例</th>
+</tr>
+<tr>
+  <td>ORDER_CREATED</td>
+  <td>站内信</td>
+  <td>订单创建</td>
+  <td>"您的订单 ${orderNo} 已创建，金额 ${amount} 元"</td>
+</tr>
+<tr>
+  <td>ORDER_PAID</td>
+  <td>站内信</td>
+  <td>支付成功</td>
+  <td>"订单 ${orderNo} 已支付成功"</td>
+</tr>
+<tr>
+  <td>ORDER_SHIPPED</td>
+  <td>站内信+邮件</td>
+  <td>已发货</td>
+  <td>"订单 ${orderNo} 已发货，物流单号 ${trackingNo}"</td>
+</tr>
+<tr>
+  <td>ORDER_REFUNDED</td>
+  <td>站内信+邮件</td>
+  <td>已退款</td>
+  <td>"订单 ${orderNo} 已退款 ${amount} 元"</td>
+</tr>
+<tr>
+  <td>COUPON_EXPIRING</td>
+  <td>站内信</td>
+  <td>优惠券即将过期</td>
+  <td>"您的优惠券将于 ${expireDate} 过期"</td>
+</tr>
+</table>
+<h3>5.3 核心接口</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// ===== 用户端 =====</span>
+<span class="tok-cmt">// 我的通知列表</span>
+GET /api/notify/list?userId=xxx&amp;page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">20</span>
+
+<span class="tok-cmt">// 未读数量</span>
+GET /api/notify/unread-count?userId=xxx
+
+<span class="tok-cmt">// 标记已读</span>
+PUT /api/notify/{id}/read
+
+<span class="tok-cmt">// 全部已读</span>
+PUT /api/notify/read-all?userId=xxx
+
+<span class="tok-cmt">// ===== 管理端 =====</span>
+<span class="tok-cmt">// 创建通知模板</span>
+POST /api/notify/admin/template
+Request: { code, name, channel, title, content }
+
+<span class="tok-cmt">// ===== 内部 API =====</span>
+<span class="tok-cmt">// 发送通知（事件消费端调用）</span>
+POST /api/notify/internal/send
+Request: { userId, templateCode, params: {orderNo:..., amount:...}, channel? }
+
+<span class="tok-cmt">// Dubbo 接口</span>
+NotifyDubboService.send(<span class="tok-typ">Long</span> userId, <span class="tok-typ">String</span> templateCode, <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; params);</code></pre>
+<h3>5.4 RocketMQ 消费者</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-ann">@RocketMQMessageListener</span>(topic = <span class="tok-str">&quot;order-event-topic&quot;</span>, consumerGroup = <span class="tok-str">&quot;notify-consumer-group&quot;</span>)
+<span class="tok-kw">public</span> <span class="tok-kw">class</span> OrderEventConsumer <span class="tok-kw">implements</span> RocketMQListener&lt;<span class="tok-typ">String</span>&gt; {
+    <span class="tok-cmt">// 根据 Tag(ORDER_CREATED/ORDER_PAID/...) 匹配模板并发送通知</span>
+}</code></pre>
+<hr>
+<h2>六、platform-service — 运营平台服务</h2>
+<h3>6.1 Banner 管理</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// Banner CRUD</span>
+POST   /api/platform/admin/banner          <span class="tok-cmt">// 创建 Banner</span>
+PUT    /api/platform/admin/banner/{id}     <span class="tok-cmt">// 更新</span>
+DELETE /api/platform/admin/banner/{id}     <span class="tok-cmt">// 删除</span>
+GET    /api/platform/admin/banner/list     <span class="tok-cmt">// 管理端列表</span>
+
+<span class="tok-cmt">// 前台</span>
+GET    /api/platform/banners?position=HOME_TOP   <span class="tok-cmt">// 按位置获取有效 Banner</span></code></pre>
+<h3>6.2 广告位管理</h3>
+<pre data-lang="java"><code class="language-java">GET    /api/platform/admin/positions       <span class="tok-cmt">// 广告位列表</span>
+POST   /api/platform/admin/positions       <span class="tok-cmt">// 创建广告位</span>
+PUT    /api/platform/admin/positions/{id}  <span class="tok-cmt">// 更新广告位</span></code></pre>
+<h3>6.3 风控系统</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// 风控规则 CRUD</span>
+POST   /api/platform/admin/risk/rule
+GET    /api/platform/admin/risk/rules
+PUT    /api/platform/admin/risk/rule/{id}
+
+<span class="tok-cmt">// 风控检测（内部 Dubbo 调用）</span>
+RiskDubboService.evaluate(RiskRequest) → RiskResult { score, action }
+
+<span class="tok-cmt">// 风控日志</span>
+GET    /api/platform/admin/risk/logs?page=<span class="tok-num">1</span>&amp;size=<span class="tok-num">20</span>&amp;riskType=<span class="tok-num">1</span></code></pre>
+<h3>6.4 风控检测逻辑</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// RiskServiceImpl.evaluate()</span>
+<span class="tok-cmt">// 刷单检测: 同一用户 1 小时内下单 &gt; 10 次 → risk_score += 50</span>
+<span class="tok-cmt">// 恶意退款: 同一用户 7 天内退款率 &gt; 50% → risk_score += 70</span>
+<span class="tok-cmt">// IP 黑名单: IP 在黑名单中 → action = BLOCK</span>
+<span class="tok-cmt">// 评分 &gt;= 80: action = ALERT, &gt;= 120: action = BLOCK</span></code></pre>
+<h3>6.5 数据报表</h3>
+<pre data-lang="java"><code class="language-java"><span class="tok-cmt">// GMV 统计</span>
+GET /api/platform/admin/report/gmv?startDate=xxx&amp;endDate=xxx
+Response: { totalGmv, dailyGmv: [{date, amount}...], avgOrderAmount }
+
+<span class="tok-cmt">// 订单统计</span>
+GET /api/platform/admin/report/orders?startDate=xxx&amp;endDate=xxx
+Response: { totalOrders, statusBreakdown: {created,paid,completed,cancelled}, dailyOrders: [...] }
+
+<span class="tok-cmt">// 用户增长</span>
+GET /api/platform/admin/report/users?startDate=xxx&amp;endDate=xxx
+Response: { totalUsers, newUsers, activeUsers, dailyNewUsers: [...] }
+
+<span class="tok-cmt">// 热销商品 Top 10</span>
+GET /api/platform/admin/report/top-products?limit=<span class="tok-num">10</span>
+Response: [ { spuId, spuName, salesCount, totalAmount }... ]</code></pre>
+<p>报表通过聚合查询业务库（db_order/db_user/db_product）实时计算，简单 COUNT/SUM 直接查 DB，复杂聚合预计算到 Redis 缓存。</p>
+<hr>
+<h2>七、Gateway 路由更新</h2>
+<pre data-lang="yaml"><code class="language-yaml">- id: file-service
+<span class="tok-prop">  uri:</span> lb://file-service
+<span class="tok-prop">  predicates:</span> - Path=/api/file/**
+- id: notify-service
+<span class="tok-prop">  uri:</span> lb://notify-service
+<span class="tok-prop">  predicates:</span> - Path=/api/notify/**
+- id: platform-service
+<span class="tok-prop">  uri:</span> lb://platform-service
+<span class="tok-prop">  predicates:</span> - Path=/api/platform/**</code></pre>
+<h3>鉴权白名单更新</h3>
+<p><code>/api/platform/banners</code> 加入白名单（首页 Banner 无需登录）</p>
+<hr>
+<h2>八、验收标准</h2>
+<ul>
+<li>[ ] <code>mvn clean install -DskipTests</code> BUILD SUCCESS（新增 3 个服务）</li>
+<li>[ ] 所有单元测试通过（目标 18+ 测试用例）</li>
+<li>[ ] file-service: 文件上传 MinIO + 元数据入库 + URL 返回可访问</li>
+<li>[ ] file-service: 类型白名单拦截 + 大小限制 + 缩略图生成</li>
+<li>[ ] notify-service: 站内信列表/未读/已读 + RocketMQ 消费订单事件自动通知</li>
+<li>[ ] notify-service: 邮件发送 + 短信预留接口</li>
+<li>[ ] platform-service: Banner/广告位 CRUD + 前台接口</li>
+<li>[ ] platform-service: 风控规则评估 + 日志记录</li>
+<li>[ ] platform-service: GMV/订单/用户报表查询</li>
+<li>[ ] Prometheus :19090 + Grafana :13000 可访问</li>
+<li>[ ] 全量 <code>mvn test</code> 回归通过</li>
+</ul>
+</main>
+<footer>
+  <p>Generated 2026-05-13 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>

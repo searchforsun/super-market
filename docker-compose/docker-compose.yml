@@ -299,7 +299,44 @@ services:
       mysql:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: smt-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_PORT:-19090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - smt-net
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: smt-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_INSTALL_PLUGINS: ""
+    ports:
+      - "${GRAFANA_PORT:-13000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - smt-net
+    depends_on:
+      - prometheus
+
 volumes:
+  prometheus-data:
+  grafana-data:
   mysql-data:
   redis-data:
   nacos-data:

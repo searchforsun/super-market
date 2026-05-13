@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Spring Boot 微服务（通过 Nacos 服务发现，此处预留静态配置）
+  - job_name: 'spring-boot-apps'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          # 开发环境各服务 Actuator 端点
+          # - 'host.docker.internal:9301'  # user-service
+          # - 'host.docker.internal:9302'  # auth-service
+          # 生产环境通过 K8s Service Discovery 自动发现
+
+  # 中间件监控（如已启用对应 Exporter 则取消注释）
+  # - job_name: 'mysql'
+  #   static_configs:
+  #     - targets: ['mysql-exporter:9104']
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
