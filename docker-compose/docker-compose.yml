@@ -16,7 +16,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
       TZ: Asia/Shanghai
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_PORT:-13306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d
@@ -40,7 +40,7 @@ services:
       --maxmemory-policy allkeys-lru
       --appendonly yes
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-16379}:6379"
     volumes:
       - redis-data:/data
     networks:
@@ -57,10 +57,8 @@ services:
     restart: unless-stopped
     environment:
       MODE: standalone
-      NACOS_AUTH_ENABLE: "true"
-      NACOS_AUTH_TOKEN_EXPIRE_SECONDS: "86400"
-      NACOS_AUTH_IDENTITY_KEY: serverIdentity
-      NACOS_AUTH_IDENTITY_VALUE: security
+      # 开发环境关闭鉴权，便于 Spring Cloud / Dubbo 直连无账号
+      NACOS_AUTH_ENABLE: "false"
       SPRING_DATASOURCE_PLATFORM: mysql
       MYSQL_SERVICE_HOST: mysql
       MYSQL_SERVICE_PORT: 3306
@@ -89,7 +87,7 @@ services:
     restart: unless-stopped
     command: sh mqnamesrv
     ports:
-      - "${ROCKETMQ_NAMESRV_PORT:-9876}:9876"
+      - "${ROCKETMQ_NAMESRV_PORT:-19876}:9876"
     volumes:
       - rocketmq-namesrv-data:/home/rocketmq/store
     networks:
@@ -106,8 +104,8 @@ services:
     restart: unless-stopped
     command: sh mqbroker -n rocketmq-namesrv:9876 -c /home/rocketmq/conf/broker.conf
     ports:
-      - "${ROCKETMQ_BROKER_PORT:-10911}:10911"
-      - "10909:10909"
+      - "${ROCKETMQ_BROKER_PORT:-20911}:10911"
+      - "${ROCKETMQ_BROKER_VIP_PORT:-20909}:10909"
     volumes:
       - rocketmq-broker-data:/home/rocketmq/store
       - ./rocketmq/conf/broker.conf:/home/rocketmq/conf/broker.conf
@@ -118,19 +116,18 @@ services:
         condition: service_healthy
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.2
+    image: elasticsearch:7.17.23
     container_name: smt-elasticsearch
     restart: unless-stopped
     environment:
       discovery.type: single-node
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
       xpack.security.enabled: "false"
-      xpack.security.enrollment.enabled: "false"
       xpack.security.http.ssl.enabled: "false"
       xpack.security.transport.ssl.enabled: "false"
     ports:
-      - "${ES_PORT:-9200}:9200"
-      - "${ES_TRANSPORT_PORT:-9300}:9300"
+      - "${ES_PORT:-19200}:9200"
+      - "${ES_TRANSPORT_PORT:-19300}:9300"
     volumes:
       - es-data:/usr/share/elasticsearch/data
       - ./elasticsearch/config:/usr/share/elasticsearch/config
@@ -151,8 +148,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${MINIO_API_PORT:-19000}:9000"
+      - "${MINIO_CONSOLE_PORT:-19001}:9001"
     volumes:
       - minio-data:/data
     networks:
@@ -174,7 +171,7 @@ services:
         --spring.datasource.password=${MYSQL_ROOT_PASSWORD:-root123}
         --xxl.job.accessToken=xxl-job-access-token-2024
     ports:
-      - "${XXL_JOB_PORT:-8081}:8080"
+      - "${XXL_JOB_PORT:-18081}:8080"
     networks:
       - smt-net
     depends_on:
@@ -191,7 +188,7 @@ services:
       AUTH_PASSWORD: ${SENTINEL_PASSWORD:-sentinel123}
       NACOS_SERVER_ADDR: nacos:8848
     ports:
-      - "${SENTINEL_PORT:-8858}:8858"
+      - "${SENTINEL_PORT:-18858}:8858"
     networks:
       - smt-net
     depends_on:
@@ -207,8 +204,8 @@ services:
       SW_STORAGE_ES_CLUSTER_NODES: elasticsearch:9200
       JAVA_OPTS: "-Xms512m -Xmx512m"
     ports:
-      - "${SKYWALKING_GRPC_PORT:-11800}:11800"
-      - "${SKYWALKING_HTTP_PORT:-12800}:12800"
+      - "${SKYWALKING_GRPC_PORT:-21800}:11800"
+      - "${SKYWALKING_HTTP_PORT:-22800}:12800"
     networks:
       - smt-net
     depends_on:
@@ -222,7 +219,7 @@ services:
     environment:
       SW_OAP_ADDRESS: http://skywalking-oap:12800
     ports:
-      - "8082:8080"
+      - "${SKYWALKING_UI_PORT:-18082}:8080"
     networks:
       - smt-net
     depends_on:
@@ -239,7 +236,24 @@ services:
       canal.instance.dbPassword: ${MYSQL_ROOT_PASSWORD:-root123}
       canal.instance.filter.regex: .*\\..*
     ports:
-      - "${CANAL_PORT:-11111}:11111"
+      - "${CANAL_PORT:-21111}:11111"
+    networks:
+      - smt-net
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  seata-server:
+    image: seataio/seata-server:1.7.1
+    container_name: smt-seata
+    restart: unless-stopped
+    environment:
+      SEATA_PORT: ${SEATA_PORT:-18091}
+      STORE_MODE: db
+    ports:
+      - "${SEATA_PORT:-18091}:18091"
+    volumes:
+      - ./seata/application.yml:/seata-server/resources/application.yml
     networks:
       - smt-net
     depends_on:

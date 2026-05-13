@@ -1,6 +1,10 @@
 spring:
+  cloud:
+    config:
+      import-check:
+        enabled: false
   datasource:
-    url: jdbc:mysql://localhost:3306/db_order?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:13306/db_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root123
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -14,7 +18,7 @@ spring:
   data:
     redis:
       host: localhost
-      port: 6379
+      port: 16379
       password: redis123
       database: 0
       lettuce:
@@ -25,7 +29,7 @@ spring:
 
 dubbo:
   application:
-    name: user-service
+    name: order-service
     qos-enable: false
   protocol:
     name: tri
@@ -34,14 +38,34 @@ dubbo:
     address: nacos://localhost:8848
     parameters:
       namespace: public
+  config-center:
+    address: nacos://localhost:8848
   consumer:
     check: false
     timeout: 5000
     retries: 0
 
+rocketmq:
+  name-server: localhost:19876
+  producer:
+    group: order-producer-group
+  consumer:
+    group: order-consumer-group
+
+seata:
+  enabled: true
+  application-id: order-service
+  tx-service-group: super-market-tx-group
+  service:
+    vgroup-mapping:
+      super-market-tx-group: default
+    grouplist:
+      default: localhost:18091
+  data-source-proxy-mode: AT
+
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
-  type-aliases-package: com.supermarket.user.entity
+  type-aliases-package: com.supermarket.order.entity
   global-config:
     db-config:
       id-type: assign_id
