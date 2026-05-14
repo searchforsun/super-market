@@ -15,3 +15,10 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+
+springdoc:
+  api-docs:
+    path: /api/member/v3/api-docs
+  group-configs:
+    - group: service-member
+      paths-to-match: /api/member/**

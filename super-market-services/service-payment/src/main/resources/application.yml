@@ -15,3 +15,10 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+
+springdoc:
+  api-docs:
+    path: /api/payment/v3/api-docs
+  group-configs:
+    - group: service-payment
+      paths-to-match: /api/payment/**

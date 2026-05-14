@@ -15,3 +15,10 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+
+springdoc:
+  api-docs:
+    path: /api/seckill/v3/api-docs
+  group-configs:
+    - group: service-seckill
+      paths-to-match: /api/seckill/**

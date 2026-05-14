@@ -8,8 +8,8 @@ import com.supermarket.notify.entity.NotifyTemplate;
 import com.supermarket.notify.mapper.NotificationMapper;
 import com.supermarket.notify.mapper.NotifyTemplateMapper;
 import com.supermarket.notify.service.NotifyService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -19,12 +19,18 @@ import java.util.Map;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class NotifyServiceImpl implements NotifyService {
 
     private final NotificationMapper notificationMapper;
     private final NotifyTemplateMapper templateMapper;
-    private final JavaMailSender mailSender;
+
+    @Autowired(required = false)
+    private JavaMailSender mailSender;
+
+    public NotifyServiceImpl(NotificationMapper notificationMapper, NotifyTemplateMapper templateMapper) {
+        this.notificationMapper = notificationMapper;
+        this.templateMapper = templateMapper;
+    }
 
     @Override
     public NotifyTemplate createTemplate(NotifyTemplate template) {
@@ -56,7 +62,7 @@ public class NotifyServiceImpl implements NotifyService {
         notificationMapper.insert(notif);
 
         // 邮件通道
-        if (tpl.getChannel() == 2) {
+        if (tpl.getChannel() == 2 && mailSender != null) {
             try {
                 SimpleMailMessage msg = new SimpleMailMessage();
                 msg.setTo(params.get("email"));

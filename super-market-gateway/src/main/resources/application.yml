@@ -24,22 +24,34 @@ spring:
           uri: lb://auth-service
           predicates:
             - Path=/api/auth/**
+        - id: member-service
+          uri: lb://member-service
+          predicates:
+            - Path=/api/member/**
+        - id: address-service
+          uri: lb://address-service
+          predicates:
+            - Path=/api/address/**
         - id: product-service
           uri: lb://product-service
           predicates:
             - Path=/api/product/**
-        - id: inventory-service
-          uri: lb://inventory-service
-          predicates:
-            - Path=/api/inventory/**
-        - id: cart-service
-          uri: lb://cart-service
-          predicates:
-            - Path=/api/cart/**
         - id: category-service
           uri: lb://category-service
           predicates:
             - Path=/api/category/**
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/inventory/**
+        - id: review-service
+          uri: lb://review-service
+          predicates:
+            - Path=/api/review/**
+        - id: cart-service
+          uri: lb://cart-service
+          predicates:
+            - Path=/api/cart/**
         - id: order-service
           uri: lb://order-service
           predicates:
@@ -64,10 +76,18 @@ spring:
           uri: lb://shop-service
           predicates:
             - Path=/api/shop/**
+        - id: platform-service
+          uri: lb://platform-service
+          predicates:
+            - Path=/api/platform/**
         - id: file-service
           uri: lb://file-service
           predicates:
             - Path=/api/file/**
+        - id: notify-service
+          uri: lb://notify-service
+          predicates:
+            - Path=/api/notify/**
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Origin
   data:
@@ -93,3 +113,26 @@ management:
     web:
       exposure:
         include: health,info,gateway
+
+springdoc:
+  swagger-ui:
+    path: /doc.html
+    urls:
+      - { name: user-service, url: /api/user/v3/api-docs }
+      - { name: auth-service, url: /api/auth/v3/api-docs }
+      - { name: member-service, url: /api/member/v3/api-docs }
+      - { name: address-service, url: /api/address/v3/api-docs }
+      - { name: product-service, url: /api/product/v3/api-docs }
+      - { name: category-service, url: /api/category/v3/api-docs }
+      - { name: inventory-service, url: /api/inventory/v3/api-docs }
+      - { name: review-service, url: /api/review/v3/api-docs }
+      - { name: cart-service, url: /api/cart/v3/api-docs }
+      - { name: order-service, url: /api/order/v3/api-docs }
+      - { name: payment-service, url: /api/payment/v3/api-docs }
+      - { name: coupon-service, url: /api/coupon/v3/api-docs }
+      - { name: seckill-service, url: /api/seckill/v3/api-docs }
+      - { name: search-service, url: /api/search/v3/api-docs }
+      - { name: shop-service, url: /api/shop/v3/api-docs }
+      - { name: platform-service, url: /api/platform/v3/api-docs }
+      - { name: file-service, url: /api/file/v3/api-docs }
+      - { name: notify-service, url: /api/notify/v3/api-docs }

@@ -31,10 +31,13 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         "/api/user/register",
         "/api/user/login",
         "/api/auth/login",
-        "/api/search",       // 商品搜索无需登录
+        "/api/search",
         "/actuator",
         "/doc.html",
-        "/v3/api-docs"
+        "/swagger-ui",
+        "/webjars",
+        "/v3/api-docs",
+        "/favicon.ico"
     );
 
     @Override
@@ -42,7 +45,10 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
-        if (WHITELIST.stream().anyMatch(path::startsWith)) {
+        if (WHITELIST.stream().anyMatch(path::startsWith)
+            || path.contains("v3/api-docs")
+            || path.contains("swagger-ui")
+            || path.contains("webjars")) {
             return chain.filter(exchange);
         }
 
