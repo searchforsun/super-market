@@ -32,7 +32,9 @@ public class SeckillServiceImpl implements SeckillService {
     private final SeckillProductMapper productMapper;
     private final StringRedisTemplate redisTemplate;
     private final RedissonClient redissonClient;
-    private final RocketMQTemplate rocketMQTemplate;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RocketMQTemplate rocketMQTemplate;
 
     private static final String STOCK_KEY = "smt:seckill:stock:";
     private static final String PRODUCT_KEY = "smt:seckill:product:";
@@ -148,7 +150,9 @@ public class SeckillServiceImpl implements SeckillService {
 
             Message<String> msg = MessageBuilder.withPayload(
                     new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(mqMsg)).build();
-            rocketMQTemplate.syncSend(SECKILL_ORDER_TOPIC, msg, 3000, 0);
+            if (rocketMQTemplate != null) {
+                rocketMQTemplate.syncSend(SECKILL_ORDER_TOPIC, msg, 3000, 0);
+            }
 
             return Map.of("success", true, "message", "抢购成功，订单处理中", "requestId", requestId);
 

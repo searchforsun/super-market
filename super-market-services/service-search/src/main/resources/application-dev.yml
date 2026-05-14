@@ -11,6 +11,11 @@ spring:
       max-lifetime: 1800000
       connection-timeout: 5000
 
+  elasticsearch:
+    uris: http://localhost:19200
+    connection-timeout: 5s
+    socket-timeout: 10s
+
   data:
     redis:
       host: localhost
@@ -48,11 +53,6 @@ mybatis-plus:
       logic-delete-field: isDeleted
       logic-delete-value: 1
       logic-not-delete-value: 0
-
-  elasticsearch:
-    uris: http://localhost:19200
-    connection-timeout: 5s
-    socket-timeout: 10s
 
 logging:
   level:

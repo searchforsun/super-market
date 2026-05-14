@@ -1,6 +1,4 @@
 spring:
-  config:
-    import: optional:nacos:localhost:8848
   application:
     name: user-service
   profiles:
