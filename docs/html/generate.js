@@ -657,7 +657,7 @@ const indexBody = `
     <div class="stat-card"><strong>18</strong><span>微服务</span></div>
     <div class="stat-card"><strong>JDK 21</strong><span>运行环境</span></div>
     <div class="stat-card"><strong>Dubbo 3.2</strong><span>RPC 框架</span></div>
-    <div class="stat-card"><strong>5 已完成</strong><span>开发阶段</span></div>
+    <div class="stat-card"><strong>6 已完成</strong><span>开发阶段</span></div>
   </div>
 </section>
 
@@ -713,7 +713,7 @@ const indexBody = `
     <a href="phase6.html" class="doc-card">
       <h3>Phase 6 — 前端应用（三端）</h3>
       <p>Vue 3 + Element Plus + pnpm Monorepo，B2C 用户前台(15页) + B2B 商家后台(12页) + Admin 运营后台(8页)，10 个共享组件</p>
-      <span class="tag">W17-W19</span><span class="tag">设计完成</span>
+      <span class="tag">W17-W19</span><span class="tag">96 文件</span><span class="tag">完成</span>
     </a>
   </div>
 </section>
