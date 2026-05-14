@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@supermarket/ui": ["./packages/ui/src"],
+      "@supermarket/api": ["./packages/api/src"],
+      "@supermarket/stores": ["./packages/stores/src"],
+      "@supermarket/utils": ["./packages/utils/src"]
+    }
+  },
+  "include": ["packages/**/*.ts", "packages/**/*.vue", "app-*/**/*.ts", "app-*/**/*.vue"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "super-market-frontend",
+  "private": true,
+  "packageManager": "pnpm@9.1.0",
+  "scripts": {
+    "dev:b2c": "pnpm -F app-b2c dev",
+    "dev:b2b": "pnpm -F app-b2b dev",
+    "dev:admin": "pnpm -F app-admin dev",
+    "build:b2c": "pnpm -F app-b2c build",
+    "build:b2b": "pnpm -F app-b2b build",
+    "build:admin": "pnpm -F app-admin build",
+    "build": "pnpm -r build"
+  },
+  "dependencies": {
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "pinia": "^2.1.7",
+    "axios": "^1.6.8",
+    "element-plus": "^2.6.3",
+    "@element-plus/icons-vue": "^2.3.1"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.0",
+    "vue-tsc": "^2.0.0",
+    "unplugin-auto-import": "^0.17.5",
+    "unplugin-vue-components": "^0.26.0",
+    "sass": "^1.72.0"
+  }
+}

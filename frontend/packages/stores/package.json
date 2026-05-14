@@ -1,0 +1,10 @@
+{
+  "name": "@supermarket/stores",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "pinia": "^2.1.7"
+  }
+}

@@ -1,0 +1,5 @@
+packages:
+  - 'packages/*'
+  - 'app-b2c'
+  - 'app-b2b'
+  - 'app-admin'
