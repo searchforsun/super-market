@@ -1,0 +1,123 @@
+<h2>三端统一设计系统 — Design Tokens & Style Guide</h2>
+<p class="subtitle">B2C 用户前台 + B2B 商家后台 + Admin 运营后台：三端差异定位，统一设计语言</p>
+
+<div class="section">
+  <h3>三端视觉定位</h3>
+</div>
+
+<div class="cards">
+  <div class="card" style="border-left:4px solid #e1251b">
+    <div class="card-body">
+      <h3 style="color:#e1251b">B2C 用户前台</h3>
+      <p style="font-size:13px;color:#666">情感化 · 品牌感强 · 促进转化</p>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="background:#e1251b;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#c81623;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#fff;width:24px;height:24px;border-radius:4px;border:1px solid #ddd"></div>
+        <div style="background:#f30213;width:24px;height:24px;border-radius:4px"></div>
+      </div>
+      <span class="label" style="margin-top:4px">主色: 京东红 #e1251b</span>
+    </div>
+  </div>
+  <div class="card" style="border-left:4px solid #3b82f6">
+    <div class="card-body">
+      <h3 style="color:#3b82f6">B2B 商家后台</h3>
+      <p style="font-size:13px;color:#666">效率优先 · 数据清晰 · 操作便捷</p>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="background:#3b82f6;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#1e40af;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#f8fafc;width:24px;height:24px;border-radius:4px;border:1px solid #ddd"></div>
+        <div style="background:#dbeafe;width:24px;height:24px;border-radius:4px"></div>
+      </div>
+      <span class="label" style="margin-top:4px">主色: 商务蓝 #3b82f6</span>
+    </div>
+  </div>
+  <div class="card" style="border-left:4px solid #8b5cf6">
+    <div class="card-body">
+      <h3 style="color:#8b5cf6">Admin 运营后台</h3>
+      <p style="font-size:13px;color:#666">管控感 · 权威性 · 数据驱动</p>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="background:#8b5cf6;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#5b21b6;width:24px;height:24px;border-radius:4px"></div>
+        <div style="background:#faf5ff;width:24px;height:24px;border-radius:4px;border:1px solid #ddd"></div>
+        <div style="background:#ede9fe;width:24px;height:24px;border-radius:4px"></div>
+      </div>
+      <span class="label" style="margin-top:4px">主色: 紫晶 #8b5cf6</span>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<h2>共享组件库 — 三端复用</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+<div class="mockup" style="min-height:180px">
+  <div class="mockup-header">Element Plus 定制化封装</div>
+  <div class="mockup-body" style="text-align:left;font-size:13px;line-height:2;padding:12px">
+    <div>✅ <strong>ProductCard</strong> — 商品卡片（图片/价格/标题/标签）</div>
+    <div>✅ <strong>SearchBar</strong> — 搜索栏（关键词/类目筛选/排序）</div>
+    <div>✅ <strong>OrderStatusTag</strong> — 订单状态标签（待付款/待发货/...）</div>
+    <div>✅ <strong>PriceDisplay</strong> — 价格展示（¥符号 + 小数位 + 划线价）</div>
+    <div>✅ <strong>SkuSelector</strong> — 规格选择器</div>
+    <div>✅ <strong>RatingStars</strong> — 评分星星组件</div>
+    <div>✅ <strong>DataTable</strong> — 数据表格（分页/排序/筛选）</div>
+    <div>✅ <strong>StatCard</strong> — 统计卡片（标题/数值/趋势）</div>
+    <div>✅ <strong>FileUploader</strong> — 文件上传（图片预览/进度）</div>
+    <div>✅ <strong>Countdown</strong> — 秒杀倒计时</div>
+  </div>
+</div>
+
+<div class="mockup" style="min-height:180px">
+  <div class="mockup-header">Monorepo 包结构</div>
+  <div class="mockup-body" style="text-align:left;font-size:12px;line-height:1.8;padding:12px;font-family:monospace">
+    frontend/<br>
+    ├── <span style="color:#e1251b">app-b2c/</span> &nbsp; 用户前台<br>
+    │ &nbsp; └── src/pages/ (15 pages)<br>
+    ├── <span style="color:#3b82f6">app-b2b/</span> &nbsp; 商家后台<br>
+    │ &nbsp; └── src/pages/ (12 pages)<br>
+    ├── <span style="color:#8b5cf6">app-admin/</span> 运营后台<br>
+    │ &nbsp; └── src/pages/ (8 pages)<br>
+    └── <strong>packages/</strong> &nbsp; &nbsp; 公共包<br>
+    &nbsp; &nbsp; ├── <strong>ui/</strong> &nbsp; &nbsp; &nbsp; 11 个共享组件<br>
+    &nbsp; &nbsp; ├── <strong>api/</strong> &nbsp; &nbsp; Axios 封装 + 接口定义<br>
+    &nbsp; &nbsp; ├── <strong>stores/</strong> Pinia stores (user/cart)<br>
+    &nbsp; &nbsp; └── <strong>utils/</strong> &nbsp; 工具函数/常量<br>
+  </div>
+</div>
+
+</div>
+
+<hr>
+
+<h2>B2B 商家后台 — 页面清单</h2>
+<table>
+  <tr><th>#</th><th>页面</th><th>路由</th><th>后端 API</th></tr>
+  <tr><td>1</td><td><strong>商家首页/看板</strong></td><td><code>/dashboard</code></td><td>/api/order/list/shop, /api/product/list/shop</td></tr>
+  <tr><td>2</td><td><strong>商品管理</strong></td><td><code>/products</code></td><td>/api/product/spu (POST/PUT), /api/product/list/shop</td></tr>
+  <tr><td>3</td><td><strong>商品发布</strong></td><td><code>/products/create</code></td><td>/api/product/spu, /api/file/upload, /api/category/tree</td></tr>
+  <tr><td>4</td><td><strong>库存管理</strong></td><td><code>/inventory</code></td><td>/api/inventory/init, /api/inventory/sku/{id}</td></tr>
+  <tr><td>5</td><td><strong>订单处理</strong></td><td><code>/orders</code></td><td>/api/order/list/shop, /api/order/{no}/ship</td></tr>
+  <tr><td>6</td><td><strong>订单详情</strong></td><td><code>/orders/:no</code></td><td>/api/order/{no}</td></tr>
+  <tr><td>7</td><td><strong>店铺设置</strong></td><td><code>/shop/settings</code></td><td>/api/shop/{id}</td></tr>
+  <tr><td>8</td><td><strong>优惠券管理</strong></td><td><code>/coupons</code></td><td>/api/coupon/admin/template, /api/coupon/admin/distribute</td></tr>
+  <tr><td>9</td><td><strong>秒杀活动</strong></td><td><code>/seckill</code></td><td>/api/seckill/admin/session, /api/seckill/admin/product</td></tr>
+  <tr><td>10</td><td><strong>评价管理</strong></td><td><code>/reviews</code></td><td>/api/review/list/spu, /api/review/{id}/reply</td></tr>
+  <tr><td>11</td><td><strong>通知中心</strong></td><td><code>/notifications</code></td><td>/api/notify/list</td></tr>
+  <tr><td>12</td><td><strong>结算查询</strong></td><td><code>/settlement</code></td><td>（预留）</td></tr>
+</table>
+
+<hr>
+
+<h2>Admin 运营后台 — 页面清单</h2>
+<table>
+  <tr><th>#</th><th>页面</th><th>路由</th><th>后端 API</th></tr>
+  <tr><td>1</td><td><strong>运营看板</strong></td><td><code>/dashboard</code></td><td>/api/platform/admin/report/gmv, /api/platform/admin/report/orders</td></tr>
+  <tr><td>2</td><td><strong>商家审核</strong></td><td><code>/merchants</code></td><td>/api/shop/merchant/apply, /api/shop/merchant/{id}/audit</td></tr>
+  <tr><td>3</td><td><strong>商品审核</strong></td><td><code>/products/audit</code></td><td>/api/product/spu, /api/product/spu/{id}/audit</td></tr>
+  <tr><td>4</td><td><strong>类目管理</strong></td><td><code>/categories</code></td><td>/api/category (CRUD), /api/category/tree</td></tr>
+  <tr><td>5</td><td><strong>Banner/广告位</strong></td><td><code>/banners</code></td><td>/api/platform/admin/banner (CRUD), /api/file/upload</td></tr>
+  <tr><td>6</td><td><strong>风控管理</strong></td><td><code>/risk</code></td><td>/api/platform/admin/risk/rules, /api/platform/admin/risk/logs</td></tr>
+  <tr><td>7</td><td><strong>数据报表</strong></td><td><code>/reports</code></td><td>/api/platform/admin/report/*</td></tr>
+  <tr><td>8</td><td><strong>通知模板</strong></td><td><code>/notify-templates</code></td><td>/api/notify/admin/template</td></tr>
+</table>

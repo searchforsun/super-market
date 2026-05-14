@@ -1,0 +1,128 @@
+<h2>前端开发：阶段划分总览</h2>
+<p class="subtitle">后端 18 个微服务全部就绪，API 路径覆盖完整。前端从零搭建，三个应用共 ~35 个页面</p>
+
+<div class="section">
+  <h3>三端应用全景</h3>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-image">
+      <div class="mockup" style="min-height:140px">
+        <div class="mockup-body" style="text-align:left;padding:12px;font-size:12px">
+          <div class="mock-nav" style="background:#dbeafe;margin-bottom:8px">🛒 Super Market 用户前台</div>
+          <div style="display:flex;gap:8px">
+            <div class="mock-sidebar" style="width:80px;background:#f0fdf4;font-size:10px">商品分类<br>手机<br>电脑<br>服装<br>食品</div>
+            <div style="flex:1">
+              <div class="mock-content" style="background:#fff;min-height:80px;font-size:10px">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+                  <div class="placeholder" style="height:40px;font-size:9px">商品1</div>
+                  <div class="placeholder" style="height:40px;font-size:9px">商品2</div>
+                  <div class="placeholder" style="height:40px;font-size:9px">商品3</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B2C 用户前台</h3>
+      <p>首页 · 商品搜索/详情 · 购物车 · 下单 · 支付 · 个人中心 · 评价 · 秒杀</p>
+      <span class="label">~15 页面</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-image">
+      <div class="mockup" style="min-height:140px">
+        <div class="mockup-body" style="text-align:left;padding:12px;font-size:12px">
+          <div class="mock-nav" style="background:#ede9fe;margin-bottom:8px">🏪 商家后台</div>
+          <div style="display:flex;gap:8px">
+            <div class="mock-sidebar" style="width:80px;background:#fffbeb;font-size:10px">商品管理<br>订单处理<br>店铺设置<br>营销活动</div>
+            <div class="mock-content" style="background:#fff;min-height:80px;font-size:10px">
+              <div style="border:1px dashed #ccc;padding:8px;margin-bottom:4px">商品列表</div>
+              <div style="border:1px dashed #ccc;padding:8px">今日订单: 35</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B2B 商家后台</h3>
+      <p>商品管理 · 订单处理 · 发货 · 店铺装修 · 营销 · 结算</p>
+      <span class="label">~12 页面</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-image">
+      <div class="mockup" style="min-height:140px">
+        <div class="mockup-body" style="text-align:left;padding:12px;font-size:12px">
+          <div class="mock-nav" style="background:#fce7f3;margin-bottom:8px">⚙️ 运营后台</div>
+          <div style="display:flex;gap:8px">
+            <div class="mock-sidebar" style="width:80px;background:#f5f3ff;font-size:10px">审核管理<br>类目配置<br>Banner<br>风控<br>报表</div>
+            <div class="mock-content" style="background:#fff;min-height:80px;font-size:10px">
+              <div style="border:1px dashed #ccc;padding:8px;margin-bottom:4px">待审核: 12</div>
+              <div style="border:1px dashed #ccc;padding:8px;margin-bottom:4px">今日 GMV: ¥52,380</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Admin 运营后台</h3>
+      <p>商家/商品审核 · 类目管理 · Banner/广告 · 风控 · 数据报表</p>
+      <span class="label">~8 页面</span>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<h2>前端阶段拆分方案</h2>
+<p class="subtitle">三个方案，不同的开发顺序和侧重点。请选择一个方向。</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>按用户角色拆分（推荐）</h3>
+      <p><strong>Phase 6A: B2C 用户前台</strong>（~15 页，覆盖核心交易链路：首页→搜索→商品详情→购物车→下单→支付→我的订单→评价→秒杀）</p>
+      <p><strong>Phase 6B: B2B 商家后台</strong>（~12 页，商品管理→订单处理→发货→店铺→营销活动→结算）</p>
+      <p><strong>Phase 6C: Admin 运营后台</strong>（~8 页，审核→类目→Banner→风控→报表）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>每个阶段可独立交付验证</li><li>B2C 优先交付，核心交易闭环最快上线</li><li>后端 API 按角色域划分，天然对齐</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>B2C 阶段页面最多，前期工作量大</li><li>公共组件需在第一阶段全部建立</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>按功能层次拆分</h3>
+      <p><strong>Phase 6A: 基础框架 + 公共模块</strong>（Monorepo 搭建、路由、状态管理、Axios 封装、公共组件库、登录/注册）</p>
+      <p><strong>Phase 6B: 核心交易链路</strong>（三端并行：B2C 下单链路 + B2B 商品管理 + Admin 审核）</p>
+      <p><strong>Phase 6C: 扩展功能</strong>（秒杀、优惠券、评价、营销、风控、报表）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>公共基础设施先到位，后续开发效率高</li><li>三端并行推进，整体进度快</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>Phase 6A 交付物不是可感知的业务功能</li><li>三端并行对人力要求高</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>按页面复杂度拆分（简单优先）</h3>
+      <p><strong>Phase 6A: 快速出 MVP</strong>（Admin 运营后台 → B2C 核心 8 页 → B2B 核心 6 页，先做简单 CRUD 页面）</p>
+      <p><strong>Phase 6B: 完善体验</strong>（搜索、秒杀、购物车实时交互、WebSocket 推送）</p>
+      <p><strong>Phase 6C: 扩展和优化</strong>（营销活动、报表图表、风控面板、性能优化）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>快速出可演示的 MVP</li><li>Admin 后台 CRUD 页面最简单，适合热身</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>核心交易链路（下单）被推迟</li><li>交付节奏不按业务价值排序</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,89 @@
+<h2>Phase 6A: B2C 用户前台 — 页面清单（JD 风格参考）</h2>
+<p class="subtitle">~15 页面，覆盖完整交易闭环。参考京东 PC 端布局：顶部导航 → 搜索 → 类目 → 商品流</p>
+
+<div class="section">
+  <h3>JD 风格布局特征</h3>
+  <div class="mockup" style="min-height:200px">
+    <div class="mockup-header">JD.com 风格 — 首页布局参考</div>
+    <div class="mockup-body" style="padding:0;font-size:12px;text-align:left">
+      <!-- Top bar -->
+      <div style="background:#2d2d2d;color:#999;padding:4px 20px;display:flex;justify-content:space-between">
+        <span>你好，请登录 | 免费注册</span>
+        <span>我的订单 | 我的京东 | 客户服务</span>
+      </div>
+      <!-- Header -->
+      <div style="background:#e1251b;padding:12px 20px;display:flex;align-items:center;gap:20px">
+        <div style="color:#fff;font-size:20px;font-weight:700">Super Market</div>
+        <div style="flex:1;display:flex;gap:0">
+          <input style="flex:1;padding:8px;border:none;border-radius:2px 0 0 2px" placeholder="搜索商品...">
+          <button style="background:#c81623;color:#fff;border:none;padding:8px 20px;border-radius:0 2px 2px 0;font-size:14px">🔍 搜索</button>
+        </div>
+        <div style="color:#fff;font-size:14px">🛒 购物车 0</div>
+      </div>
+      <!-- Nav -->
+      <div style="background:#e1251b;padding:4px 20px;display:flex;gap:20px">
+        <span style="color:#fff;font-weight:600">全部商品分类</span>
+        <span style="color:#fcc">服装城</span>
+        <span style="color:#fcc">家电馆</span>
+        <span style="color:#fcc">超市</span>
+        <span style="color:#fcc">生鲜</span>
+        <span style="color:#fcc">手机</span>
+        <span style="color:#fcc">电脑</span>
+      </div>
+      <!-- Body -->
+      <div style="display:flex;padding:8px 20px;gap:8px">
+        <div style="width:140px;background:#f4f4f4;padding:8px;font-size:10px;line-height:2">
+          <div>📱 手机通讯</div>
+          <div>💻 电脑办公</div>
+          <div>👔 服装内衣</div>
+          <div>👟 运动户外</div>
+          <div>🍜 食品生鲜</div>
+          <div>🏠 家居家装</div>
+        </div>
+        <div style="flex:1;background:#ffe0e0;min-height:180px;display:flex;align-items:center;justify-content:center;color:#666">
+          Banner 轮播区 (商品推荐 / 秒杀预告 / 活动推广)
+        </div>
+        <div style="width:180px;background:#f8f8f8;padding:8px;font-size:10px">
+          <div style="font-weight:600;margin-bottom:4px">⚡ 限时秒杀</div>
+          <div style="border-bottom:1px dashed #ddd;padding:2px 0">iPhone 16 ¥4999</div>
+          <div style="border-bottom:1px dashed #ddd;padding:2px 0">Nike Air ¥599</div>
+          <div style="padding:2px 0">茅台 ¥1499</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<h2>B2C 页面清单 & 对应后端 API</h2>
+
+<table>
+  <tr><th>#</th><th>页面</th><th>路由</th><th>后端 API</th><th>复杂度</th></tr>
+  <tr><td>1</td><td><strong>首页</strong></td><td><code>/</code></td><td>/api/platform/banners, /api/category/tree, /api/product/list, /api/seckill/sessions</td><td>⭐⭐⭐</td></tr>
+  <tr><td>2</td><td><strong>商品搜索/列表</strong></td><td><code>/search</code></td><td>/api/search/product, /api/category/tree</td><td>⭐⭐⭐</td></tr>
+  <tr><td>3</td><td><strong>商品详情</strong></td><td><code>/product/:id</code></td><td>/api/product/spu/{id}, /api/review/list/spu/{id}, /api/inventory/sku/{id}</td><td>⭐⭐⭐⭐</td></tr>
+  <tr><td>4</td><td><strong>购物车</strong></td><td><code>/cart</code></td><td>/api/cart/list, /api/cart/add, /api/cart/select</td><td>⭐⭐</td></tr>
+  <tr><td>5</td><td><strong>确认订单</strong></td><td><code>/order/confirm</code></td><td>/api/address/list, /api/coupon/available/list, /api/cart/selected</td><td>⭐⭐⭐</td></tr>
+  <tr><td>6</td><td><strong>下单结果</strong></td><td><code>/order/result</code></td><td>/api/order/create, /api/payment/pay</td><td>⭐⭐</td></tr>
+  <tr><td>7</td><td><strong>我的订单</strong></td><td><code>/user/orders</code></td><td>/api/order/list/user/{id}, /api/order/{no}/cancel</td><td>⭐⭐</td></tr>
+  <tr><td>8</td><td><strong>订单详情</strong></td><td><code>/order/:no</code></td><td>/api/order/{no}, /api/review (POST)</td><td>⭐⭐</td></tr>
+  <tr><td>9</td><td><strong>登录/注册</strong></td><td><code>/login</code></td><td>/api/user/register, /api/auth/login</td><td>⭐</td></tr>
+  <tr><td>10</td><td><strong>个人中心</strong></td><td><code>/user/center</code></td><td>/api/user/info, /api/member/{id}</td><td>⭐</td></tr>
+  <tr><td>11</td><td><strong>收货地址</strong></td><td><code>/user/addresses</code></td><td>/api/address/list, CRUD</td><td>⭐</td></tr>
+  <tr><td>12</td><td><strong>我的优惠券</strong></td><td><code>/user/coupons</code></td><td>/api/coupon/my</td><td>⭐</td></tr>
+  <tr><td>13</td><td><strong>我的评价</strong></td><td><code>/user/reviews</code></td><td>/api/review/list/user/{id}</td><td>⭐</td></tr>
+  <tr><td>14</td><td><strong>秒杀会场</strong></td><td><code>/seckill</code></td><td>/api/seckill/sessions, /api/seckill/products, /api/seckill/execute</td><td>⭐⭐⭐⭐</td></tr>
+  <tr><td>15</td><td><strong>通知中心</strong></td><td><code>/user/notifications</code></td><td>/api/notify/list, /api/notify/unread-count</td><td>⭐</td></tr>
+</table>
+
+<hr>
+
+<h2>技术栈确认</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;text-align:center">
+  <div class="card"><div class="card-body"><h3>Vue 3.4</h3><span class="label">框架</span></div></div>
+  <div class="card"><div class="card-body"><h3>Vite 5</h3><span class="label">构建</span></div></div>
+  <div class="card"><div class="card-body"><h3>Element Plus</h3><span class="label">UI 库</span></div></div>
+  <div class="card"><div class="card-body"><h3>Pinia</h3><span class="label">状态管理</span></div></div>
+  <div class="card"><div class="card-body"><h3>Axios</h3><span class="label">HTTP</span></div></div>
+</div>
