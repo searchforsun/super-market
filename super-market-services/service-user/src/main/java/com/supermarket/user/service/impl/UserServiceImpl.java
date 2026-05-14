@@ -13,7 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
 
-@DubboService
+@DubboService(interfaceClass = UserDubboService.class)
 @org.springframework.stereotype.Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService, UserDubboService {
 

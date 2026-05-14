@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
-@DubboService
+@DubboService(interfaceClass = CouponDubboService.class)
 @Service
 @RequiredArgsConstructor
 public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponTemplate>

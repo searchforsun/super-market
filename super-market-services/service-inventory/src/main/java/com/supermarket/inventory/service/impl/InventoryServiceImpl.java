@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@DubboService
+@DubboService(interfaceClass = InventoryDubboService.class)
 @org.springframework.stereotype.Service
 @RequiredArgsConstructor
 public class InventoryServiceImpl extends ServiceImpl<InventoryMapper, Inventory> implements InventoryService, InventoryDubboService {
