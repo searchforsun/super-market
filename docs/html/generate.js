@@ -564,6 +564,7 @@ function page(title, body, navLabel) {
     { label: 'P3', href: 'phase3.html' },
     { label: 'P4', href: 'phase4.html' },
     { label: 'P5', href: 'phase5.html' },
+    { label: 'P6', href: 'phase6.html' },
   ];
   const navHtml = nav.map(n =>
     `<a href="${n.href}"${n.label === navLabel ? ' class="active"' : ''}>${n.label}</a>`
@@ -628,7 +629,8 @@ const phaseDefs = [
   { file: '2026-05-12-phase2-user-product-services.md', out: 'phase2.html', title: 'Phase 2 — 用户域 + 商品域', nav: 'Phase 2', phaseName: 'Phase 2', phaseRange: 'W3-W6', desc: '8 个微服务完整实现 · DDL · Entity · Mapper · Service · Controller · 单元测试 (35+)' },
   { file: '2026-05-12-phase3-order-payment-services.md', out: 'phase3.html', title: 'Phase 3 — 交易域 + 支付域', nav: 'Phase 3', phaseName: 'Phase 3', phaseRange: 'W7-W10', desc: '3 个微服务 · Seata AT 分布式事务 · RocketMQ 消息驱动 · 支付幂等 · 超时取消 (48 测试)' },
   { file: '2026-05-13-phase4-search-marketing-design.md', out: 'phase4.html', title: 'Phase 4 — 搜索域 + 营销域', nav: 'Phase 4', phaseName: 'Phase 4', phaseRange: 'W11-W13', desc: '4 个微服务 · Canal ES 索引同步 · 优惠券(模板+发放+核销) · 秒杀(Redis Lua + MQ异步下单) · 商品评价', dir: 'specs' },
-  { file: '2026-05-13-phase5-support-services-design.md', out: 'phase5.html', title: 'Phase 5 — 支撑服务 + 可观测性', nav: 'Phase 5', phaseName: 'Phase 5', phaseRange: 'W14-W16', desc: '3 个微服务 · MinIO 文件存储 · 多通道通知(站内信+邮件+短信) · 运营后台(Banner+风控+报表) · Prometheus+Grafana', dir: 'specs' },
+  { file: '2026-05-13-phase5-support-services-design.md', out: 'phase5.html', title: 'Phase 5 — 支撑服务 + 可观测性', nav: 'Phase 5', phaseName: 'Phase 5', phaseRange: 'W14-W16', desc: '3 个微服务 · MinIO 文件存储 · 多通道通知 · 运营后台 · Prometheus+Grafana', dir: 'specs' },
+  { file: '2026-05-14-phase6-frontend-design.md', out: 'phase6.html', title: 'Phase 6 — 前端应用（三端）', nav: 'Phase 6', phaseName: 'Phase 6', phaseRange: 'W17-W19', desc: 'Vue 3 + Element Plus + pnpm Monorepo · B2C(15页) · B2B(12页) · Admin(8页)', dir: 'specs' },
 ];
 
 for (const p of phaseDefs) {
@@ -655,7 +657,7 @@ const indexBody = `
     <div class="stat-card"><strong>18</strong><span>微服务</span></div>
     <div class="stat-card"><strong>JDK 21</strong><span>运行环境</span></div>
     <div class="stat-card"><strong>Dubbo 3.2</strong><span>RPC 框架</span></div>
-    <div class="stat-card"><strong>4 已完成</strong><span>开发阶段</span></div>
+    <div class="stat-card"><strong>5 已完成</strong><span>开发阶段</span></div>
   </div>
 </section>
 
@@ -706,7 +708,12 @@ const indexBody = `
     <a href="phase5.html" class="doc-card">
       <h3>Phase 5 — 支撑服务 + 可观测性</h3>
       <p>file/notify/platform 3 个微服务，MinIO 文件存储、多通道通知、运营后台(Banner+风控+报表)、Prometheus+Grafana</p>
-      <span class="tag">W14-W16</span><span class="tag">设计完成</span>
+      <span class="tag">W14-W16</span><span class="tag">13 测试</span><span class="tag">完成</span>
+    </a>
+    <a href="phase6.html" class="doc-card">
+      <h3>Phase 6 — 前端应用（三端）</h3>
+      <p>Vue 3 + Element Plus + pnpm Monorepo，B2C 用户前台(15页) + B2B 商家后台(12页) + Admin 运营后台(8页)，10 个共享组件</p>
+      <span class="tag">W17-W19</span><span class="tag">设计完成</span>
     </a>
   </div>
 </section>
@@ -732,6 +739,7 @@ const indexBody = `
     { name: 'Phase 3', date: 'W7-W10', title: '交易域 + 支付域', detail: '3个服务 · Seata · RocketMQ · 48测试', status: 'done' },
     { name: 'Phase 4', date: 'W11-W13', title: '搜索 + 营销域', detail: '4个服务 · Canal ES同步 · 优惠券 · 秒杀 Redis Lua · 评价', status: 'done' },
     { name: 'Phase 5', date: 'W14-W16', title: '支撑 + 可观测性', detail: '3个服务 · MinIO文件 · 多通道通知 · 运营后台 · 监控面板', status: 'done' },
+    { name: 'Phase 6', date: 'W17-W19', title: '前端三端应用', detail: 'Vue3+pnpm · B2C(15p) · B2B(12p) · Admin(8p)', status: 'done' },
     { name: 'Phase 6', date: 'W17-W18', title: '压测 + 优化', detail: 'JMeter · JVM调优 · 高可用演练', status: '' },
   ])}
 </section>

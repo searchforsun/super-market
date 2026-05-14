@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 6 — 前端应用（三端） — Super Market</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">Super Market</a>
+    <div class="nav-links"><a href="index.html">Index</a>
+<a href="prd.html">PRD</a>
+<a href="solution-design.html">Design</a>
+<a href="service-registry.html">Services</a>
+<a href="phase1.html">P1</a>
+<a href="phase2.html">P2</a>
+<a href="phase3.html">P3</a>
+<a href="phase4.html">P4</a>
+<a href="phase5.html">P5</a>
+<a href="phase6.html">P6</a></div>
+  </div>
+</nav>
+<main class="container">
+<div class="phase-header">
+    <span class="phase-badge">Phase 6</span>
+    <span class="phase-period">W17-W19</span>
+    <p>Vue 3 + Element Plus + pnpm Monorepo · B2C(15页) · B2B(12页) · Admin(8页)</p>
+  </div>
+<h1>Phase 6 — 前端应用 方案设计</h1>
+<blockquote>
+2026-05-14 | 基于 PRD · 18 后端微服务全部就绪
+</blockquote>
+<h2>一、总览</h2>
+<h3>1.1 三个前端应用</h3>
+<table>
+<tr>
+  <th>应用</th>
+  <th>中文名称</th>
+  <th>色系</th>
+  <th>页面数</th>
+  <th>路由前缀</th>
+</tr>
+<tr>
+  <td>app-b2c</td>
+  <td>用户前台</td>
+  <td>京东红 #e1251b</td>
+  <td>15</td>
+  <td><code>/</code></td>
+</tr>
+<tr>
+  <td>app-b2b</td>
+  <td>商家后台</td>
+  <td>商务蓝 #3b82f6</td>
+  <td>12</td>
+  <td><code>/merchant</code></td>
+</tr>
+<tr>
+  <td>app-admin</td>
+  <td>运营后台</td>
+  <td>紫晶 #8b5cf6</td>
+  <td>8</td>
+  <td><code>/admin</code></td>
+</tr>
+</table>
+<h3>1.2 技术栈</h3>
+<table>
+<tr>
+  <th>技术</th>
+  <th>版本</th>
+  <th>用途</th>
+</tr>
+<tr>
+  <td>Vue</td>
+  <td>3.4.x</td>
+  <td>前端框架</td>
+</tr>
+<tr>
+  <td>Vite</td>
+  <td>5.x</td>
+  <td>构建工具</td>
+</tr>
+<tr>
+  <td>Element Plus</td>
+  <td>2.6.x</td>
+  <td>UI 组件库</td>
+</tr>
+<tr>
+  <td>Pinia</td>
+  <td>2.1.x</td>
+  <td>状态管理</td>
+</tr>
+<tr>
+  <td>Vue Router</td>
+  <td>4.3.x</td>
+  <td>路由管理</td>
+</tr>
+<tr>
+  <td>Axios</td>
+  <td>1.6.x</td>
+  <td>HTTP 客户端</td>
+</tr>
+<tr>
+  <td>pnpm</td>
+  <td>9.x</td>
+  <td>包管理器 + Workspace</td>
+</tr>
+</table>
+<h3>1.3 Monorepo 结构</h3>
+<div class="diagram flow"><div class="flow-node start">用户登录
+POST /api/auth/login</div><span class="flow-arrow">→</span><div class="flow-node ">auth-service
+校验密码(BCrypt)</div><span class="flow-arrow">→</span><div class="flow-node decision">校验通过?</div><span class="flow-arrow">→</span><div class="flow-node end">返回 401</div><span class="flow-arrow">→</span><div class="flow-node event">生成 Access Token
+(JWT TTL=2h)
++ Refresh Token
+(TTL=7d)</div><span class="flow-arrow">→</span><div class="flow-node ">返回 Tokens</div><span class="flow-arrow">→</span><div class="flow-node ">前端存储
+AccessToken→内存
+RefreshToken→Cookie</div><span class="flow-arrow">→</span><div class="flow-node ">后续请求
+Authorization:
+Bearer {token}</div><span class="flow-arrow">→</span><div class="flow-node ">Gateway 全局过滤器
+JWT验签(RSA256)
+解析 userId+roles</div><span class="flow-arrow">→</span><div class="flow-node ">透传 Header
+X-User-Id
+X-User-Roles</div></div>
+<hr>
+<h2>二、前端开发阶段拆分</h2>
+<h3>Phase 6A: B2C 用户前台（~15 页）</h3>
+<blockquote>
+目标：完成核心交易闭环，B2C 用户可完成从浏览到下单的完整流程
+</blockquote>
+<table>
+<tr>
+  <th>#</th>
+  <th>页面</th>
+  <th>路由</th>
+  <th>后端 API</th>
+  <th>复杂度</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td>首页</td>
+  <td><code>/</code></td>
+  <td>banners, category/tree, product/list, seckill/sessions</td>
+  <td>⭐⭐⭐</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>商品搜索/列表</td>
+  <td><code>/search?q=</code></td>
+  <td>search/product, category/tree</td>
+  <td>⭐⭐⭐</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>商品详情</td>
+  <td><code>/product/:id</code></td>
+  <td>product/spu/{id}, skus, review/list, rating</td>
+  <td>⭐⭐⭐⭐</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>购物车</td>
+  <td><code>/cart</code></td>
+  <td>cart/list, add, update, select, delete</td>
+  <td>⭐⭐</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>确认订单</td>
+  <td><code>/order/confirm</code></td>
+  <td>address/list, coupon/available, cart/selected</td>
+  <td>⭐⭐⭐</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>下单结果</td>
+  <td><code>/order/result</code></td>
+  <td>order/create, payment/pay</td>
+  <td>⭐⭐</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>我的订单</td>
+  <td><code>/user/orders</code></td>
+  <td>order/list/user, cancel</td>
+  <td>⭐⭐</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>订单详情</td>
+  <td><code>/order/:no</code></td>
+  <td>order/{no}, review (POST)</td>
+  <td>⭐⭐</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>登录/注册</td>
+  <td><code>/login</code></td>
+  <td>user/register, auth/login</td>
+  <td>⭐</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>个人中心</td>
+  <td><code>/user/center</code></td>
+  <td>user/info, member/{id}</td>
+  <td>⭐</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td>收货地址</td>
+  <td><code>/user/addresses</code></td>
+  <td>address CRUD</td>
+  <td>⭐</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td>我的优惠券</td>
+  <td><code>/user/coupons</code></td>
+  <td>coupon/my</td>
+  <td>⭐</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td>我的评价</td>
+  <td><code>/user/reviews</code></td>
+  <td>review/list/user</td>
+  <td>⭐</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td>秒杀会场</td>
+  <td><code>/seckill</code></td>
+  <td>seckill/sessions, products, execute</td>
+  <td>⭐⭐⭐⭐</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td>通知中心</td>
+  <td><code>/user/notifications</code></td>
+  <td>notify/list, unread-count, read</td>
+  <td>⭐</td>
+</tr>
+</table>
+<h3>Phase 6B: B2B 商家后台（~12 页）</h3>
+<table>
+<tr>
+  <th>#</th>
+  <th>页面</th>
+  <th>路由</th>
+  <th>后端 API</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td>商家首页/看板</td>
+  <td><code>/merchant/dashboard</code></td>
+  <td>order/list/shop, product/list/shop</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>商品管理</td>
+  <td><code>/merchant/products</code></td>
+  <td>product/spu, product/list/shop</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>商品发布</td>
+  <td><code>/merchant/products/create</code></td>
+  <td>product/spu, file/upload, category/tree</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>库存管理</td>
+  <td><code>/merchant/inventory</code></td>
+  <td>inventory/init, inventory/sku/{id}</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>订单处理</td>
+  <td><code>/merchant/orders</code></td>
+  <td>order/list/shop, order/{no}/ship</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>订单详情</td>
+  <td><code>/merchant/orders/:no</code></td>
+  <td>order/{no}</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>店铺设置</td>
+  <td><code>/merchant/shop/settings</code></td>
+  <td>shop/{id}</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>优惠券管理</td>
+  <td><code>/merchant/coupons</code></td>
+  <td>coupon/admin/template, coupon/admin/distribute</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>秒杀活动</td>
+  <td><code>/merchant/seckill</code></td>
+  <td>seckill/admin/session, seckill/admin/product</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>评价管理</td>
+  <td><code>/merchant/reviews</code></td>
+  <td>review/list/spu, review/{id}/reply</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td>通知中心</td>
+  <td><code>/merchant/notifications</code></td>
+  <td>notify/list</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td>结算查询</td>
+  <td><code>/merchant/settlement</code></td>
+  <td>（预留）</td>
+</tr>
+</table>
+<h3>Phase 6C: Admin 运营后台（~8 页）</h3>
+<table>
+<tr>
+  <th>#</th>
+  <th>页面</th>
+  <th>路由</th>
+  <th>后端 API</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td>运营看板</td>
+  <td><code>/admin/dashboard</code></td>
+  <td>report/gmv, report/orders, report/users</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>商家审核</td>
+  <td><code>/admin/merchants</code></td>
+  <td>shop/merchant/apply, audit</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>商品审核</td>
+  <td><code>/admin/products/audit</code></td>
+  <td>product/spu/{id}/audit</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>类目管理</td>
+  <td><code>/admin/categories</code></td>
+  <td>category CRUD, category/tree</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Banner/广告位</td>
+  <td><code>/admin/banners</code></td>
+  <td>platform/admin/banner CRUD, file/upload</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>风控管理</td>
+  <td><code>/admin/risk</code></td>
+  <td>platform/admin/risk/rules, risk/logs</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>数据报表</td>
+  <td><code>/admin/reports</code></td>
+  <td>platform/admin/report/*</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>通知模板</td>
+  <td><code>/admin/notify-templates</code></td>
+  <td>notify/admin/template</td>
+</tr>
+</table>
+<hr>
+<h2>三、B2C 京东风格布局设计</h2>
+<h3>3.1 全局布局 (Default.vue)</h3>
+<pre class="arch-diagram">┌──────────────────────────────────────────────┐
+│ 顶部工具栏: 你好请登录 | 我的订单 | 客户服务    │  bg: #2d2d2d
+├──────────────────────────────────────────────┤
+│ Logo | 🔍 搜索框 (flex) | 🛒 购物车           │  bg: #e1251b
+├──────────────────────────────────────────────┤
+│ 全部商品分类 | 服装 | 家电 | 超市 | 手机...     │  bg: #e1251b
+├──────────────────────────────────────────────┤
+│                                              │
+│              &lt;router-view /&gt;                  │
+│                                              │
+├──────────────────────────────────────────────┤
+│ 底部: 关于我们 | 帮助中心 | 版权信息            │  bg: #f5f5f5
+└──────────────────────────────────────────────┘</pre>
+<h3>3.2 配色体系</h3>
+<table>
+<tr>
+  <th>用途</th>
+  <th>颜色</th>
+  <th>CSS 变量</th>
+</tr>
+<tr>
+  <td>品牌主色</td>
+  <td><code>#e1251b</code></td>
+  <td><code>--color-primary</code></td>
+</tr>
+<tr>
+  <td>促销红</td>
+  <td><code>#c81623</code></td>
+  <td><code>--color-danger</code></td>
+</tr>
+<tr>
+  <td>价格红</td>
+  <td><code>#f30213</code></td>
+  <td><code>--color-price</code></td>
+</tr>
+<tr>
+  <td>成功绿</td>
+  <td><code>#10b981</code></td>
+  <td><code>--color-success</code></td>
+</tr>
+<tr>
+  <td>文字主色</td>
+  <td><code>#333333</code></td>
+  <td><code>--text-primary</code></td>
+</tr>
+<tr>
+  <td>文字次要</td>
+  <td><code>#999999</code></td>
+  <td><code>--text-secondary</code></td>
+</tr>
+<tr>
+  <td>背景灰</td>
+  <td><code>#f4f4f4</code></td>
+  <td><code>--bg-page</code></td>
+</tr>
+</table>
+<h3>3.3 关键页面交互</h3>
+<p><strong>商品详情页</strong>：SPU 主图轮播 → SKU 选择器（规格联动） → 价格实时切换 → 加入购物车/立即购买</p>
+<p><strong>秒杀会场</strong>：倒计时组件 → Redis Lua 秒杀按钮（防重复点击） → 结果模态框（成功/失败/已抢光）</p>
+<p><strong>购物车</strong>：全选/单选 → 实时价格汇总 → 删除确认 → 去结算</p>
+<hr>
+<h2>四、pnpm 依赖管理</h2>
+<h3>pnpm-workspace.yaml</h3>
+<pre data-lang="yaml"><code class="language-yaml"><span class="tok-prop">packages:</span>
+  - <span class="tok-str">'packages/*'</span>
+  - <span class="tok-str">'app-b2c'</span>
+  - <span class="tok-str">'app-b2b'</span>
+  - <span class="tok-str">'app-admin'</span></code></pre>
+<h3>公共依赖版本（根 package.json）</h3>
+<pre data-lang="json"><code class="language-json">{
+  <span class="tok-str">&quot;dependencies&quot;</span>: {
+    <span class="tok-str">&quot;vue&quot;</span>: <span class="tok-str">&quot;^3.4.0&quot;</span>,
+    <span class="tok-str">&quot;vue-router&quot;</span>: <span class="tok-str">&quot;^4.3.0&quot;</span>,
+    <span class="tok-str">&quot;pinia&quot;</span>: <span class="tok-str">&quot;^2.1.0&quot;</span>,
+    <span class="tok-str">&quot;axios&quot;</span>: <span class="tok-str">&quot;^1.6.0&quot;</span>,
+    <span class="tok-str">&quot;element-plus&quot;</span>: <span class="tok-str">&quot;^2.6.0&quot;</span>,
+    <span class="tok-str">&quot;@element-plus/icons-vue&quot;</span>: <span class="tok-str">&quot;^2.3.0&quot;</span>
+  },
+  <span class="tok-str">&quot;devDependencies&quot;</span>: {
+    <span class="tok-str">&quot;vite&quot;</span>: <span class="tok-str">&quot;^5.0.0&quot;</span>,
+    <span class="tok-str">&quot;@vitejs/plugin-vue&quot;</span>: <span class="tok-str">&quot;^5.0.0&quot;</span>,
+    <span class="tok-str">&quot;typescript&quot;</span>: <span class="tok-str">&quot;^5.3.0&quot;</span>,
+    <span class="tok-str">&quot;vue-tsc&quot;</span>: <span class="tok-str">&quot;^2.0.0&quot;</span>,
+    <span class="tok-str">&quot;unplugin-auto-import&quot;</span>: <span class="tok-str">&quot;^0.17.0&quot;</span>,
+    <span class="tok-str">&quot;unplugin-vue-components&quot;</span>: <span class="tok-str">&quot;^0.26.0&quot;</span>,
+    <span class="tok-str">&quot;sass&quot;</span>: <span class="tok-str">&quot;^1.70.0&quot;</span>
+  }
+}</code></pre>
+<hr>
+<h2>五、验收标准</h2>
+<ul>
+<li>[ ] pnpm monorepo 搭建完成，3 个 app + 4 个公共包可正常引用</li>
+<li>[ ] B2C 首页 + 搜索 + 商品详情 + 购物车 + 下单完整链路可走通</li>
+<li>[ ] B2B 商品管理 + 订单处理 + 发货流程可走通</li>
+<li>[ ] Admin 审核 + Banner + 报表可走通</li>
+<li>[ ] 所有页面响应式适配（PC 端 1200px+）</li>
+<li>[ ] Axios 拦截器正确注入 Token + 处理 401</li>
+<li>[ ] 三端独立打包，<code>pnpm build</code> 通过</li>
+</ul>
+<hr>
+<h2>六、开发阶段汇总</h2>
+<table>
+<tr>
+  <th>Phase</th>
+  <th>名称</th>
+  <th>页面</th>
+  <th>依赖</th>
+</tr>
+<tr>
+  <td><strong>Phase 6A</strong></td>
+  <td>B2C 用户前台</td>
+  <td>15 页</td>
+  <td>packages/ui, packages/api, packages/stores</td>
+</tr>
+<tr>
+  <td><strong>Phase 6B</strong></td>
+  <td>B2B 商家后台</td>
+  <td>12 页</td>
+  <td>packages/ui, packages/api</td>
+</tr>
+<tr>
+  <td><strong>Phase 6C</strong></td>
+  <td>Admin 运营后台</td>
+  <td>8 页</td>
+  <td>packages/ui, packages/api</td>
+</tr>
+</table>
+</main>
+<footer>
+  <p>Generated 2026-05-14 — Super Market E-Commerce Platform</p>
+</footer>
+</body>
+</html>
