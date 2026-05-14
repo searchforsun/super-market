@@ -1,6 +1,7 @@
 package com.supermarket.shop.controller;
 
 import com.supermarket.common.core.result.R;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.supermarket.shop.entity.Merchant;
 import com.supermarket.shop.entity.Shop;
 import com.supermarket.shop.service.ShopService;
@@ -25,6 +26,16 @@ public class ShopController {
                          @RequestParam(required = false) String reason) {
         shopService.auditMerchant(id, auditStatus, reason);
         return R.ok();
+    }
+
+    @GetMapping("/merchant/page")
+    public R<IPage<Merchant>> pageMerchants(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) Integer auditStatus,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        return R.ok(shopService.pageMerchants(page, size, auditStatus, startDate, endDate));
     }
 
     @GetMapping("/{id}")

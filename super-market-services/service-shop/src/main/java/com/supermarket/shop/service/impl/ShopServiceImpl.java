@@ -1,6 +1,8 @@
 package com.supermarket.shop.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.shop.entity.Merchant;
 import com.supermarket.shop.entity.Shop;
@@ -10,6 +12,9 @@ import com.supermarket.shop.service.ShopService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +50,23 @@ public class ShopServiceImpl implements ShopService {
             createShop(merchantId, merchant.getCompanyName() + "旗舰店");
         }
         merchantMapper.updateById(merchant);
+    }
+
+    @Override
+    public IPage<Merchant> pageMerchants(Integer page, Integer size, Integer auditStatus, String startDate, String endDate) {
+        Page<Merchant> p = new Page<>(page, size);
+        LambdaQueryWrapper<Merchant> wrapper = new LambdaQueryWrapper<>();
+        if (auditStatus != null) {
+            wrapper.eq(Merchant::getAuditStatus, auditStatus);
+        }
+        if (startDate != null && !startDate.isEmpty()) {
+            wrapper.ge(Merchant::getCreatedAt, LocalDateTime.parse(startDate + " 00:00:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            wrapper.le(Merchant::getCreatedAt, LocalDateTime.parse(endDate + " 23:59:59", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        }
+        wrapper.orderByDesc(Merchant::getCreatedAt);
+        return merchantMapper.selectPage(p, wrapper);
     }
 
     @Override

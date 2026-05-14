@@ -136,4 +136,30 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
         }
         return page(new Page<>(page, size), wrapper);
     }
+
+    @Override
+    public Page<Spu> searchByName(String keyword, int page, int size) {
+        LambdaQueryWrapper<Spu> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(Spu::getName, keyword)
+               .eq(Spu::getIsDeleted, 0)
+               .orderByDesc(Spu::getCreatedAt);
+        return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    public Page<Spu> listForAdmin(Integer auditStatus, String keyword, Long categoryId, int page, int size) {
+        LambdaQueryWrapper<Spu> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Spu::getIsDeleted, 0);
+        if (auditStatus != null) {
+            wrapper.eq(Spu::getAuditStatus, auditStatus);
+        }
+        if (categoryId != null) {
+            wrapper.eq(Spu::getCategoryId, categoryId);
+        }
+        if (keyword != null && !keyword.isEmpty()) {
+            wrapper.like(Spu::getName, keyword);
+        }
+        wrapper.orderByDesc(Spu::getCreatedAt);
+        return page(new Page<>(page, size), wrapper);
+    }
 }

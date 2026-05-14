@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 export default createRouter({ history: createWebHistory(), routes: [
   { path: '/', redirect: '/merchant' },
+  { path: '/login', name: 'login', component: () => import('../pages/login/LoginPage.vue') },
   { path: '/merchant', component: () => import('../layouts/Default.vue'), children: [
     { path: '', name:'dashboard', component: () => import('../pages/dashboard/DashboardPage.vue') },
     { path: 'products', name:'products', component: () => import('../pages/products/ListPage.vue') },

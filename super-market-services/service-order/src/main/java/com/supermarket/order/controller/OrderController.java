@@ -36,6 +36,11 @@ public class OrderController {
         return R.ok(orderService.listByUser(userId, status, page, size));
     }
 
+    @GetMapping("/{orderNo}/items")
+    public R<List<OrderItem>> items(@PathVariable String orderNo) {
+        return R.ok(orderService.getOrderItems(orderNo));
+    }
+
     @PutMapping("/{orderNo}/cancel")
     public R<Void> cancel(@PathVariable String orderNo, @RequestParam String reason) {
         orderService.cancelOrder(orderNo, reason);

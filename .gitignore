@@ -1,13 +1,53 @@
+# === Maven ===
 target/
 *.class
 *.jar
 *.war
+
+# === Logs ===
 *.log
+logs/
+
+# === IDE ===
 .idea/
 *.iml
 .vscode/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+
+# === OS ===
 .DS_Store
 Thumbs.db
+
+# === Frontend dependencies ===
+**/node_modules/
+frontend/pnpm-lock.yaml
+
+# === Frontend auto-generated (unplugin) ===
+auto-imports.d.ts
+components.d.ts
+**/auto-imports.d.ts
+**/components.d.ts
+
+# === Vite ===
+.vite/
+**/.vite/
+
+# === Build output ===
+dist/
+**/dist/
+
+# === Environment & local config ===
+*.local
+.env
+.env.*
+!.env.example
+
+# === Test output ===
+*.test
+*.out
+coverage/

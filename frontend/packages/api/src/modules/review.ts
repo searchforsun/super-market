@@ -15,3 +15,11 @@ export function getReviewsByUser(userId: number, page = 1, size = 10) {
 export function getRatingSummary(spuId: number) {
   return request.get(`/review/rating/${spuId}`)
 }
+
+export function getReviewPage(params: Record<string, any>) {
+  return request.get('/review/page', { params })
+}
+
+export function replyReview(id: number, content: string) {
+  return request.put(`/review/${id}/reply`, null, { params: { content } })
+}

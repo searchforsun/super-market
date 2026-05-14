@@ -100,6 +100,22 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
     }
 
     @Override
+    public Page<Review> listAll(Integer minRating, Integer maxRating, Long spuId, int page, int size) {
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByDesc(Review::getCreatedAt);
+        if (minRating != null) {
+            wrapper.ge(Review::getRating, minRating);
+        }
+        if (maxRating != null) {
+            wrapper.le(Review::getRating, maxRating);
+        }
+        if (spuId != null) {
+            wrapper.eq(Review::getSpuId, spuId);
+        }
+        return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
     public Map<Integer, Long> getRatingDistribution(Long spuId) {
         List<Map<String, Object>> rows = baseMapper.countByRating(spuId);
         Map<Integer, Long> dist = new HashMap<>();

@@ -26,4 +26,8 @@ public interface ProductService {
     Page<Spu> listByShop(Long shopId, int page, int size);
 
     Page<Spu> listByCategory(Long categoryId, int page, int size, String sort);
+
+    Page<Spu> searchByName(String keyword, int page, int size);
+
+    Page<Spu> listForAdmin(Integer auditStatus, String keyword, Long categoryId, int page, int size);
 }

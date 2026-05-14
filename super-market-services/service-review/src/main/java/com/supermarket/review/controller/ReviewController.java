@@ -50,6 +50,15 @@ public class ReviewController {
         return R.ok(reviewService.listByUser(userId, page, size));
     }
 
+    @GetMapping("/page")
+    public R<Page<Review>> page(@RequestParam(required = false) Integer minRating,
+                                @RequestParam(required = false) Integer maxRating,
+                                @RequestParam(required = false) Long spuId,
+                                @RequestParam(defaultValue = "1") int page,
+                                @RequestParam(defaultValue = "10") int size) {
+        return R.ok(reviewService.listAll(minRating, maxRating, spuId, page, size));
+    }
+
     @GetMapping("/rating/{spuId}")
     public R<Map<String, Object>> ratingSummary(@PathVariable Long spuId) {
         Map<Integer, Long> dist = reviewService.getRatingDistribution(spuId);

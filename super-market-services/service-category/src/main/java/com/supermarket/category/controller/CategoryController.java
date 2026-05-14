@@ -20,6 +20,11 @@ public class CategoryController {
         return R.ok(categoryService.create(category));
     }
 
+    @PutMapping
+    public R<Category> update(@RequestBody Category category) {
+        return R.ok(categoryService.update(category));
+    }
+
     @GetMapping("/tree")
     public R<List<Category>> tree() {
         return R.ok(categoryService.getFullTree());

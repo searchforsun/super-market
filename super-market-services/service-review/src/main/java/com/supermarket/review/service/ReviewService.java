@@ -19,6 +19,8 @@ public interface ReviewService {
 
     Page<Review> listByUser(Long userId, int page, int size);
 
+    Page<Review> listAll(Integer minRating, Integer maxRating, Long spuId, int page, int size);
+
     Map<Integer, Long> getRatingDistribution(Long spuId);
 
     Double getAvgRating(Long spuId);

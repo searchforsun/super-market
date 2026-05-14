@@ -62,4 +62,20 @@ public class ProductController {
                                         @RequestParam(required = false) String sort) {
         return R.ok(productService.listByCategory(categoryId, page, size, sort));
     }
+
+    @GetMapping("/search")
+    public R<Page<Spu>> search(@RequestParam String keyword,
+                               @RequestParam(defaultValue = "1") int page,
+                               @RequestParam(defaultValue = "20") int size) {
+        return R.ok(productService.searchByName(keyword, page, size));
+    }
+
+    @GetMapping("/list")
+    public R<Page<Spu>> list(@RequestParam(required = false) Integer auditStatus,
+                             @RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) Long categoryId,
+                             @RequestParam(defaultValue = "1") int page,
+                             @RequestParam(defaultValue = "20") int size) {
+        return R.ok(productService.listForAdmin(auditStatus, keyword, categoryId, page, size));
+    }
 }

@@ -36,6 +36,10 @@ spring:
           uri: lb://cart-service
           predicates:
             - Path=/api/cart/**
+        - id: category-service
+          uri: lb://category-service
+          predicates:
+            - Path=/api/category/**
         - id: order-service
           uri: lb://order-service
           predicates:

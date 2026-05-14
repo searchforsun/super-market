@@ -6,7 +6,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.dubbo.api.inventory.InventoryDubboService;
+import com.supermarket.common.dubbo.api.order.OrderDubboService;
 import com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
+import com.supermarket.common.dubbo.api.order.dto.OrderDTO;
 import com.supermarket.order.entity.Order;
 import com.supermarket.order.entity.OrderItem;
 import com.supermarket.order.mapper.OrderItemMapper;
@@ -14,8 +16,10 @@ import com.supermarket.order.mapper.OrderMapper;
 import com.supermarket.order.mq.OrderEventProducer;
 import com.supermarket.order.service.OrderService;
 import io.seata.spring.annotation.GlobalTransactional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
+import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,28 +29,18 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
+@DubboService(interfaceClass = OrderDubboService.class)
 @Service
-public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
+@RequiredArgsConstructor
+public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService, OrderDubboService {
 
     private final OrderItemMapper orderItemMapper;
 
     @DubboReference(check = false)
     private InventoryDubboService inventoryDubboService;
 
-    private final OrderEventProducer orderEventProducer;
-
-    @Autowired
-    public OrderServiceImpl(OrderItemMapper orderItemMapper, OrderEventProducer orderEventProducer) {
-        this.orderItemMapper = orderItemMapper;
-        this.orderEventProducer = orderEventProducer;
-    }
-
-    public OrderServiceImpl(OrderItemMapper orderItemMapper, InventoryDubboService inventoryDubboService,
-                           OrderEventProducer orderEventProducer) {
-        this.orderItemMapper = orderItemMapper;
-        this.inventoryDubboService = inventoryDubboService;
-        this.orderEventProducer = orderEventProducer;
-    }
+    @Autowired(required = false)
+    private OrderEventProducer orderEventProducer;
 
     @Override
     @GlobalTransactional(timeoutMills = 30000)
@@ -174,6 +168,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     public List<OrderItem> getOrderItems(String orderNo) {
         return orderItemMapper.selectByOrderNo(orderNo);
+    }
+
+    // -- OrderDubboService impl (跨服务 Dubbo 调用) --
+
+    @Override
+    public void updateStatus(String orderNo, Integer toStatus) {
+        switch (toStatus) {
+            case 2 -> paySuccess(orderNo, null);
+            case 5 -> cancelOrder(orderNo, "系统取消");
+            case 6 -> cancelOrder(orderNo, "退款取消");
+            default -> log.warn("未知订单状态: {}", toStatus);
+        }
     }
 
     private void rollbackInventory(String orderNo) {
