@@ -22,3 +22,12 @@ springdoc:
   group-configs:
     - group: service-auth
       paths-to-match: /api/auth/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always

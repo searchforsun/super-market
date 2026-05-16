@@ -22,3 +22,12 @@ springdoc:
   group-configs:
     - group: service-payment
       paths-to-match: /api/payment/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
