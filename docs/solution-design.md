@@ -890,9 +890,9 @@ Access Token 过期 → 自动用 Refresh Token 换取新 Token
 
 ```yaml
 # 目录结构
-docker-compose/
+middleware-docker/
 ├── .env                          # 环境变量（端口映射、密码等）
-├── docker-compose.yml            # 主编排文件（13 个服务）
+├── middleware-docker.yml            # 主编排文件（13 个服务）
 ├── mysql/
 │   └── init/                     # 初始化SQL脚本（10 个文件）
 │       ├── 01-init-databases.sql    # 11 个数据库创建（7 业务 + 4 基础设施）
@@ -1040,8 +1040,8 @@ super-market/
 ├── docs/                           # 文档
 │   ├── prd.md                      # 产品需求文档
 │   └── solution-design.md          # 本方案设计文档
-├── docker-compose/                 # 本地开发环境
-│   ├── docker-compose.yml
+├── middleware-docker/                 # 本地开发环境
+│   ├── middleware-docker.yml
 │   ├── .env
 │   └── conf.d/                     # 各中间件配置
 ├── frontend/                       # 前端项目 (Monorepo)

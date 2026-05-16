@@ -167,7 +167,7 @@
 基础库: xxl_job | seata | nacos | canal_manager
 ```
 
-启动时 MySQL 自动执行 `docker-compose/mysql/init/` 目录下 10 个 SQL 脚本，完成建库建表。
+启动时 MySQL 自动执行 `middleware-docker/mysql/init/` 目录下 10 个 SQL 脚本，完成建库建表。
 
 ## 六、GitLab CI/CD 全K8s部署方案
 ### 6.1 核心架构原理

@@ -12,7 +12,8 @@ import { computed } from 'vue'
 
 const props = defineProps<{ price: number; originalPrice?: number }>()
 
-const parts = computed(() => props.price.toFixed(2).split('.'))
+const safePrice = computed(() => (typeof props.price === 'number' && !isNaN(props.price)) ? props.price : 0)
+const parts = computed(() => safePrice.value.toFixed(2).split('.'))
 const integer = computed(() => parts.value[0])
 const decimal = computed(() => parts.value[1])
 </script>

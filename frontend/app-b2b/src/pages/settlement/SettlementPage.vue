@@ -168,6 +168,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getOrderList } from '@supermarket/api'
 import { PriceDisplay, StatCard } from '@supermarket/ui'
+import { USER_ID_KEY } from '@supermarket/utils'
 
 interface SettlementRecord {
   id: string
@@ -295,7 +296,7 @@ function computeSettlements(orders: any[]) {
 async function fetchSettlements() {
   loading.value = true
   try {
-    const userId = Number(localStorage.getItem('user_id') || 0)
+    const userId = Number(localStorage.getItem(USER_ID_KEY) || 0)
     const params: Record<string, any> = {
       page: currentPage.value,
       size: 200,
@@ -333,7 +334,7 @@ async function showDetail(record: SettlementRecord) {
   detailOrders.value = []
 
   try {
-    const userId = Number(localStorage.getItem('user_id') || 0)
+    const userId = Number(localStorage.getItem(USER_ID_KEY) || 0)
     const res = await getOrderList(userId, {
       page: 1,
       size: 200,

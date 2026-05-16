@@ -1,32 +1,57 @@
 <template>
   <div class="login-page">
-    <div class="login-box">
-      <h2>Super Market 登录</h2>
-      <el-input v-model="phone" placeholder="手机号" style="margin-bottom:12px" />
-      <el-input v-model="password" type="password" placeholder="密码" show-password @keyup.enter="doLogin" />
-      <el-button type="danger" style="width:100%;margin-top:16px" @click="doLogin" :loading="loading">登 录</el-button>
-      <p class="login-tip">未注册的手机号将自动注册</p>
+    <div class="login-card">
+      <router-link to="/" class="login-logo">
+        <span class="logo-mark">S</span>
+        <span class="logo-text">Super Market</span>
+      </router-link>
+      <h2 class="login-heading">欢迎回来</h2>
+      <p class="login-sub">登录你的账号继续购物</p>
+
+      <el-form ref="formRef" :model="form" :rules="rules" size="large" @submit.prevent="doLogin">
+        <el-form-item prop="phone">
+          <el-input v-model="form.phone" placeholder="手机号" :prefix-icon="Phone" />
+        </el-form-item>
+        <el-form-item prop="password">
+          <el-input v-model="form.password" type="password" placeholder="密码" show-password :prefix-icon="Lock" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="danger" native-type="submit" :loading="loading" style="width:100%;height:44px;border-radius:8px;font-weight:500">
+            登 录
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <p class="login-switch">
+        还没有账号？<router-link to="/register">立即注册</router-link>
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@supermarket/stores'
 import { ElMessage } from 'element-plus'
+import { Phone, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
-const phone = ref('')
-const password = ref('')
 const loading = ref(false)
+const formRef = ref()
+const form = reactive({ phone: '', password: '' })
+const rules = {
+  phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+}
 
 async function doLogin() {
-  if (!phone.value || !password.value) { ElMessage.warning('请输入手机号和密码'); return }
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
   loading.value = true
   try {
-    await userStore.login(phone.value, password.value)
+    await userStore.login(form.phone, form.password)
     ElMessage.success('登录成功')
     router.push('/')
   } catch {
@@ -38,8 +63,55 @@ async function doLogin() {
 </script>
 
 <style scoped>
-.login-page { display: flex; align-items: center; justify-content: center; min-height: 70vh; background: #f4f4f4; }
-.login-box { background: #fff; padding: 32px; border-radius: 6px; width: 360px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
-.login-box h2 { text-align: center; margin-bottom: 20px; }
-.login-tip { font-size: 12px; color: #999; text-align: center; margin-top: 12px; }
+.login-page {
+  min-height: 80vh;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-bg, #faf8f5);
+}
+.login-card {
+  background: var(--color-surface, #fff);
+  padding: 48px 40px;
+  border-radius: var(--radius-xl, 16px);
+  width: 420px;
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(26,24,22,0.08));
+}
+.login-logo {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin-bottom: var(--space-xl, 32px);
+  text-decoration: none;
+}
+.logo-mark {
+  width: 40px; height: 40px;
+  background: var(--color-accent, #c41e3a);
+  color: #fff;
+  font-family: var(--font-display, 'Playfair Display', serif);
+  font-size: 22px; font-weight: 700;
+  border-radius: var(--radius-md, 8px);
+  display: flex; align-items: center; justify-content: center;
+}
+.logo-text {
+  font-family: var(--font-display, 'Playfair Display', serif);
+  font-size: 22px; font-weight: 600;
+  color: var(--color-text-primary, #1a1816);
+}
+.login-heading {
+  text-align: center;
+  font-family: var(--font-display, 'Playfair Display', serif);
+  font-size: 24px; font-weight: 600;
+  margin-bottom: var(--space-sm, 8px);
+}
+.login-sub {
+  text-align: center; font-size: 14px;
+  color: var(--color-text-muted, #a09890);
+  margin-bottom: var(--space-xl, 32px);
+}
+.login-switch {
+  text-align: center; font-size: 13px;
+  color: var(--color-text-muted, #a09890);
+  margin-top: var(--space-lg, 24px);
+}
+.login-switch a {
+  color: var(--color-accent, #c41e3a);
+  font-weight: 500; text-decoration: none;
+}
 </style>

@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<{ tip?: string; maxSize?: number }>(), {
 
 const emit = defineEmits<{ success: [url: string] }>()
 
-const uploadUrl = '/api/file/upload'
+const uploadUrl = import.meta.env.VITE_API_BASE ? import.meta.env.VITE_API_BASE + '/file/upload' : '/api/file/upload'
 const headers = computed(() => ({ Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }))
 
 function beforeUpload(file: File) {

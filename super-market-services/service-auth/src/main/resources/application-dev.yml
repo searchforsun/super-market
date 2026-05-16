@@ -4,9 +4,9 @@ spring:
       import-check:
         enabled: false
   datasource:
-    url: jdbc:mysql://localhost:13306/db_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: root123
+    password: ${MYSQL_ROOT_PASSWORD:root123}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       minimum-idle: 5
@@ -17,9 +17,9 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 16379
-      password: redis123
+      host: ${DOCKER_HOST_IP:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
       database: 0
       lettuce:
         pool:
@@ -35,7 +35,7 @@ dubbo:
     name: tri
     port: -1
   registry:
-    address: nacos://localhost:8848
+    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:nacos123}
     parameters:
       namespace: public
   consumer:
@@ -43,7 +43,7 @@ dubbo:
     timeout: 5000
     retries: 0
   config-center:
-    address: nacos://localhost:8848
+    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:nacos123}
     highest-priority: false
 
 mybatis-plus:

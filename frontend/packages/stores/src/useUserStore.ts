@@ -1,40 +1,42 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { TOKEN_KEY, REFRESH_TOKEN_KEY, USER_ID_KEY } from '@supermarket/utils'
 import { authLogin, getUserInfo } from '@supermarket/api'
+import { saveAuth, clearAuth, getRoles, isAuthenticated, getPrimaryRole, redirectByRole } from '@supermarket/utils'
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref(localStorage.getItem(TOKEN_KEY) || '')
-  const userId = ref(Number(localStorage.getItem(USER_ID_KEY)) || 0)
+  const token = ref(isAuthenticated())
+  const userId = ref(Number(localStorage.getItem('userId')) || 0)
   const userInfo = ref<any>(null)
+  const roles = ref<string[]>(getRoles())
 
-  const isLoggedIn = computed(() => !!token.value)
+  const isLoggedIn = computed(() => isAuthenticated())
+  const primaryRole = computed(() => getPrimaryRole())
 
   async function login(phone: string, password: string) {
     const res: any = await authLogin(phone, password)
-    token.value = res.accessToken
+    saveAuth(res)
+    token.value = true
     userId.value = Number(res.userId)
-    localStorage.setItem(TOKEN_KEY, res.accessToken)
-    localStorage.setItem(REFRESH_TOKEN_KEY, res.refreshToken)
-    localStorage.setItem(USER_ID_KEY, String(res.userId))
+    roles.value = getRoles()
     await fetchUserInfo()
   }
 
   async function fetchUserInfo() {
     if (!userId.value) return
-    try {
-      userInfo.value = await getUserInfo(userId.value)
-    } catch { /* ignore */ }
+    try { userInfo.value = await getUserInfo(userId.value) } catch {}
   }
 
   function logout() {
-    token.value = ''
+    clearAuth()
+    token.value = false
     userId.value = 0
     userInfo.value = null
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_TOKEN_KEY)
-    localStorage.removeItem(USER_ID_KEY)
+    roles.value = []
   }
 
-  return { token, userId, userInfo, isLoggedIn, login, fetchUserInfo, logout }
+  function goToApp() {
+    redirectByRole()
+  }
+
+  return { token, userId, userInfo, roles, isLoggedIn, primaryRole, login, fetchUserInfo, logout, goToApp }
 })

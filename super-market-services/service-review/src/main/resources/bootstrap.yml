@@ -1,13 +1,19 @@
 spring:
+  config:
+    import: optional:nacos:${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
   cloud:
     nacos:
       config:
-        server-addr: localhost:8848
+        server-addr: ${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
         namespace: public
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos123}
         group: DEFAULT_GROUP
         file-extension: yaml
         enabled: false
       discovery:
-        server-addr: localhost:8848
+        server-addr: ${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
         namespace: public
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos123}
         enabled: true

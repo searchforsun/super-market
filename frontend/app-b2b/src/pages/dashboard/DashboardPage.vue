@@ -25,7 +25,7 @@
         <el-table-column prop="orderNo" label="订单号" width="200" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <OrderStatusTag :status="row.status" />
+            <OrderStatusTag :status="row.orderStatus" />
           </template>
         </el-table-column>
         <el-table-column prop="totalAmount" label="金额" width="120" />

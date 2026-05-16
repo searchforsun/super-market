@@ -6,6 +6,9 @@ import com.supermarket.product.dto.CreateProductRequest;
 import com.supermarket.product.entity.Sku;
 import com.supermarket.product.entity.Spu;
 import com.supermarket.product.service.ProductService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,67 +18,78 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/product")
 @RequiredArgsConstructor
+@Tag(name = "商品服务", description = "SPU/SKU管理、商品审核、上下架接口")
 public class ProductController {
 
     private final ProductService productService;
 
+    @Operation(summary = "创建商品SPU")
     @PostMapping("/spu")
-    public R<Spu> createProduct(@Valid @RequestBody CreateProductRequest request) {
+    public R<Spu> createProduct(@Parameter(description = "商品创建请求") @Valid @RequestBody CreateProductRequest request) {
         return R.ok(productService.createProduct(request));
     }
 
+    @Operation(summary = "查询商品SPU详情")
     @GetMapping("/spu/{spuId}")
-    public R<Spu> getSpu(@PathVariable Long spuId) {
+    public R<Spu> getSpu(@Parameter(description = "SPU ID") @PathVariable Long spuId) {
         return R.ok(productService.getSpuById(spuId));
     }
 
+    @Operation(summary = "查询商品下SKU列表")
     @GetMapping("/spu/{spuId}/skus")
-    public R<List<Sku>> getSkus(@PathVariable Long spuId) {
+    public R<List<Sku>> getSkus(@Parameter(description = "SPU ID") @PathVariable Long spuId) {
         return R.ok(productService.getSkusBySpuId(spuId));
     }
 
+    @Operation(summary = "审核商品")
     @PutMapping("/spu/{spuId}/audit")
-    public R<Void> audit(@PathVariable Long spuId,
-                         @RequestParam Integer auditStatus,
-                         @RequestParam(required = false) String reason) {
+    public R<Void> audit(@Parameter(description = "SPU ID") @PathVariable Long spuId,
+                         @Parameter(description = "审核状态") @RequestParam Integer auditStatus,
+                         @Parameter(description = "审核原因") @RequestParam(required = false) String reason) {
         productService.auditProduct(spuId, auditStatus, reason);
         return R.ok();
     }
 
+    @Operation(summary = "商品上下架")
     @PutMapping("/spu/{spuId}/shelf")
-    public R<Void> updateShelf(@PathVariable Long spuId, @RequestParam Integer shelfStatus) {
+    public R<Void> updateShelf(@Parameter(description = "SPU ID") @PathVariable Long spuId,
+                               @Parameter(description = "上下架状态") @RequestParam Integer shelfStatus) {
         productService.updateShelfStatus(spuId, shelfStatus);
         return R.ok();
     }
 
+    @Operation(summary = "按店铺分页查询商品")
     @GetMapping("/list/shop/{shopId}")
-    public R<Page<Spu>> listByShop(@PathVariable Long shopId,
-                                    @RequestParam(defaultValue = "1") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
+    public R<Page<Spu>> listByShop(@Parameter(description = "店铺ID") @PathVariable Long shopId,
+                                    @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                    @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return R.ok(productService.listByShop(shopId, page, size));
     }
 
+    @Operation(summary = "按分类分页查询商品")
     @GetMapping("/list/category/{categoryId}")
-    public R<Page<Spu>> listByCategory(@PathVariable Long categoryId,
-                                        @RequestParam(defaultValue = "1") int page,
-                                        @RequestParam(defaultValue = "20") int size,
-                                        @RequestParam(required = false) String sort) {
+    public R<Page<Spu>> listByCategory(@Parameter(description = "分类ID") @PathVariable Long categoryId,
+                                        @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                        @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size,
+                                        @Parameter(description = "排序方式") @RequestParam(required = false) String sort) {
         return R.ok(productService.listByCategory(categoryId, page, size, sort));
     }
 
+    @Operation(summary = "搜索商品")
     @GetMapping("/search")
-    public R<Page<Spu>> search(@RequestParam String keyword,
-                               @RequestParam(defaultValue = "1") int page,
-                               @RequestParam(defaultValue = "20") int size) {
+    public R<Page<Spu>> search(@Parameter(description = "搜索关键词") @RequestParam String keyword,
+                               @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                               @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return R.ok(productService.searchByName(keyword, page, size));
     }
 
+    @Operation(summary = "管理后台分页查询商品")
     @GetMapping("/list")
-    public R<Page<Spu>> list(@RequestParam(required = false) Integer auditStatus,
-                             @RequestParam(required = false) String keyword,
-                             @RequestParam(required = false) Long categoryId,
-                             @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "20") int size) {
+    public R<Page<Spu>> list(@Parameter(description = "审核状态") @RequestParam(required = false) Integer auditStatus,
+                             @Parameter(description = "搜索关键词") @RequestParam(required = false) String keyword,
+                             @Parameter(description = "分类ID") @RequestParam(required = false) Long categoryId,
+                             @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                             @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return R.ok(productService.listForAdmin(auditStatus, keyword, categoryId, page, size));
     }
 }

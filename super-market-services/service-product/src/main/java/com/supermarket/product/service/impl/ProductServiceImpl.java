@@ -34,7 +34,8 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
         spu.setName(request.getName());
         spu.setSubtitle(request.getSubtitle());
         spu.setMainImage(request.getMainImage());
-        spu.setImages(request.getImages() != null ? String.join(",", request.getImages()) : null);
+        spu.setImages(request.getImages() != null && !request.getImages().isEmpty()
+                ? "[\"" + String.join("\",\"", request.getImages()) + "\"]" : null);
         spu.setDescription(request.getDescription());
         spu.setAuditStatus(0);
         spu.setShelfStatus(0);

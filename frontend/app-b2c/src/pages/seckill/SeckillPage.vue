@@ -38,9 +38,13 @@ onMounted(async () => {
 
 async function doSeckill(p: any) {
   if (!userStore.isLoggedIn) { router.push('/login'); return }
-  const res: any = await executeSeckill(userStore.userId, p.id, 1)
-  if (res.success) ElMessage.success('抢购成功！订单处理中')
-  else ElMessage.warning(res.message || '抢购失败')
+  try {
+    const res: any = await executeSeckill(userStore.userId, p.id, 1)
+    if (res.success) ElMessage.success('抢购成功！订单处理中')
+    else ElMessage.warning(res.message || '抢购失败')
+  } catch {
+    // 错误已由拦截器处理
+  }
 }
 </script>
 

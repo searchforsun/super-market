@@ -11,5 +11,6 @@ public class UserDTO implements Serializable {
     private String nickname;
     private String avatarUrl;
     private Integer status;
+    private String passwordHash;
     private LocalDateTime createdAt;
 }

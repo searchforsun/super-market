@@ -139,7 +139,7 @@ function onPageChange(page: number) {
 }
 
 function handleEdit(row: any) {
-  router.push(`/merchant/products/${row.spuId}/edit`)
+  router.push({ name: 'productCreate', query: { spuId: row.spuId } })
 }
 
 async function handleStatusToggle(row: any) {
@@ -151,7 +151,7 @@ async function handleStatusToggle(row: any) {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    await request.put(`/product/spu/${row.spuId}/status`, { status: newStatus })
+    await request.put(`/product/spu/${row.spuId}/shelf`, null, { params: { shelfStatus: newStatus } })
     row.status = newStatus
     ElMessage.success(`${actionText}成功`)
   } catch {

@@ -10,6 +10,7 @@ import com.supermarket.order.mapper.OrderMapper;
 import com.supermarket.order.mq.OrderEventProducer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,7 +23,7 @@ import static org.mockito.Mockito.*;
 
 class OrderServiceTest {
 
-    private TestableOrderServiceImpl orderService;
+    private OrderServiceImpl orderService;
     private OrderMapper orderMapper;
     private OrderItemMapper orderItemMapper;
     private InventoryDubboService inventoryDubboService;
@@ -34,8 +35,11 @@ class OrderServiceTest {
         orderItemMapper = mock(OrderItemMapper.class);
         inventoryDubboService = mock(InventoryDubboService.class);
         orderEventProducer = mock(OrderEventProducer.class);
-        orderService = new TestableOrderServiceImpl(orderItemMapper, inventoryDubboService, orderEventProducer);
-        orderService.setBaseMapper(orderMapper);
+        orderService = new OrderServiceImpl();
+        ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
+        ReflectionTestUtils.setField(orderService, "orderItemMapper", orderItemMapper);
+        ReflectionTestUtils.setField(orderService, "inventoryDubboService", inventoryDubboService);
+        ReflectionTestUtils.setField(orderService, "orderEventProducer", orderEventProducer);
     }
 
     @Test
@@ -67,7 +71,7 @@ class OrderServiceTest {
         mockOrder.setOrderNo("ORD001");
         mockOrder.setOrderStatus(1);
 
-        TestableOrderServiceImpl spy = spy(orderService);
+        OrderServiceImpl spy = spy(orderService);
         doReturn(mockOrder).when(spy).getOne(any());
         assertThat(spy.getByOrderNo("ORD001").getOrderNo()).isEqualTo("ORD001");
     }
@@ -95,15 +99,5 @@ class OrderServiceTest {
         item.setQuantity(2);
         req.setItems(List.of(item));
         return req;
-    }
-
-    static class TestableOrderServiceImpl extends OrderServiceImpl {
-        TestableOrderServiceImpl(OrderItemMapper orderItemMapper, InventoryDubboService inventoryDubboService,
-                                  OrderEventProducer orderEventProducer) {
-            super(orderItemMapper, inventoryDubboService, orderEventProducer);
-        }
-        void setBaseMapper(OrderMapper mapper) {
-            this.baseMapper = mapper;
-        }
     }
 }

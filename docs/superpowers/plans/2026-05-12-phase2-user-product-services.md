@@ -44,11 +44,11 @@ service-{name}/src/test/java/com/supermarket/{name}/
 ### Task A1: 创建 db_user 数据库表
 
 **Files:**
-- Create: `docker-compose/mysql/init/02-user-tables.sql`
+- Create: `middleware-docker/mysql/init/02-user-tables.sql`
 
 - [ ] **Step 1: 写入用户域 DDL**
 
-写入 `docker-compose/mysql/init/02-user-tables.sql`:
+写入 `middleware-docker/mysql/init/02-user-tables.sql`:
 
 ```sql
 -- ============================================
@@ -117,7 +117,7 @@ Expected: 输出 `users`, `members`, `addresses` 三张表
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docker-compose/mysql/init/02-user-tables.sql
+git add middleware-docker/mysql/init/02-user-tables.sql
 git commit -m "feat: add user domain DDL (users, members, addresses)"
 ```
 
@@ -126,12 +126,12 @@ git commit -m "feat: add user domain DDL (users, members, addresses)"
 ### Task A2: 创建 db_product + db_shop 数据库表
 
 **Files:**
-- Create: `docker-compose/mysql/init/03-product-tables.sql`
-- Create: `docker-compose/mysql/init/04-shop-tables.sql`
+- Create: `middleware-docker/mysql/init/03-product-tables.sql`
+- Create: `middleware-docker/mysql/init/04-shop-tables.sql`
 
 - [ ] **Step 1: 写入商品域 DDL**
 
-写入 `docker-compose/mysql/init/03-product-tables.sql`:
+写入 `middleware-docker/mysql/init/03-product-tables.sql`:
 
 ```sql
 USE db_product;
@@ -218,7 +218,7 @@ CREATE TABLE IF NOT EXISTS inventory (
 
 - [ ] **Step 2: 写入商家域 DDL**
 
-写入 `docker-compose/mysql/init/04-shop-tables.sql`:
+写入 `middleware-docker/mysql/init/04-shop-tables.sql`:
 
 ```sql
 USE db_shop;
@@ -265,7 +265,7 @@ Expected: db_product 输出 `categories`, `brands`, `spu`, `sku`, `inventory`；
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docker-compose/mysql/init/03-product-tables.sql docker-compose/mysql/init/04-shop-tables.sql
+git add middleware-docker/mysql/init/03-product-tables.sql middleware-docker/mysql/init/04-shop-tables.sql
 git commit -m "feat: add product + shop domain DDL (categories, brands, spu, sku, inventory, merchants, shops)"
 ```
 
@@ -562,7 +562,7 @@ JAVA_HOME="C:/Program Files/Java/jdk-21" mvn test -pl super-market-services/serv
 ```
 Expected: 部分测试 FAIL（因为还没有完整实现，需要 DataSource 连接等 — 如果没有 Docker 则 FAIL）
 
-> 注：如果 Docker 中间件未启动，测试会因为 DataSource 连接失败而报错。此时需要先 `docker compose -f docker-compose/docker-compose.yml up -d mysql` 启动 MySQL。
+> 注：如果 Docker 中间件未启动，测试会因为 DataSource 连接失败而报错。此时需要先 `docker compose -f middleware-docker/middleware-docker.yml up -d mysql` 启动 MySQL。
 
 - [ ] **Step 3: 写入 UserController（Green Phase）**
 
@@ -612,7 +612,7 @@ public class UserController {
 
 ```bash
 # 先确保 MySQL 已启动
-docker compose -f docker-compose/docker-compose.yml up -d mysql
+docker compose -f middleware-docker/middleware-docker.yml up -d mysql
 sleep 10
 
 # 运行测试

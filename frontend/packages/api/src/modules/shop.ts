@@ -1,5 +1,19 @@
 import request from '../request'
 
+export interface ApplyMerchantData {
+  userId: number
+  merchantName: string
+  contactName: string
+  contactPhone: string
+  businessLicense?: string
+  idCardFront?: string
+  idCardBack?: string
+}
+
+export function applyMerchant(data: ApplyMerchantData) {
+  return request.post('/shop/merchant/apply', data)
+}
+
 export function getMerchantList(params: {
   page: number
   size: number

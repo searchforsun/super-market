@@ -6,6 +6,9 @@ import com.supermarket.coupon.entity.CouponBatch;
 import com.supermarket.coupon.entity.CouponTemplate;
 import com.supermarket.coupon.entity.UserCoupon;
 import com.supermarket.coupon.service.CouponService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,42 +17,50 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/coupon")
 @RequiredArgsConstructor
+@Tag(name = "优惠券服务", description = "优惠券模板、发放、领取、查询接口")
 public class CouponController {
 
     private final CouponService couponService;
 
     @PostMapping("/admin/template")
-    public R<CouponTemplate> createTemplate(@RequestBody CouponTemplate template) {
+    @Operation(summary = "创建优惠券模板")
+    public R<CouponTemplate> createTemplate(@Parameter(description = "优惠券模板信息") @RequestBody CouponTemplate template) {
         return R.ok(couponService.createTemplate(template));
     }
 
     @PostMapping("/admin/distribute")
-    public R<CouponBatch> distribute(@RequestParam Long templateId,
-                                     @RequestBody List<Long> userIds) {
+    @Operation(summary = "发放优惠券")
+    public R<CouponBatch> distribute(@Parameter(description = "模板ID") @RequestParam Long templateId,
+                                     @Parameter(description = "用户ID列表") @RequestBody List<Long> userIds) {
         return R.ok(couponService.distribute(templateId, userIds));
     }
 
     @GetMapping("/available")
-    public R<Page<CouponTemplate>> availableTemplates(@RequestParam(defaultValue = "1") int page,
-                                                       @RequestParam(defaultValue = "20") int size) {
+    @Operation(summary = "查询可领取的优惠券模板")
+    public R<Page<CouponTemplate>> availableTemplates(@Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                                       @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
         return R.ok(couponService.listTemplates(page, size));
     }
 
     @PostMapping("/claim")
-    public R<UserCoupon> claim(@RequestParam Long userId, @RequestParam Long templateId) {
+    @Operation(summary = "领取优惠券")
+    public R<UserCoupon> claim(@Parameter(description = "用户ID") @RequestParam Long userId,
+                               @Parameter(description = "模板ID") @RequestParam Long templateId) {
         return R.ok(couponService.claim(userId, templateId));
     }
 
     @GetMapping("/my")
-    public R<Page<UserCoupon>> myCoupons(@RequestParam Long userId,
-                                          @RequestParam(required = false) Integer status,
-                                          @RequestParam(defaultValue = "1") int page,
-                                          @RequestParam(defaultValue = "10") int size) {
+    @Operation(summary = "查询我的优惠券")
+    public R<Page<UserCoupon>> myCoupons(@Parameter(description = "用户ID") @RequestParam Long userId,
+                                          @Parameter(description = "优惠券状态") @RequestParam(required = false) Integer status,
+                                          @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                          @Parameter(description = "每页数量") @RequestParam(defaultValue = "10") int size) {
         return R.ok(couponService.listUserCoupons(userId, status, page, size));
     }
 
     @GetMapping("/available/list")
-    public R<List<UserCoupon>> availableList(@RequestParam Long userId) {
+    @Operation(summary = "查询可用优惠券列表")
+    public R<List<UserCoupon>> availableList(@Parameter(description = "用户ID") @RequestParam Long userId) {
         return R.ok(couponService.listAvailableCoupons(userId));
     }
 }

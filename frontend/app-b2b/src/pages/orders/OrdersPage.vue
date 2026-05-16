@@ -115,7 +115,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { OrderStatusTag, PriceDisplay } from '@supermarket/ui'
 import { getMerchantOrderList, shipOrder } from '@supermarket/api'
-import { ORDER_STATUS } from '@supermarket/utils'
+import { ORDER_STATUS, USER_ID_KEY } from '@supermarket/utils'
 
 const loading = ref(false)
 const orders = ref<any[]>([])
@@ -148,7 +148,8 @@ async function fetchOrders() {
     if (queryParams.status) params.status = queryParams.status
     if (queryParams.orderNo) params.orderNo = queryParams.orderNo
 
-    const res: any = await getMerchantOrderList(1, params)
+    const userId = Number(localStorage.getItem(USER_ID_KEY)) || 0
+    const res: any = await getMerchantOrderList(userId, params)
     orders.value = res.records || []
     total.value = res.total || 0
   } catch {

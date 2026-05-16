@@ -77,7 +77,7 @@ Super Market 是一个**生产级全栈电商系统**，从商品浏览到下单
 ### 1. 启动中间件
 
 ```bash
-cd docker-compose
+cd middleware-docker
 docker compose up -d
 ```
 
@@ -159,7 +159,7 @@ super-market/
 │   ├── app-b2b/                   #   商家后台 (12 页)
 │   └── app-admin/                 #   运营后台 (8 页)
 ├── super-market-k8s/              # Kubernetes 部署配置
-├── docker-compose/                # 开发环境中间件
+├── middleware-docker/                # 开发环境中间件
 └── docs/                          # PRD · 架构设计 · 方案文档
 ```
 

@@ -4,21 +4,24 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.dubbo.api.shop.ShopDubboService;
 import com.supermarket.shop.entity.Merchant;
 import com.supermarket.shop.entity.Shop;
 import com.supermarket.shop.mapper.MerchantMapper;
 import com.supermarket.shop.mapper.ShopMapper;
 import com.supermarket.shop.service.ShopService;
 import lombok.RequiredArgsConstructor;
+import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+@DubboService(interfaceClass = ShopDubboService.class)
 @Service
 @RequiredArgsConstructor
-public class ShopServiceImpl implements ShopService {
+public class ShopServiceImpl implements ShopService, ShopDubboService {
 
     private final MerchantMapper merchantMapper;
     private final ShopMapper shopMapper;
@@ -96,6 +99,15 @@ public class ShopServiceImpl implements ShopService {
             throw new BizException(404, "店铺不存在");
         }
         return shop;
+    }
+
+    // -- ShopDubboService impl --
+
+    @Override
+    public boolean hasMerchant(Long userId) {
+        Merchant m = merchantMapper.selectOne(
+            new LambdaQueryWrapper<Merchant>().eq(Merchant::getUserId, userId));
+        return m != null;
     }
 
     @Override

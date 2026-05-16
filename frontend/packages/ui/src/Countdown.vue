@@ -11,20 +11,29 @@ import { formatCountdown } from '@supermarket/utils'
 const props = defineProps<{ endTime: string | Date }>()
 
 function calcRemaining(): number {
-  const diff = new Date(props.endTime).getTime() - Date.now()
+  const t = new Date(props.endTime).getTime()
+  if (isNaN(t)) return 0
+  const diff = t - Date.now()
   return Math.max(0, Math.floor(diff / 1000))
 }
 
+const emit = defineEmits<{ finish: [] }>()
 const remaining = ref(calcRemaining())
 let timer: ReturnType<typeof setInterval>
+let finished = false
 
 onMounted(() => {
-  timer = setInterval(() => { remaining.value = calcRemaining() }, 1000)
+  if (remaining.value <= 0) { finished = true; return }
+  timer = setInterval(() => {
+    remaining.value = calcRemaining()
+    if (remaining.value <= 0) {
+      clearInterval(timer)
+      if (!finished) { finished = true; emit('finish') }
+    }
+  }, 1000)
 })
 
 onUnmounted(() => { clearInterval(timer) })
-
-defineEmits<{ finish: [] }>()
 </script>
 
 <style scoped>

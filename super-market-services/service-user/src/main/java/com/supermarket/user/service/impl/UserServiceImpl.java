@@ -21,6 +21,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public User register(String phone, String password) {
+        if (phone == null || phone.isBlank()) {
+            throw new BizException(400, "手机号不能为空");
+        }
+        if (!phone.matches("^1[3-9]\\d{9}$")) {
+            throw new BizException(400, "手机号格式不正确");
+        }
+        if (password == null || password.isBlank()) {
+            throw new BizException(400, "密码不能为空");
+        }
+        if (password.length() < 6) {
+            throw new BizException(400, "密码长度至少6位");
+        }
         User exist = getByPhone(phone);
         if (exist != null) {
             throw new BizException(400, "该手机号已注册");
@@ -94,6 +106,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         dto.setNickname(user.getNickname());
         dto.setAvatarUrl(user.getAvatarUrl());
         dto.setStatus(user.getStatus());
+        dto.setPasswordHash(user.getPasswordHash());
         dto.setCreatedAt(user.getCreatedAt());
         return dto;
     }

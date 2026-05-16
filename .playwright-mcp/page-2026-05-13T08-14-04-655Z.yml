@@ -86,7 +86,7 @@
     - list [ref=e72]:
       - listitem [ref=e73]:
         - text: "[ ]"
-        - code [ref=e74]: docker-compose up -d
+        - code [ref=e74]: middleware-docker up -d
         - text: 一键启动全部中间件，所有服务健康 Check 通过
       - listitem [ref=e75]:
         - text: "[ ]"
@@ -111,26 +111,26 @@
       - listitem [ref=e85]: "[ ] K8s 基础配置目录结构就绪（Namespace / ConfigMap / Secret / PV 模板）"
     - separator [ref=e86]
     - 'heading "Task Group A: Docker Compose 中间件编排" [level=2] [ref=e87]'
-    - 'heading "Task A1: 创建 docker-compose 目录与 .env 文件" [level=3] [ref=e88]'
+    - 'heading "Task A1: 创建 middleware-docker 目录与 .env 文件" [level=3] [ref=e88]'
     - paragraph [ref=e89]:
       - strong [ref=e90]: "Files:"
     - list [ref=e91]:
       - listitem [ref=e92]:
         - text: "Create:"
-        - code [ref=e93]: docker-compose/.env
+        - code [ref=e93]: middleware-docker/.env
       - listitem [ref=e94]:
         - text: "Create:"
-        - code [ref=e95]: docker-compose/docker-compose.yml
+        - code [ref=e95]: middleware-docker/middleware-docker.yml
     - list [ref=e96]:
       - listitem [ref=e97]:
         - text: "[ ]"
         - strong [ref=e98]: "Step 1: 创建 .env 环境变量文件"
     - generic [ref=e99]:
       - text: bash
-      - code [ref=e100]: "mkdir -p docker-compose/{mysql/init,nacos/conf,rocketmq/conf,nginx/conf.d,elasticsearch/config,minio/data,prometheus/config,grafana/provisioning}"
+      - code [ref=e100]: "mkdir -p middleware-docker/{mysql/init,nacos/conf,rocketmq/conf,nginx/conf.d,elasticsearch/config,minio/data,prometheus/config,grafana/provisioning}"
     - paragraph [ref=e101]:
       - text: 写入
-      - code [ref=e102]: docker-compose/.env
+      - code [ref=e102]: middleware-docker/.env
       - text: ":"
     - generic [ref=e103]:
       - text: env
@@ -141,7 +141,7 @@
         - strong [ref=e107]: "Step 2: 验证 .env 文件语法"
     - generic [ref=e108]:
       - text: bash
-      - code [ref=e109]: grep -E '^[A-Z_]+\=' docker-compose/.env | wc -l
+      - code [ref=e109]: grep -E '^[A-Z_]+\=' middleware-docker/.env | wc -l
     - paragraph [ref=e110]:
       - text: "Expected:"
       - code [ref=e111]: "18"
@@ -152,7 +152,7 @@
         - strong [ref=e114]: "Step 3: Commit"
     - generic [ref=e115]:
       - text: bash
-      - code [ref=e116]: "git add docker-compose/.env git commit -m \"feat: add docker-compose .env with middleware configuration\""
+      - code [ref=e116]: "git add middleware-docker/.env git commit -m \"feat: add middleware-docker .env with middleware configuration\""
     - separator [ref=e117]
     - 'heading "Task A2: 创建 MySQL 初始化脚本" [level=3] [ref=e118]'
     - paragraph [ref=e119]:
@@ -160,14 +160,14 @@
     - list [ref=e121]:
       - listitem [ref=e122]:
         - text: "Create:"
-        - code [ref=e123]: docker-compose/mysql/init/01-init-databases.sql
+        - code [ref=e123]: middleware-docker/mysql/init/01-init-databases.sql
     - list [ref=e124]:
       - listitem [ref=e125]:
         - text: "[ ]"
         - strong [ref=e126]: "Step 1: 写入数据库初始化 SQL"
     - paragraph [ref=e127]:
       - text: 写入
-      - code [ref=e128]: docker-compose/mysql/init/01-init-databases.sql
+      - code [ref=e128]: middleware-docker/mysql/init/01-init-databases.sql
       - text: ":"
     - generic [ref=e129]:
       - text: sql
@@ -178,22 +178,22 @@
         - strong [ref=e133]: "Step 2: Commit"
     - generic [ref=e134]:
       - text: bash
-      - code [ref=e135]: "git add docker-compose/mysql/init/01-init-databases.sql git commit -m \"feat: add MySQL initialization script with business databases\""
+      - code [ref=e135]: "git add middleware-docker/mysql/init/01-init-databases.sql git commit -m \"feat: add MySQL initialization script with business databases\""
     - separator [ref=e136]
-    - 'heading "Task A3: 编写主 docker-compose.yml" [level=3] [ref=e137]'
+    - 'heading "Task A3: 编写主 middleware-docker.yml" [level=3] [ref=e137]'
     - paragraph [ref=e138]:
       - strong [ref=e139]: "Files:"
     - list [ref=e140]:
       - listitem [ref=e141]:
         - text: "Create:"
-        - code [ref=e142]: docker-compose/docker-compose.yml
+        - code [ref=e142]: middleware-docker/middleware-docker.yml
     - list [ref=e143]:
       - listitem [ref=e144]:
         - text: "[ ]"
         - strong [ref=e145]: "Step 1: 写入完整的 Docker Compose 编排文件"
     - paragraph [ref=e146]:
       - text: 写入
-      - code [ref=e147]: docker-compose/docker-compose.yml
+      - code [ref=e147]: middleware-docker/middleware-docker.yml
       - text: ":"
     - generic [ref=e148]:
       - text: yaml
@@ -204,10 +204,10 @@
         - strong [ref=e152]: "Step 2: 创建 RocketMQ Broker 配置"
     - generic [ref=e153]:
       - text: bash
-      - code [ref=e154]: mkdir -p docker-compose/rocketmq/conf
+      - code [ref=e154]: mkdir -p middleware-docker/rocketmq/conf
     - paragraph [ref=e155]:
       - text: 写入
-      - code [ref=e156]: docker-compose/rocketmq/conf/broker.conf
+      - code [ref=e156]: middleware-docker/rocketmq/conf/broker.conf
       - text: ":"
     - generic [ref=e157]:
       - text: properties
@@ -218,7 +218,7 @@
         - strong [ref=e161]: "Step 3: Commit"
     - generic [ref=e162]:
       - text: bash
-      - code [ref=e163]: "git add docker-compose/docker-compose.yml docker-compose/rocketmq/ git commit -m \"feat: add Docker Compose middleware orchestration (12 services)\""
+      - code [ref=e163]: "git add middleware-docker/middleware-docker.yml middleware-docker/rocketmq/ git commit -m \"feat: add Docker Compose middleware orchestration (12 services)\""
     - separator [ref=e164]
     - 'heading "Task A4: 验证 Docker Compose 启动" [level=3] [ref=e165]'
     - list [ref=e166]:
@@ -227,7 +227,7 @@
         - strong [ref=e168]: "Step 1: 启动所有中间件"
     - generic [ref=e169]:
       - text: bash
-      - code [ref=e170]: cd docker-compose && docker compose up -d
+      - code [ref=e170]: cd middleware-docker && docker compose up -d
     - list [ref=e171]:
       - listitem [ref=e172]:
         - text: "[ ]"

@@ -85,9 +85,11 @@ function buyNow() {
 
 onMounted(async () => {
   const id = Number(route.params.id)
-  product.value = await getProductDetail(id)
-  skus.value = await getProductSkus(id)
-  if (skus.value.length) currentSku.value = skus.value[0]
+  try {
+    product.value = await getProductDetail(id)
+    skus.value = await getProductSkus(id)
+    if (skus.value.length) currentSku.value = skus.value[0]
+  } catch { /* product load failed */ }
   try {
     const res: any = await getReviewsBySpu(id, { page: 1, size: 5 })
     reviews.value = res.records || []

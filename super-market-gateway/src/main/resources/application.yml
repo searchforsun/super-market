@@ -8,8 +8,10 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: localhost:8848
+        server-addr: ${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
         namespace: public
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos123}
     gateway:
       discovery:
         locator:
@@ -92,12 +94,12 @@ spring:
         - DedupeResponseHeader=Access-Control-Allow-Origin
   data:
     redis:
-      host: localhost
-      port: 16379
-      password: redis123
+      host: ${DOCKER_HOST_IP:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
 
 server:
-  port: 8999
+  port: ${SERVER_PORT:8999}
 
 jwt:
   secret: super-market-default-secret-key-change-in-production-min-256-bits

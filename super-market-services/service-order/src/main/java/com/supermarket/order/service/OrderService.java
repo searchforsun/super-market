@@ -13,6 +13,7 @@ public interface OrderService {
     Order getById(Long orderId);
     Page<Order> listByUser(Long userId, Integer status, int page, int size);
     Page<Order> listByShop(Long shopId, Integer status, int page, int size);
+    Page<Order> listAdmin(int page, int size);
     void cancelOrder(String orderNo, String reason);
     void paySuccess(String orderNo, String payNo);
     void ship(String orderNo);

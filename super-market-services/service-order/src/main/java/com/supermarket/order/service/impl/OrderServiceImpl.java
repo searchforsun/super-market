@@ -125,6 +125,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override
+    public Page<Order> listAdmin(int page, int size) {
+        return page(new Page<>(page, size),
+            new LambdaQueryWrapper<Order>().orderByDesc(Order::getCreatedAt));
+    }
+
+    @Override
     @Transactional
     public void cancelOrder(String orderNo, String reason) {
         Order order = getByOrderNo(orderNo);

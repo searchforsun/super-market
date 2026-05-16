@@ -78,8 +78,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '@supermarket/api'
+import { request, getShopByMerchantId } from '@supermarket/api'
 import { FileUploader } from '@supermarket/ui'
+import { USER_ID_KEY } from '@supermarket/utils'
 
 interface ShopForm {
   shopName: string
@@ -115,11 +116,13 @@ function onLogoSuccess(url: string) {
 
 async function fetchShopInfo() {
   try {
-    const data: Record<string, any> = await request.get('/shop/info')
+    const userId = Number(localStorage.getItem(USER_ID_KEY)) || 0
+    if (!userId) return
+    const data: Record<string, any> = await getShopByMerchantId(userId)
     if (data) {
       form.shopName = data.shopName || ''
       form.shopLogo = data.shopLogo || ''
-      form.description = data.description || ''
+      form.description = data.description || data.shopDesc || ''
       form.contactPhone = data.contactPhone || ''
       form.contactEmail = data.contactEmail || ''
       form.serviceHours = data.serviceHours || ''

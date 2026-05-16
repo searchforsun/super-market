@@ -1,12 +1,14 @@
 # === Maven ===
 target/
+!.mvn/wrapper/maven-wrapper.jar
 *.class
 *.jar
 *.war
 
 # === Logs ===
-*.log
 logs/
+*.log
+**/*.log
 
 # === IDE ===
 .idea/
@@ -18,13 +20,25 @@ logs/
 .project
 .classpath
 .settings/
+.cursor/
 
 # === OS ===
 .DS_Store
+**/.DS_Store
 Thumbs.db
+**/Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # === Frontend dependencies ===
+node_modules/
 **/node_modules/
+package-lock.json
+**/package-lock.json
+yarn.lock
+**/yarn.lock
+bun.lockb
+**/bun.lockb
 frontend/pnpm-lock.yaml
 
 # === Frontend auto-generated (unplugin) ===
@@ -42,12 +56,37 @@ dist/
 **/dist/
 
 # === Environment & local config ===
-*.local
+middleware-docker/.env
 .env
 .env.*
 !.env.example
+**/.env
+**/application-local.yml
+**/bootstrap-local.yml
 
 # === Test output ===
-*.test
-*.out
 coverage/
+**/coverage/
+*.out
+
+# === Temp & backup ===
+*.tmp
+*.bak
+*.orig
+*.old
+*.pid
+
+# === Java dump & heap ===
+*.hprof
+*.dump
+*.heapdump
+
+# === Cache ===
+.cache/
+**/.cache/
+.parcel-cache/
+**/.parcel-cache/
+
+# === Kubernetes local ===
+kubeconfig*
+*.kubeconfig

@@ -35,7 +35,7 @@ frontend/
 
 - Node.js >= 18
 - pnpm >= 9 (`npm i -g pnpm`)
-- 后端服务已启动（Gateway :8999 + 中间件 docker-compose）
+- 后端服务已启动（Gateway :8999 + 中间件 middleware-docker）
 
 ### 安装依赖
 

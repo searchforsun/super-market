@@ -27,7 +27,7 @@ export function getRiskRules(params: {
   type?: number
   status?: number
 }) {
-  return request.get('/platform/risk/rules', { params })
+  return request.get('/platform/admin/risk/rules', { params })
 }
 
 export function createRiskRule(data: {
@@ -38,7 +38,7 @@ export function createRiskRule(data: {
   status: number
   description?: string
 }) {
-  return request.post('/platform/risk/rules', data)
+  return request.post('/platform/admin/risk/rules', data)
 }
 
 export function updateRiskRule(data: {
@@ -50,11 +50,11 @@ export function updateRiskRule(data: {
   status?: number
   description?: string
 }) {
-  return request.put('/platform/risk/rules', data)
+  return request.put('/platform/admin/risk/rules', data)
 }
 
 export function deleteRiskRule(id: number) {
-  return request.delete(`/platform/risk/rules/${id}`)
+  return request.delete(`/platform/admin/risk/rules/${id}`)
 }
 
 export function getRiskLogs(params: {
@@ -67,15 +67,15 @@ export function getRiskLogs(params: {
   endTime?: string
   handled?: number
 }) {
-  return request.get('/platform/risk/logs', { params })
+  return request.get('/platform/admin/risk/logs', { params })
 }
 
 export function handleRiskLog(id: number) {
-  return request.put(`/platform/risk/logs/${id}/handle`)
+  return request.put(`/platform/admin/risk/logs/${id}/handle`)
 }
 
 export function getRiskLogDetail(id: number) {
-  return request.get(`/platform/risk/logs/${id}`)
+  return request.get(`/platform/admin/risk/logs/${id}`)
 }
 
 export interface GmvDailyRecord {

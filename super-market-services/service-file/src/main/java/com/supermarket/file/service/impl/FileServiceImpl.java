@@ -56,24 +56,25 @@ public class FileServiceImpl implements FileService {
         bucket = (bucket != null && !bucket.isBlank()) ? bucket : "smt-product";
         String originalName = file.getOriginalFilename();
         String ext = FileUtil.extName(originalName != null ? originalName : "bin");
-        String objectKey = bucket + "/" + UUID.randomUUID() + "." + ext;
+        String objectKey = UUID.randomUUID() + "." + ext;
 
-        try (InputStream is = file.getInputStream()) {
-            String md5 = DigestUtil.md5Hex(is);
-            // Check duplicate
-            FileRecord exist = fileRecordMapper.selectOne(
-                    new LambdaQueryWrapper<FileRecord>().eq(FileRecord::getMd5, md5));
-            if (exist != null) return exist;
-
-            is.reset(); // Reset stream after MD5
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
         } catch (Exception e) {
-            // MD5 calculation may consume stream, re-open
+            log.error("Read file bytes failed", e);
+            throw new BizException(500, "读取文件失败");
         }
 
-        try (InputStream is = file.getInputStream()) {
+        String md5 = DigestUtil.md5Hex(bytes);
+        FileRecord exist = fileRecordMapper.selectOne(
+                new LambdaQueryWrapper<FileRecord>().eq(FileRecord::getMd5, md5));
+        if (exist != null) return exist;
+
+        try (InputStream is = new java.io.ByteArrayInputStream(bytes)) {
             minioClient.putObject(PutObjectArgs.builder()
                     .bucket(bucket).object(objectKey)
-                    .stream(is, file.getSize(), -1)
+                    .stream(is, bytes.length, -1)
                     .contentType(contentType).build());
         } catch (Exception e) {
             log.error("MinIO upload failed", e);
@@ -83,7 +84,7 @@ public class FileServiceImpl implements FileService {
         FileRecord record = new FileRecord();
         record.setFileName(originalName);
         record.setFileSize(file.getSize());
-        record.setMd5(DigestUtil.md5Hex(file.getOriginalFilename() + System.currentTimeMillis()));
+        record.setMd5(md5);
         record.setBucket(bucket);
         record.setObjectKey(objectKey);
         record.setUrl(minioEndpoint + "/" + bucket + "/" + objectKey);

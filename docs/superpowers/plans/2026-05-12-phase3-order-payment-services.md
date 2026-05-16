@@ -30,12 +30,12 @@
 ### Task A1: 创建 db_order + db_payment 表 + Seata undo_log
 
 **Files:**
-- Create: `docker-compose/mysql/init/05-order-tables.sql`
-- Create: `docker-compose/mysql/init/06-payment-tables.sql`
+- Create: `middleware-docker/mysql/init/05-order-tables.sql`
+- Create: `middleware-docker/mysql/init/06-payment-tables.sql`
 
 - [ ] **Step 1: 写入订单域 DDL**
 
-写入 `docker-compose/mysql/init/05-order-tables.sql`:
+写入 `middleware-docker/mysql/init/05-order-tables.sql`:
 
 ```sql
 USE db_order;
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS undo_log (
 
 - [ ] **Step 2: 写入支付域 DDL**
 
-写入 `docker-compose/mysql/init/06-payment-tables.sql`:
+写入 `middleware-docker/mysql/init/06-payment-tables.sql`:
 
 ```sql
 USE db_payment;
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS undo_log (
 - [ ] **Step 5: Commit**
 
 ```bash
-git add docker-compose/mysql/init/05-order-tables.sql docker-compose/mysql/init/06-payment-tables.sql
+git add middleware-docker/mysql/init/05-order-tables.sql middleware-docker/mysql/init/06-payment-tables.sql
 git commit -m "feat: add order + payment domain DDL (orders, payments, refunds, undo_log)"
 ```
 
@@ -196,12 +196,12 @@ git commit -m "feat: add order + payment domain DDL (orders, payments, refunds, 
 ### Task B1: Docker Compose 添加 Seata Server + 配置
 
 **Files:**
-- Modify: `docker-compose/docker-compose.yml` — 添加 seata-server 服务
-- Create: `docker-compose/seata/application.yml` — Seata Server 配置
+- Modify: `middleware-docker/middleware-docker.yml` — 添加 seata-server 服务
+- Create: `middleware-docker/seata/application.yml` — Seata Server 配置
 
-- [ ] **Step 1: 在 docker-compose.yml 添加 Seata Server**
+- [ ] **Step 1: 在 middleware-docker.yml 添加 Seata Server**
 
-在 `docker-compose/docker-compose.yml` 的 `services:` 下添加:
+在 `middleware-docker/middleware-docker.yml` 的 `services:` 下添加:
 
 ```yaml
   seata-server:
@@ -225,7 +225,7 @@ git commit -m "feat: add order + payment domain DDL (orders, payments, refunds, 
 
 - [ ] **Step 2: 创建 Seata Server 配置**
 
-写入 `docker-compose/seata/application.yml`:
+写入 `middleware-docker/seata/application.yml`:
 
 ```yaml
 server:
@@ -267,7 +267,7 @@ seata:
 
 - [ ] **Step 3: 添加 seata 库初始化 SQL 到 01-init-databases.sql**
 
-在 `docker-compose/mysql/init/01-init-databases.sql` 末尾添加:
+在 `middleware-docker/mysql/init/01-init-databases.sql` 末尾添加:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS seata DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -276,8 +276,8 @@ CREATE DATABASE IF NOT EXISTS seata DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docker-compose/docker-compose.yml docker-compose/seata/ docker-compose/mysql/init/01-init-databases.sql
-git commit -m "feat: add Seata Server 1.7 to docker-compose + seata database"
+git add middleware-docker/middleware-docker.yml middleware-docker/seata/ middleware-docker/mysql/init/01-init-databases.sql
+git commit -m "feat: add Seata Server 1.7 to middleware-docker + seata database"
 ```
 
 ---

@@ -27,7 +27,7 @@
 
 ## Phase 1 验收标准
 
-- [ ] `docker-compose up -d` 一键启动全部中间件，所有服务健康 Check 通过
+- [ ] `middleware-docker up -d` 一键启动全部中间件，所有服务健康 Check 通过
 - [ ] `mvn clean install -DskipTests` 在根目录执行成功，所有模块编译通过
 - [ ] Nacos 控制台 `http://localhost:8848/nacos` 可访问，16 个服务名在服务列表可见
 - [ ] Gateway 启动后 `http://localhost:8080/actuator/health` 返回 UP
@@ -39,19 +39,19 @@
 
 ## Task Group A: Docker Compose 中间件编排
 
-### Task A1: 创建 docker-compose 目录与 .env 文件
+### Task A1: 创建 middleware-docker 目录与 .env 文件
 
 **Files:**
-- Create: `docker-compose/.env`
-- Create: `docker-compose/docker-compose.yml`
+- Create: `middleware-docker/.env`
+- Create: `middleware-docker/middleware-docker.yml`
 
 - [ ] **Step 1: 创建 .env 环境变量文件**
 
 ```bash
-mkdir -p docker-compose/{mysql/init,nacos/conf,rocketmq/conf,nginx/conf.d,elasticsearch/config,minio/data,prometheus/config,grafana/provisioning}
+mkdir -p middleware-docker/{mysql/init,nacos/conf,rocketmq/conf,nginx/conf.d,elasticsearch/config,minio/data,prometheus/config,grafana/provisioning}
 ```
 
-写入 `docker-compose/.env`:
+写入 `middleware-docker/.env`:
 
 ```env
 # 网络配置
@@ -106,15 +106,15 @@ CANAL_PORT=11111
 - [ ] **Step 2: 验证 .env 文件语法**
 
 ```bash
-grep -E '^[A-Z_]+\=' docker-compose/.env | wc -l
+grep -E '^[A-Z_]+\=' middleware-docker/.env | wc -l
 ```
 Expected: `18` (18 个环境变量定义)
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docker-compose/.env
-git commit -m "feat: add docker-compose .env with middleware configuration"
+git add middleware-docker/.env
+git commit -m "feat: add middleware-docker .env with middleware configuration"
 ```
 
 ---
@@ -122,11 +122,11 @@ git commit -m "feat: add docker-compose .env with middleware configuration"
 ### Task A2: 创建 MySQL 初始化脚本
 
 **Files:**
-- Create: `docker-compose/mysql/init/01-init-databases.sql`
+- Create: `middleware-docker/mysql/init/01-init-databases.sql`
 
 - [ ] **Step 1: 写入数据库初始化 SQL**
 
-写入 `docker-compose/mysql/init/01-init-databases.sql`:
+写入 `middleware-docker/mysql/init/01-init-databases.sql`:
 
 ```sql
 -- 创建业务数据库（垂直分库）
@@ -160,20 +160,20 @@ FLUSH PRIVILEGES;
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docker-compose/mysql/init/01-init-databases.sql
+git add middleware-docker/mysql/init/01-init-databases.sql
 git commit -m "feat: add MySQL initialization script with business databases"
 ```
 
 ---
 
-### Task A3: 编写主 docker-compose.yml
+### Task A3: 编写主 middleware-docker.yml
 
 **Files:**
-- Create: `docker-compose/docker-compose.yml`
+- Create: `middleware-docker/middleware-docker.yml`
 
 - [ ] **Step 1: 写入完整的 Docker Compose 编排文件**
 
-写入 `docker-compose/docker-compose.yml`:
+写入 `middleware-docker/middleware-docker.yml`:
 
 ```yaml
 version: '3.8'
@@ -466,10 +466,10 @@ volumes:
 - [ ] **Step 2: 创建 RocketMQ Broker 配置**
 
 ```bash
-mkdir -p docker-compose/rocketmq/conf
+mkdir -p middleware-docker/rocketmq/conf
 ```
 
-写入 `docker-compose/rocketmq/conf/broker.conf`:
+写入 `middleware-docker/rocketmq/conf/broker.conf`:
 
 ```properties
 brokerClusterName=DefaultCluster
@@ -487,7 +487,7 @@ listenPort=10911
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docker-compose/docker-compose.yml docker-compose/rocketmq/
+git add middleware-docker/middleware-docker.yml middleware-docker/rocketmq/
 git commit -m "feat: add Docker Compose middleware orchestration (12 services)"
 ```
 
@@ -498,7 +498,7 @@ git commit -m "feat: add Docker Compose middleware orchestration (12 services)"
 - [ ] **Step 1: 启动所有中间件**
 
 ```bash
-cd docker-compose && docker compose up -d
+cd middleware-docker && docker compose up -d
 ```
 
 - [ ] **Step 2: 等待健康检查通过（约 90 秒）**
