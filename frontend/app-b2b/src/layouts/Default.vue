@@ -10,6 +10,7 @@
         <nav class="header-nav">
           <a href="http://localhost:5173" target="_self" class="nav-link">&#x1F6CD; 商城</a>
           <a href="http://localhost:5175" target="_self" class="nav-link">&#x2699; 管理</a>
+          <ThemeToggle />
           <button class="nav-link logout-btn" @click="doLogout">退出</button>
         </nav>
       </div>
@@ -18,15 +19,18 @@
     <!-- Body -->
     <div class="b2b-body">
       <aside class="b2b-sidebar">
-        <router-link to="/merchant" class="sidebar-item">&#x1F4CA; 首页看板</router-link>
-        <router-link to="/merchant/products" class="sidebar-item">&#x1F4E6; 商品管理</router-link>
-        <router-link to="/merchant/inventory" class="sidebar-item">&#x1F4CB; 库存管理</router-link>
-        <router-link to="/merchant/orders" class="sidebar-item">&#x1F4DD; 订单处理</router-link>
-        <router-link to="/merchant/shop/settings" class="sidebar-item">&#x1F3EA; 店铺设置</router-link>
-        <router-link to="/merchant/coupons" class="sidebar-item">&#x1F4AC; 优惠券</router-link>
-        <router-link to="/merchant/seckill" class="sidebar-item">&#x26A1; 秒杀活动</router-link>
-        <router-link to="/merchant/reviews" class="sidebar-item">&#x2B50; 评价管理</router-link>
-        <router-link to="/merchant/settlement" class="sidebar-item">&#x1F4B0; 结算查询</router-link>
+        <div class="sidebar-decor"></div>
+        <nav class="sidebar-nav">
+          <router-link to="/merchant" class="sidebar-item">&#x1F4CA; 首页看板</router-link>
+          <router-link to="/merchant/products" class="sidebar-item">&#x1F4E6; 商品管理</router-link>
+          <router-link to="/merchant/inventory" class="sidebar-item">&#x1F4CB; 库存管理</router-link>
+          <router-link to="/merchant/orders" class="sidebar-item">&#x1F4DD; 订单处理</router-link>
+          <router-link to="/merchant/shop/settings" class="sidebar-item">&#x1F3EA; 店铺设置</router-link>
+          <router-link to="/merchant/coupons" class="sidebar-item">&#x1F4AC; 优惠券</router-link>
+          <router-link to="/merchant/seckill" class="sidebar-item">&#x26A1; 秒杀活动</router-link>
+          <router-link to="/merchant/reviews" class="sidebar-item">&#x2B50; 评价管理</router-link>
+          <router-link to="/merchant/settlement" class="sidebar-item">&#x1F4B0; 结算查询</router-link>
+        </nav>
       </aside>
       <main class="b2b-content">
         <router-view />
@@ -38,6 +42,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { clearAuth } from '@supermarket/utils'
+import { ThemeToggle } from '@supermarket/ui'
 
 const router = useRouter()
 function doLogout() {
@@ -89,9 +94,15 @@ function doLogout() {
 .b2b-sidebar {
   width: 200px; background: var(--color-surface, #fff);
   border-right: 1px solid var(--color-border-light, #f0ece6);
-  padding: var(--space-md, 16px) 0;
+  padding: 0; flex-shrink: 0;
+  display: flex; flex-direction: column;
+}
+.sidebar-decor {
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent, #d97706) 0%, var(--color-accent-soft, #fef3c7) 100%);
   flex-shrink: 0;
 }
+.sidebar-nav { padding: var(--space-md, 16px) 0; }
 .sidebar-item {
   display: block; padding: 10px 24px;
   font-size: 13px; color: var(--color-text-secondary, #6b6560);
