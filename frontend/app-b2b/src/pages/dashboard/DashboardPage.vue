@@ -89,7 +89,11 @@ onMounted(async () => {
 
 <style scoped>
 .merchant-dashboard {
-  background: #f5f7fa;
+  background-color: #f5f7fa;
+  background-image:
+    linear-gradient(rgba(26,26,24,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,26,24,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .dash-title {
