@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: seckill-service
+  namespace: super-market
+  labels:
+    app: seckill-service
+spec:
+  selector:
+    app: seckill-service
+  ports:
+    - name: dubbo
+      port: 9352
+      targetPort: 9352
+      protocol: TCP
+  type: ClusterIP

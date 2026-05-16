@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-service
+  namespace: super-market
+  labels:
+    app: file-service
+spec:
+  selector:
+    app: file-service
+  ports:
+    - name: dubbo
+      port: 9371
+      targetPort: 9371
+      protocol: TCP
+  type: ClusterIP

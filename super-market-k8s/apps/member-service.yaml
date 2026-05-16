@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: member-service
+  namespace: super-market
+  labels:
+    app: member-service
+spec:
+  selector:
+    app: member-service
+  ports:
+    - name: dubbo
+      port: 9303
+      targetPort: 9303
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-service
+  namespace: super-market
+  labels:
+    app: shop-service
+spec:
+  selector:
+    app: shop-service
+  ports:
+    - name: dubbo
+      port: 9341
+      targetPort: 9341
+      protocol: TCP
+  type: ClusterIP

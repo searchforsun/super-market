@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: address-service
+  namespace: super-market
+  labels:
+    app: address-service
+spec:
+  selector:
+    app: address-service
+  ports:
+    - name: dubbo
+      port: 9304
+      targetPort: 9304
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: super-market
+  labels:
+    app: auth-service
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - name: dubbo
+      port: 9302
+      targetPort: 9302
+      protocol: TCP
+  type: ClusterIP
