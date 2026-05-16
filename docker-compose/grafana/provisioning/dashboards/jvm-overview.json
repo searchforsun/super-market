@@ -1,0 +1,34 @@
+{
+  "dashboard": {
+    "uid": "super-market-jvm",
+    "title": "JVM Overview",
+    "tags": ["jvm", "super-market"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "datasource": "Prometheus",
+        "title": "Heap Memory Used",
+        "type": "graph",
+        "targets": [
+          { "expr": "jvm_memory_used_bytes{area=\"heap\"}", "legendFormat": "{{service}}" }
+        ]
+      },
+      {
+        "datasource": "Prometheus",
+        "title": "GC Pause Duration",
+        "type": "graph",
+        "targets": [
+          { "expr": "rate(jvm_gc_pause_seconds_sum[1m]) / rate(jvm_gc_pause_seconds_count[1m])", "legendFormat": "{{service}}" }
+        ]
+      },
+      {
+        "datasource": "Prometheus",
+        "title": "Thread Count",
+        "type": "stat",
+        "targets": [
+          { "expr": "jvm_threads_live_threads", "legendFormat": "{{service}}" }
+        ]
+      }
+    ]
+  }
+}

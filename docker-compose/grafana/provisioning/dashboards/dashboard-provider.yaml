@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: 'super-market'
+    orgId: 1
+    folder: 'Super Market'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards

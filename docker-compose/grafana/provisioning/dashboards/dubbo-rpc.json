@@ -1,0 +1,25 @@
+{
+  "dashboard": {
+    "uid": "super-market-dubbo",
+    "title": "Dubbo RPC Metrics",
+    "tags": ["dubbo", "super-market"],
+    "panels": [
+      {
+        "datasource": "Prometheus",
+        "title": "Provider QPS",
+        "type": "graph",
+        "targets": [
+          { "expr": "rate(dubbo_provider_success_total[1m])", "legendFormat": "{{service}}.{{method}}" }
+        ]
+      },
+      {
+        "datasource": "Prometheus",
+        "title": "Provider Response Time (P99)",
+        "type": "graph",
+        "targets": [
+          { "expr": "histogram_quantile(0.99, rate(dubbo_provider_rt_seconds_bucket[1m]))", "legendFormat": "{{service}}.{{method}}" }
+        ]
+      }
+    ]
+  }
+}
