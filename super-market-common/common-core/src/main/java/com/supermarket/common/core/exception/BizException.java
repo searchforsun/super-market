@@ -1,5 +1,6 @@
 package com.supermarket.common.core.exception;
 
+import com.supermarket.common.core.result.ResultCode;
 import lombok.Getter;
 
 @Getter
@@ -14,5 +15,10 @@ public class BizException extends RuntimeException {
 
     public BizException(String message) {
         this(500, message);
+    }
+
+    public BizException(ResultCode rc) {
+        super(rc.getMessage());
+        this.code = rc.getCode();
     }
 }
