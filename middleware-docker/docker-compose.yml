@@ -64,8 +64,9 @@ services:
       NACOS_AUTH_ENABLE: "false"
       NACOS_AUTH_USER: ${NACOS_USERNAME:-nacos}
       NACOS_AUTH_PASSWORD: ${NACOS_PASSWORD:-nacos123}
-      NACOS_AUTH_IDENTITY_KEY: super-market
-      NACOS_AUTH_IDENTITY_VALUE: super-market
+      NACOS_AUTH_IDENTITY_KEY: super-market-token-key-2025-abcdefgh
+      NACOS_AUTH_IDENTITY_VALUE: super-market-token-value-2025-abcdefghijkl
+      NACOS_AUTH_TOKEN: QifAine6LoWXm9zWe6JIskJKYXmQim3yvgeCOrVw9xps=
       SPRING_DATASOURCE_PLATFORM: mysql
       MYSQL_SERVICE_HOST: mysql
       MYSQL_SERVICE_PORT: 3306

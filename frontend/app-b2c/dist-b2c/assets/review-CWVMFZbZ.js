@@ -1,0 +1,1 @@
+import{s as r}from"./index-D_Aycp15.js";function n(e,t){return r.get(`/review/list/spu/${e}`,{params:t})}function u(e,t=1,s=10){return r.get(`/review/list/user/${e}`,{params:{page:t,size:s}})}function a(e){return r.get(`/review/rating/${e}`)}export{a,u as b,n as g};

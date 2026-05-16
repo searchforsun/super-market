@@ -1,0 +1,1 @@
+import{s as e}from"./index-D_Aycp15.js";function c(r){return e.post("/order/create",r)}function o(r){return e.get(`/order/${r}`)}function u(r,t){return e.get(`/order/list/user/${r}`,{params:t})}function a(r,t){return e.put(`/order/${r}/cancel`,null,{params:{reason:t}})}function s(r){return e.put(`/order/${r}/receive`)}export{a,s as b,c,u as d,o as g};

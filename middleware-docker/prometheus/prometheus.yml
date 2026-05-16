@@ -10,12 +10,28 @@ scrape_configs:
   # Spring Boot 微服务（通过 Nacos 服务发现，此处预留静态配置）
   - job_name: 'spring-boot-apps'
     metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets:
-          # 开发环境各服务 Actuator 端点
-          # - 'host.docker.internal:9301'  # user-service
-          # - 'host.docker.internal:9302'  # auth-service
-          # 生产环境通过 K8s Service Discovery 自动发现
+        - 'service.domian:9301'
+        - 'service.domian:9302'
+        - 'service.domian:9303'
+        - 'service.domian:9304'
+        - 'service.domian:9311'
+        - 'service.domian:9312'
+        - 'service.domian:9313'
+        - 'service.domian:9314'
+        - 'service.domian:9321'
+        - 'service.domian:9322'
+        - 'service.domian:9331'
+        - 'service.domian:9341'
+        - 'service.domian:9351'
+        - 'service.domian:9352'
+        - 'service.domian:9361'
+        - 'service.domian:9371'
+        - 'service.domian:9372'
+        - 'service.domian:9381'
+        - 'service.domian:8999'
 
   # 中间件监控（如已启用对应 Exporter 则取消注释）
   # - job_name: 'mysql'

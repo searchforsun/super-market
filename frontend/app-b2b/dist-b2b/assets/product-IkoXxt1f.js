@@ -1,0 +1,1 @@
+import{r}from"./request-BAVD0x-L.js";function u(t){return r.get("/product/list",{params:t})}function o(t){return r.get(`/product/spu/${t}`)}function c(t){return r.get("/product/search",{params:t})}export{o as a,u as g,c as s};

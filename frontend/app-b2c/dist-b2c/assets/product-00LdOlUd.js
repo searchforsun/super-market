@@ -1,0 +1,1 @@
+import{s as u}from"./index-D_Aycp15.js";function e(t){return u.get("/product/list",{params:t})}function s(t){return u.get(`/product/spu/${t}`)}function o(t){return u.get(`/product/spu/${t}/skus`)}export{s as a,o as b,e as g};

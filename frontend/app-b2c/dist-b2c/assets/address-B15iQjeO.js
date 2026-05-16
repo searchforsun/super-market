@@ -1,0 +1,1 @@
+import{s as e}from"./index-D_Aycp15.js";function d(s){return e.get("/address/list",{params:{userId:s}})}function a(s){return e.post("/address",s)}function n(s,r){return e.delete(`/address/${s}`,{params:{userId:r}})}function u(s,r){return e.put(`/address/${s}/default`,null,{params:{userId:r}})}export{a as c,n as d,d as g,u as s};

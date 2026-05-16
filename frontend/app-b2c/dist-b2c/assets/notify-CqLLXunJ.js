@@ -1,0 +1,1 @@
+import{s as a}from"./index-D_Aycp15.js";function o(t,n=1,r=20){return a.get("/notify/list",{params:{userId:t,page:n,size:r}})}function i(t){return a.get("/notify/unread-count",{params:{userId:t}})}function u(t){return a.put("/notify/read-all",null,{params:{userId:t}})}export{o as a,i as g,u as m};

@@ -1,0 +1,1 @@
+import{s as t}from"./index-D_Aycp15.js";function r(a,e){return t.get("/coupon/my",{params:{userId:a,status:e}})}function s(a){return t.get("/coupon/available/list",{params:{userId:a}})}export{r as a,s as g};

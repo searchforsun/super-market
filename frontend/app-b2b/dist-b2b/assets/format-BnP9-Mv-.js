@@ -1,0 +1,1 @@
+function c(t,n="YYYY-MM-DD HH:mm:ss"){if(!t)return"";const e=typeof t=="string"?new Date(t):t,s={"Y+":e.getFullYear(),"M+":e.getMonth()+1,"D+":e.getDate(),"H+":e.getHours(),"m+":e.getMinutes(),"s+":e.getSeconds()};for(const[r,g]of Object.entries(s)){const o=new RegExp("("+r+")");o.test(n)&&(n=n.replace(o,String(g).padStart(r.length>2?2:r.length,"0")))}return n}export{c as f};

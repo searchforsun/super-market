@@ -1,0 +1,1 @@
+import{r as e}from"./request-BLTNDS4S.js";function o(t){return e.get("/shop/merchant/page",{params:t})}function u(t,r,n){return e.put(`/shop/merchant/${t}/audit`,null,{params:{auditStatus:r,reason:n}})}function h(t){return e.get(`/shop/merchant/${t}`)}function s(t){return e.get(`/shop/${t}`)}export{h as a,u as b,s as c,o as g};
