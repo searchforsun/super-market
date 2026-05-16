@@ -8,11 +8,17 @@ import com.supermarket.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
+@Validated
 @RestController
 @RequestMapping("/api/payment")
 @RequiredArgsConstructor
@@ -23,9 +29,9 @@ public class PaymentController {
 
     @PostMapping("/pay")
     @Operation(summary = "创建支付")
-    public R<Payment> pay(@Parameter(description = "订单号") @RequestParam String orderNo,
-                          @Parameter(description = "用户ID") @RequestParam Long userId,
-                          @Parameter(description = "支付金额") @RequestParam BigDecimal amount,
+    public R<Payment> pay(@Parameter(description = "订单号") @RequestParam @NotBlank(message = "订单号不能为空") String orderNo,
+                          @Parameter(description = "用户ID") @RequestParam @NotNull(message = "用户ID不能为空") Long userId,
+                          @Parameter(description = "支付金额") @RequestParam @NotNull(message = "金额不能为空") @DecimalMin(value = "0.01", message = "金额必须大于0") BigDecimal amount,
                           @Parameter(description = "支付方式") @RequestParam(defaultValue = "1") Integer payMethod) {
         return R.ok(paymentService.createPaymentEntity(orderNo, userId, amount, payMethod));
     }
@@ -46,9 +52,9 @@ public class PaymentController {
 
     @PostMapping("/refund")
     @Operation(summary = "申请退款")
-    public R<PaymentRefund> refund(@Parameter(description = "订单号") @RequestParam String orderNo,
-                                   @Parameter(description = "退款金额") @RequestParam BigDecimal refundAmount,
-                                   @Parameter(description = "退款原因") @RequestParam String reason) {
+    public R<PaymentRefund> refund(@Parameter(description = "订单号") @RequestParam @NotBlank(message = "订单号不能为空") String orderNo,
+                                   @Parameter(description = "退款金额") @RequestParam @NotNull(message = "退款金额不能为空") @DecimalMin(value = "0.01", message = "退款金额必须大于0") BigDecimal refundAmount,
+                                   @Parameter(description = "退款原因") @RequestParam @Size(max = 500, message = "退款原因最长500字") String reason) {
         return R.ok(paymentService.refund(orderNo, refundAmount, reason));
     }
 }

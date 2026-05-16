@@ -9,11 +9,16 @@ import com.supermarket.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Validated
 @RestController
 @RequestMapping("/api/order")
 @RequiredArgsConstructor
@@ -24,7 +29,7 @@ public class OrderController {
 
     @PostMapping("/create")
     @Operation(summary = "创建订单")
-    public R<Order> create(@Parameter(description = "创建订单请求") @RequestBody CreateOrderRequest request) {
+    public R<Order> create(@Parameter(description = "创建订单请求") @Valid @RequestBody CreateOrderRequest request) {
         return R.ok(orderService.createOrder(request));
     }
 
@@ -51,8 +56,8 @@ public class OrderController {
 
     @PutMapping("/{orderNo}/cancel")
     @Operation(summary = "取消订单")
-    public R<Void> cancel(@Parameter(description = "订单号") @PathVariable String orderNo,
-                          @Parameter(description = "取消原因") @RequestParam String reason) {
+    public R<Void> cancel(@Parameter(description = "订单号") @PathVariable @NotBlank(message = "订单号不能为空") String orderNo,
+                          @Parameter(description = "取消原因") @RequestParam @Size(max = 500, message = "取消原因最长500字") String reason) {
         orderService.cancelOrder(orderNo, reason);
         return R.ok();
     }
