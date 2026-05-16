@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.dubbo.api.order.OrderDubboService;
+import com.supermarket.common.dubbo.api.payment.PaymentDubboService;
+import com.supermarket.common.dubbo.api.payment.dto.PaymentDTO;
 import com.supermarket.payment.entity.Payment;
 import com.supermarket.payment.entity.PaymentIdempotent;
 import com.supermarket.payment.entity.PaymentRefund;
@@ -15,6 +17,7 @@ import com.supermarket.payment.service.PaymentService;
 import com.supermarket.payment.service.thirdparty.ThirdPartyPaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
+import org.apache.dubbo.config.annotation.DubboService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +26,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Slf4j
+@DubboService(interfaceClass = PaymentDubboService.class)
 @Service
-public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> implements PaymentService {
+public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> implements PaymentService, PaymentDubboService {
 
     private final PaymentRefundMapper refundMapper;
     private final PaymentIdempotentMapper idempotentMapper;
@@ -52,9 +56,11 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         this.orderDubboService = orderDubboService;
     }
 
+    // -- PaymentService impl (local entity) --
+
     @Override
     @Transactional
-    public Payment createPayment(String orderNo, Long userId, BigDecimal amount, Integer payMethod) {
+    public Payment createPaymentEntity(String orderNo, Long userId, BigDecimal amount, Integer payMethod) {
         Payment exist = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getOrderNo, orderNo));
         if (exist != null) throw new BizException(400, "该订单已创建支付单");
 
@@ -71,7 +77,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     }
 
     @Override
-    public Payment getByPayNo(String payNo) {
+    public Payment getByPayNoEntity(String payNo) {
         Payment p = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getPayNo, payNo));
         if (p == null) throw new BizException(404, "支付单不存在");
         return p;
@@ -91,7 +97,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
             return cached;
         }
 
-        Payment payment = getByPayNo(payNo);
+        Payment payment = getByPayNoEntity(payNo);
         if (payment.getPayStatus() != 1) {
             throw new BizException(400, "支付单状态不正确");
         }
@@ -144,5 +150,37 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         orderDubboService.updateStatus(orderNo, 6);
 
         return refund;
+    }
+
+    // -- PaymentDubboService impl (Dubbo RPC) --
+
+    @Override
+    public PaymentDTO createPayment(String orderNo, Long userId, BigDecimal amount, Integer payMethod) {
+        Payment p = createPaymentEntity(orderNo, userId, amount, payMethod);
+        return toDTO(p);
+    }
+
+    @Override
+    public PaymentDTO getByPayNo(String payNo) {
+        Payment p = getByPayNoEntity(payNo);
+        return toDTO(p);
+    }
+
+    @Override
+    public void handleCallback(String payNo, String thirdPayNo) {
+        String requestId = "DUBBO_" + payNo + "_" + System.currentTimeMillis();
+        handleCallback(requestId, payNo, thirdPayNo);
+    }
+
+    private PaymentDTO toDTO(Payment p) {
+        PaymentDTO dto = new PaymentDTO();
+        dto.setPayNo(p.getPayNo());
+        dto.setOrderNo(p.getOrderNo());
+        dto.setAmount(p.getAmount());
+        dto.setPayMethod(p.getPayMethod());
+        dto.setPayStatus(p.getPayStatus());
+        dto.setThirdPayNo(p.getThirdPayNo());
+        dto.setPaidAt(p.getPaidAt());
+        return dto;
     }
 }

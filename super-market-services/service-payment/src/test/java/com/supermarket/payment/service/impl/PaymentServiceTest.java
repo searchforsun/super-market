@@ -37,7 +37,7 @@ class PaymentServiceTest {
     @Test
     void shouldCreatePayment() {
         when(paymentMapper.insert(any())).thenReturn(1);
-        Payment payment = paymentService.createPayment("ORD001", 1L, new BigDecimal("99.00"), 1);
+        Payment payment = paymentService.createPaymentEntity("ORD001", 1L, new BigDecimal("99.00"), 1);
         assertThat(payment.getPayNo()).startsWith("PAY");
         assertThat(payment.getPayStatus()).isEqualTo(1);
     }
@@ -45,7 +45,7 @@ class PaymentServiceTest {
     @Test
     void shouldRejectDuplicatePayment() {
         when(paymentMapper.insert(any())).thenReturn(1);
-        paymentService.createPayment("ORD002", 1L, new BigDecimal("99.00"), 1);
+        paymentService.createPaymentEntity("ORD002", 1L, new BigDecimal("99.00"), 1);
 
         TestablePaymentServiceImpl spy = spy(paymentService);
         Payment existing = new Payment();
@@ -53,7 +53,7 @@ class PaymentServiceTest {
         existing.setPayStatus(1);
         doReturn(existing).when(spy).getOne(any());
 
-        assertThatThrownBy(() -> spy.createPayment("ORD002", 1L, new BigDecimal("99.00"), 1))
+        assertThatThrownBy(() -> spy.createPaymentEntity("ORD002", 1L, new BigDecimal("99.00"), 1))
             .hasMessageContaining("已创建支付单");
     }
 

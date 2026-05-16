@@ -27,7 +27,7 @@ public class PaymentController {
                           @Parameter(description = "用户ID") @RequestParam Long userId,
                           @Parameter(description = "支付金额") @RequestParam BigDecimal amount,
                           @Parameter(description = "支付方式") @RequestParam(defaultValue = "1") Integer payMethod) {
-        return R.ok(paymentService.createPayment(orderNo, userId, amount, payMethod));
+        return R.ok(paymentService.createPaymentEntity(orderNo, userId, amount, payMethod));
     }
 
     @PostMapping("/callback/mock")
@@ -41,7 +41,7 @@ public class PaymentController {
     @GetMapping("/{payNo}")
     @Operation(summary = "查询支付记录")
     public R<Payment> query(@Parameter(description = "支付流水号") @PathVariable String payNo) {
-        return R.ok(paymentService.getByPayNo(payNo));
+        return R.ok(paymentService.getByPayNoEntity(payNo));
     }
 
     @PostMapping("/refund")
