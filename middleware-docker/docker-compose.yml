@@ -13,7 +13,7 @@ services:
     container_name: smt-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
       TZ: Asia/Shanghai
       DOCKER_HOST_IP: ${DOCKER_HOST_IP:-localhost}
       MINIO_API_PORT: ${MINIO_API_PORT:-9000}
@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
     command: >
       redis-server
-      --requirepass ${REDIS_PASSWORD:}
+      --requirepass ${REDIS_PASSWORD:-redis123}
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
       --appendonly yes
@@ -61,7 +61,7 @@ services:
       MODE: standalone
       JVM_XMS: 256m
       JVM_XMX: 256m
-      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_ENABLE: "true"
       NACOS_AUTH_USER: ${NACOS_USERNAME:-nacos}
       NACOS_AUTH_PASSWORD: ${NACOS_PASSWORD:-nacos}
       NACOS_AUTH_IDENTITY_KEY: super-market-token-key-2025-abcdefgh
@@ -125,12 +125,6 @@ services:
       - ./rocketmq/conf/broker.conf:/home/rocketmq/rocketmq-5.3.2/conf/broker.conf
     networks:
       - smt-net
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/10911 || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
     depends_on:
       rocketmq-namesrv:
         condition: service_healthy
@@ -318,8 +312,8 @@ services:
     environment:
       JAVA_OPTS: "-Xms256m -Xmx256m"
       SERVER_PORT: 8858
-      AUTH_USERNAME: ${SENTINEL_USERNAME:}
-      AUTH_PASSWORD: ${SENTINEL_PASSWORD:}
+      AUTH_USERNAME: ${SENTINEL_USERNAME:-sentinel}
+      AUTH_PASSWORD: ${SENTINEL_PASSWORD:-sentinel123}
       NACOS_SERVER_ADDR: nacos:8848
     ports:
       - "${SENTINEL_PORT:-8858}:8858"
@@ -368,52 +362,52 @@ services:
       skywalking-oap:
         condition: service_healthy
 
-  canal-admin:
-    image: canal/canal-admin:v1.1.7
-    container_name: smt-canal-admin
+#   canal-admin:
+#     image: canal/canal-admin:v1.1.7
+#     container_name: smt-canal-admin
+#     restart: unless-stopped
+#     environment:
+#       JAVA_OPTS: "-Xms256m -Xmx256m"
+#       server.port: "8089"
+#       spring.datasource.address: mysql:3306
+#       spring.datasource.database: canal_manager
+#       spring.datasource.username: root
+#       spring.datasource.password: ${MYSQL_ROOT_PASSWORD:-root123}
+#       canal.adminUser: admin
+#       canal.adminPasswd: ${CANAL_ADMIN_PASSWORD:-123456}
+#     ports:
+#       - "${CANAL_ADMIN_PORT:-8089}:8089"
+#     networks:
+#       - smt-net
+#     depends_on:
+#       mysql:
+#         condition: service_healthy
+#     healthcheck:
+#       test: ["CMD-SHELL", "nc -z 127.0.0.1 8089 || exit 1"]
+#       interval: 15s
+#       timeout: 10s
+#       retries: 15
+#       start_period: 90s
+
+  canal-server:
+    image: canal/canal-server:v1.1.7
+    container_name: smt-canal
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms256m -Xmx256m"
-      server.port: "8089"
-      spring.datasource.address: mysql:3306
-      spring.datasource.database: canal_manager
-      spring.datasource.username: root
-      spring.datasource.password: ${MYSQL_ROOT_PASSWORD:-root123}
-#      canal.adminUser: admin
-#      canal.adminPasswd: ${CANAL_ADMIN_PASSWORD:-123456}
+    #   canal.admin.manager: http://canal-admin:8089
+    #   canal.admin.port: "11110"
+      canal.instance.master.address: mysql:3306
+      canal.instance.dbUsername: root
+      canal.instance.dbPassword: ${MYSQL_ROOT_PASSWORD:-root123}
+      canal.instance.filter.regex: .*\\..*
     ports:
-      - "${CANAL_ADMIN_PORT:-8089}:8089"
+      - "${CANAL_PORT:-11111}:11111"
     networks:
       - smt-net
     depends_on:
       mysql:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 8089 || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 15
-      start_period: 90s
-
-#  canal-server:
-#    image: canal/canal-server:v1.1.7
-#    container_name: smt-canal
-#    restart: unless-stopped
-#    environment:
-#      JAVA_OPTS: "-Xms256m -Xmx256m"
-#      canal.admin.manager: http://canal-admin:8089
-#      canal.admin.port: "11110"
-#      canal.instance.master.address: mysql:3306
-#      canal.instance.dbUsername: root
-#      canal.instance.dbPassword: ${MYSQL_ROOT_PASSWORD:-root123}
-#      canal.instance.filter.regex: .*\\..*
-#    ports:
-#      - "${CANAL_PORT:-11111}:11111"
-#    networks:
-#      - smt-net
-#    depends_on:
-#      mysql:
-#        condition: service_healthy
 
   seata-server:
     image: seataio/seata-server:1.7.1
