@@ -3,6 +3,8 @@ package com.supermarket.product.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.result.R;
 import com.supermarket.product.dto.CreateProductRequest;
+import com.supermarket.product.dto.UpdateProductRequest;
+import com.supermarket.product.dto.UpdateSkuRequest;
 import com.supermarket.product.entity.Sku;
 import com.supermarket.product.entity.Spu;
 import com.supermarket.product.service.ProductService;
@@ -94,5 +96,21 @@ public class ProductController {
                              @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
                              @Parameter(description = "每页条数") @RequestParam(defaultValue = "20") int size) {
         return R.ok(productService.listForAdmin(auditStatus, keyword, categoryId, page, size));
+    }
+
+    @PutMapping("/spu/{spuId}")
+    @Operation(summary = "更新商品SPU信息")
+    public R<Void> updateSpu(@PathVariable Long spuId,
+                              @Valid @RequestBody UpdateProductRequest request) {
+        productService.updateSpu(spuId, request);
+        return R.ok();
+    }
+
+    @PutMapping("/sku/{skuId}")
+    @Operation(summary = "更新SKU信息")
+    public R<Void> updateSku(@PathVariable Long skuId,
+                              @Valid @RequestBody UpdateSkuRequest request) {
+        productService.updateSku(skuId, request);
+        return R.ok();
     }
 }

@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.product.dto.CreateProductRequest;
+import com.supermarket.product.dto.UpdateProductRequest;
+import com.supermarket.product.dto.UpdateSkuRequest;
 import com.supermarket.product.entity.Sku;
 import com.supermarket.product.entity.Spu;
 import com.supermarket.product.mapper.SkuMapper;
@@ -162,5 +164,28 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
         }
         wrapper.orderByDesc(Spu::getCreatedAt);
         return page(new Page<>(page, size), wrapper);
+    }
+
+    @Override
+    public void updateSpu(Long spuId, UpdateProductRequest request) {
+        Spu spu = getById(spuId);
+        if (spu == null || spu.getIsDeleted() == 1) throw new BizException(404, "商品不存在");
+        if (request.getName() != null) spu.setName(request.getName());
+        if (request.getSubtitle() != null) spu.setSubtitle(request.getSubtitle());
+        if (request.getMainImage() != null) spu.setMainImage(request.getMainImage());
+        if (request.getImages() != null) spu.setImages(request.getImages());
+        if (request.getDescription() != null) spu.setDescription(request.getDescription());
+        updateById(spu);
+    }
+
+    @Override
+    public void updateSku(Long skuId, UpdateSkuRequest request) {
+        Sku sku = skuMapper.selectById(skuId);
+        if (sku == null) throw new BizException(404, "SKU不存在");
+        if (request.getPrice() != null) sku.setPrice(request.getPrice());
+        if (request.getMarketPrice() != null) sku.setMarketPrice(request.getMarketPrice());
+        if (request.getImage() != null) sku.setImage(request.getImage());
+        if (request.getStatus() != null) sku.setStatus(request.getStatus());
+        skuMapper.updateById(sku);
     }
 }

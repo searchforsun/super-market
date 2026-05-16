@@ -2,6 +2,8 @@ package com.supermarket.product.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.product.dto.CreateProductRequest;
+import com.supermarket.product.dto.UpdateProductRequest;
+import com.supermarket.product.dto.UpdateSkuRequest;
 import com.supermarket.product.entity.Sku;
 import com.supermarket.product.entity.Spu;
 
@@ -30,4 +32,8 @@ public interface ProductService {
     Page<Spu> searchByName(String keyword, int page, int size);
 
     Page<Spu> listForAdmin(Integer auditStatus, String keyword, Long categoryId, int page, int size);
+
+    void updateSpu(Long spuId, UpdateProductRequest request);
+
+    void updateSku(Long skuId, UpdateSkuRequest request);
 }
