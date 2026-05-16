@@ -56,7 +56,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Order order = new Order();
         order.setOrderNo(orderNo);
         order.setUserId(request.getUserId());
-        order.setShopId(1L);
+        order.setShopId(request.getShopId() != null ? request.getShopId() : 1L);
         order.setTotalAmount(totalAmount);
         order.setDiscountAmount(BigDecimal.ZERO);
         order.setFreightAmount(BigDecimal.ZERO);

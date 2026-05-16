@@ -8,6 +8,7 @@ import java.util.List;
 @Data
 public class CreateOrderRequest implements Serializable {
     private Long userId;
+    private Long shopId;
     private Long addressId;
     private String addressSnapshot;
     private List<OrderItemRequest> items;

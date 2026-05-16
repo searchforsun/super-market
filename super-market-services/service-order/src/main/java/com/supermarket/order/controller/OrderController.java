@@ -39,6 +39,15 @@ public class OrderController {
         return R.ok(orderService.getByOrderNo(orderNo));
     }
 
+    @GetMapping("/list/shop/{shopId}")
+    @Operation(summary = "查询店铺订单列表")
+    public R<Page<Order>> listByShop(@Parameter(description = "店铺ID") @PathVariable Long shopId,
+                                      @Parameter(description = "订单状态") @RequestParam(required = false) Integer status,
+                                      @Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                      @Parameter(description = "每页数量") @RequestParam(defaultValue = "10") int size) {
+        return R.ok(orderService.listByShop(shopId, status, page, size));
+    }
+
     @GetMapping("/list/user/{userId}")
     @Operation(summary = "查询用户订单列表")
     public R<Page<Order>> listByUser(@Parameter(description = "用户ID") @PathVariable Long userId,
