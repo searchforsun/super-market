@@ -251,19 +251,13 @@
                                │ HTTPS
                                ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                        接入层 (Access)                            │
-│  Nginx (反向代理 + 静态资源 + gzip)                                │
-│  生产环境: MetalLB + Nginx Ingress + ModSecurity WAF              │
-└─────────────────────────────┬────────────────────────────────────┘
-                              │
-                              ▼
-┌──────────────────────────────────────────────────────────────────┐
 │                        网关层 (Gateway)                           │
-│  Spring Cloud Gateway 集群                                        │
+│  Spring Cloud Gateway（端口 8999）— 统一入口                       │
 │  ┌──────────┬──────────┬──────────┬──────────┬──────────┐        │
 │  │ 鉴权认证  │ 限流熔断  │ 请求路由  │ 协议转换  │ 链路追踪  │        │
 │  │ JWT验签  │ Sentinel │ 路径匹配  │HTTP→Dubbo│SkyWalking│        │
 │  └──────────┴──────────┴──────────┴──────────┴──────────┘        │
+│  生产环境: 前置 MetalLB + Nginx Ingress + ModSecurity WAF          │
 └─────────────────────────────┬────────────────────────────────────┘
                               │ Dubbo 3.x (Triple Protocol / TCP)
         ┌─────────────────────┼─────────────────────┐
@@ -274,18 +268,21 @@
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
 │  │ 用户服务  │ │ 商品服务  │ │ 订单服务  │ │ 支付服务  │            │
 │  │ user-svc │ │ prod-svc │ │order-svc │ │ pay-svc  │            │
+│  │  :9301   │ │  :9311   │ │  :9322   │ │  :9331   │            │
 │  └─────┬────┘ └─────┬────┘ └─────┬────┘ └─────┬────┘            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
 │  │ 营销服务  │ │ 搜索服务  │ │ 商家服务  │ │ 平台服务  │            │
 │  │  mkt-svc │ │search-svc│ │ shop-svc │ │ plat-svc │            │
+│  │  :935x   │ │  :9361   │ │  :9341   │ │  :9381   │            │
 │  └─────┬────┘ └─────┬────┘ └─────┬────┘ └─────┬────┘            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐                         │
-│  │ 消息服务  │ │ 文件服务  │ │ 通知服务  │                         │
-│  │ msg-svc  │ │ file-svc │ │notify-svc│                         │
+│  │ 文件服务  │ │ 通知服务  │ │  +7更多  │                         │
+│  │ file-svc │ │notify-svc│ │  服务    │                         │
+│  │  :9371   │ │  :9372   │ │          │                         │
 │  └──────────┘ └──────────┘ └──────────┘                         │
 │                                                                  │
-│  注册中心/配置中心: Nacos 3节点集群                                │
-│  服务调用: Dubbo 3.2.x Triple Protocol                            │
+│  注册中心/配置中心: Nacos 2.3.1（开发环境 standalone，生产集群）    │
+│  服务调用: Dubbo 3.2.13 Triple Protocol                           │
 └─────────────────────────────┬────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -297,9 +294,14 @@
 │  │ 消息队列  │ │ 分布式缓存 │ │ 搜索引擎  │ │ 分布式事务 │            │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
-│  │ Sentinel │ │ XXL-Job  │ │SkyWalking│ │ Redisson │            │
-│  │ 熔断降级  │ │ 任务调度  │ │ 链路追踪  │ │ 分布式锁  │            │
+│  │ Sentinel │ │ XXL-Job  │ │SkyWalking│ │  Canal   │            │
+│  │ 熔断降级  │ │ 任务调度  │ │ 链路追踪  │ │ 数据同步  │            │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
+│  ┌──────────┐ ┌──────────┐                                      │
+│  │Prometheus│ │ Grafana  │                                      │
+│  │ 指标采集  │ │ 可视化   │                                      │
+│  └──────────┘ └──────────┘                                      │
+│  Redisson (分布式锁，内嵌于服务)                                    │
 └─────────────────────────────┬────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -309,9 +311,10 @@
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐            │
 │  │  MySQL   │ │ MongoDB  │ │  MinIO   │ │ClickHouse│            │
 │  │ 关系数据库│ │ NoSQL    │ │ 对象存储  │ │ 数据仓库  │            │
+│  │ (核心存储)│ │ (后期引入)│ │          │ │ (后期引入)│            │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘            │
-│  分库分表: ShardingSphere-JDBC 5.4.x                             │
-│  数据同步: Canal 1.1.x → ES / ClickHouse                         │
+│  分库分表: ShardingSphere-JDBC 5.4.x（大表）                       │
+│  数据同步: Canal 1.1.x → ES / ClickHouse（按需启用）               │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -320,31 +323,41 @@
 #### 2.1 服务清单与接口契约
 
 ```
-服务总数: 16 个核心微服务
+服务总数: 18 个核心微服务
 
-基础服务 (P0):
-  ├── user-service       用户服务 (9301)
-  ├── auth-service       认证授权服务 (9302)
-  ├── member-service     会员服务 (9303)
-  ├── address-service    地址服务 (9304)
-  ├── product-service    商品基础服务 (9311)
-  ├── category-service   类目服务 (9312)
-  ├── inventory-service  库存服务 (9313)
-  ├── review-service     评价服务 (9314)
-  ├── cart-service       购物车服务 (9321)
-  ├── order-service      订单服务 (9322)
-  ├── payment-service    支付服务 (9331)
-  ├── shop-service       商家/店铺服务 (9341)
+用户域 (9301-9304):
+  ├── service-user       用户服务 (9301)
+  ├── service-auth       认证授权服务 (9302)
+  ├── service-member     会员服务 (9303)
+  └── service-address    地址服务 (9304)
 
-扩展服务 (P1):
-  ├── coupon-service     优惠券服务 (9351)
-  ├── seckill-service    秒杀服务 (9352)
-  ├── search-service     搜索服务 (9361)
+商品域 (9311-9314):
+  ├── service-product    商品基础服务 (9311)
+  ├── service-category   类目服务 (9312)
+  ├── service-inventory  库存服务 (9313)
+  └── service-review     评价服务 (9314)
 
-支撑服务 (P1):
-  ├── file-service       文件服务 (9371)
-  ├── notify-service     通知服务 (9372)
-  └── platform-service   运营/风控服务 (9381)
+交易域 (9321-9322):
+  ├── service-cart       购物车服务 (9321)
+  └── service-order      订单服务 (9322)
+
+支付域 (9331):
+  └── service-payment    支付服务 (9331)
+
+商家域 (9341):
+  └── service-shop       商家/店铺服务 (9341)
+
+营销域 (9351-9352):
+  ├── service-coupon     优惠券服务 (9351)
+  └── service-seckill    秒杀服务 (9352)
+
+搜索域 (9361):
+  └── service-search     搜索服务 (9361)
+
+支撑域 (9371-9381):
+  ├── service-file       文件服务 (9371)
+  ├── service-notify     通知服务 (9372)
+  └── service-platform   运营/风控服务 (9381)
 ```
 
 #### 2.2 核心服务接口定义
@@ -891,26 +904,31 @@ Access Token 过期 → 自动用 Refresh Token 换取新 Token
 ```yaml
 # 目录结构
 middleware-docker/
-├── .env                          # 环境变量（端口映射、密码等）
-├── middleware-docker.yml            # 主编排文件（13 个服务）
+├── .env                          # 环境变量（端口映射、密码等，由 .env.example 文档化）
+├── docker-compose.yml            # 主编排文件
 ├── mysql/
-│   └── init/                     # 初始化SQL脚本（10 个文件）
-│       ├── 01-init-databases.sql    # 11 个数据库创建（7 业务 + 4 基础设施）
-│       ├── 02-user-tables.sql       # db_user: users, members, addresses
-│       ├── 03-product-tables.sql    # db_product: categories, brands, spu, sku, inventory
-│       ├── 04-shop-tables.sql       # db_shop: merchants, shops
-│       ├── 05-nacos-mysql-schema.sql # Nacos 配置存储表
-│       ├── 05-order-tables.sql      # db_order: orders, order_items, undo_log
-│       ├── 06-payment-tables.sql    # db_payment: payments, payment_refunds, payment_idempotent, undo_log
-│       ├── 06-xxl-job-tables.sql    # XXL-Job 调度器表
-│       ├── 07-seata-tables.sql      # Seata: global_table, branch_table, lock_table
-│       └── 08-canal-manager.sql     # Canal Admin 管理表
+│   ├── init/                     # 初始化SQL脚本（10 个文件，容器首次启动自动执行）
+│   │   ├── 01-init-databases.sql    # 11 个数据库创建（7 业务 + 4 基础设施）
+│   │   ├── 02-user-tables.sql       # db_user: users, members, addresses
+│   │   ├── 03-product-tables.sql    # db_product: categories, brands, spu, sku, inventory
+│   │   ├── 04-shop-tables.sql       # db_shop: merchants, shops
+│   │   ├── 05-nacos-mysql-schema.sql # Nacos 配置存储表
+│   │   ├── 05-order-tables.sql      # db_order: orders, order_items, undo_log
+│   │   ├── 06-payment-tables.sql    # db_payment: payments, payment_refunds, payment_idempotent, undo_log
+│   │   ├── 06-xxl-job-tables.sql    # XXL-Job 调度器表
+│   │   ├── 07-seata-tables.sql      # Seata: global_table, branch_table, lock_table
+│   │   └── 08-canal-manager.sql     # Canal Admin 管理表
+│   └── conf/                     # MySQL 自定义配置
 ├── rocketmq/
 │   └── conf/broker.conf           # RocketMQ Broker 配置
 ├── seata/
-│   └── application.yml            # Seata Server 1.7.1 配置
-└── elasticsearch/
-    └── config/                    # ES 配置文件
+│   └── application.yml            # Seata Server 1.7.1 配置（DB 存储模式）
+├── prometheus/
+│   └── prometheus.yml             # Prometheus 采集配置（监控微服务 + 中间件）
+├── grafana/
+│   └── provisioning/              # Grafana 数据源 + 仪表盘预置
+└── minio/
+    └── init/                      # MinIO 初始化脚本（自动创建 bucket）
 
 # 基础设施数据库
 db_user / db_product / db_order / db_payment / db_marketing / db_shop / db_platform
@@ -919,29 +937,35 @@ xxl_job / seata / nacos / canal_manager
 
 ### 开发环境中间件端口规划
 
-> 全部映射到高位端口（1xxxx-2xxxx），避免与本机常用服务冲突。
+> 所有端口通过环境变量配置（`${VAR:default}`），默认值使用高位端口（1xxxx-2xxxx），避免与本机常用服务冲突。实际端口以 `middleware-docker/.env` 为准。
 
-| 中间件 | 容器内端口 | 主机映射端口 | 说明 |
+| 中间件 | 容器内端口 | 默认主机映射端口 | 说明 |
 |--------|-----------|-------------|------|
-| **MySQL** | 3306 | **13306** | 8.0.35，11 个数据库 |
-| **Redis** | 6379 | **16379** | 7.2-alpine，512MB，AOF 持久化 |
-| **Nacos** | 8848 / 9848 | **8848** / **9848** | 2.3.1，standalone，鉴权关闭（开发环境） |
-| **RocketMQ NameServer** | 9876 | **19876** | 5.1.4 |
-| **RocketMQ Broker** | 10911 / 10909 | **20911** / **20909** | 5.1.4，ASYNC_MASTER |
-| **Elasticsearch** | 9200 / 9300 | **19200** / **19300** | 7.17.23，单节点，固定 IP 10.10.5.20 |
-| **MinIO** | 9000 / 9001 | **19000** / **19001** | API / Console |
-| **XXL-Job Admin** | 8080 | **18081** | 2.4.1 |
-| **Sentinel Dashboard** | 8858 | **18858** | 1.8.6，对接 Nacos |
-| **SkyWalking OAP** | 11800 / 12800 | **21800** / **22800** | 9.7.0，存储后端 ES |
-| **SkyWalking UI** | 8080 | **18083** | 9.7.0 |
-| **Seata Server** | 8091 / 7091 | **19091** / **19092** | 1.7.1，DB 存储模式，控制台 seata/seata |
-| **Canal Server** | 11111 | **21111** | 1.1.7，对接 Canal Admin 管理 |
-| **Canal Admin** | 8089 | **18089** | 1.1.7，管理 Canal Instance |
+| **MySQL** | 3306 | **3306** | 8.0.35，11 个数据库 |
+| **Redis** | 6379 | **6379** | 7.2-alpine，256MB，LRU 淘汰，AOF 持久化 |
+| **Nacos** | 8848 / 9848 | **8848** / **9848** | 2.3.1，standalone，鉴权开启（开发环境也开启） |
+| **RocketMQ NameServer** | 9876 | **9876** | 5.3.2 |
+| **RocketMQ Broker** | 10911 / 10909 | **10911** / **10909** | 5.3.2 |
+| **RocketMQ Proxy** | 8080 / 8081 | **8080** / **8081** | 5.3.2（gRPC 代理） |
+| **RocketMQ Dashboard** | 8082 | **8082** | 2.1.0，可视化管理控制台 |
+| **Elasticsearch（3 节点）** | 9200 | **9200 / 9201 / 9202** | 7.17.23，3 节点集群，固定 IP 10.10.5.21/22/23 |
+| **Kibana** | 5601 | **5601** | 7.17.23，ES 可视化管理 |
+| **MinIO** | 9000 / 9001 | **9000** / **9001** | API / Console |
+| **XXL-Job Admin** | 8080 | **8083** | 2.4.1 |
+| **Sentinel Dashboard** | 8858 | **8858** | 1.8.0，对接 Nacos（默认账密 sentinel/sentinel123） |
+| **SkyWalking OAP** | 11800 / 12800 | **11800** / **12800** | 9.7.0，存储后端 ES 集群 |
+| **SkyWalking UI** | 8080 | **8084** | 9.7.0 |
+| **Seata Server** | 8091 / 7091 | **8091** / **7091** | 1.7.1，DB 存储模式 |
+| **Canal Server** | 11111 | **11111** | 1.1.7（Canal Admin 已注释，按需启用） |
+| **Prometheus** | 9090 | **9090** | 2.51.2，采集微服务 + 中间件指标 |
+| **Grafana** | 3000 | **3000** | 10.4.2，监控仪表盘（默认账密 admin/admin123） |
 
-> **总计 13 个容器服务**（14 个容器含 RocketMQ 双组件）。ES 分配固定 IP `10.10.5.20` 以解决 SkyWalking OAP Netty DNS 解析超时问题。开发环境 Nacos 鉴权关闭，Seata 使用 file 注册模式。</system-parameter>
+> **总计 19 个容器服务**（ES 3 节点 + RocketMQ 4 组件）。所有端口通过 `.env` 环境变量配置，支持自定义以避免端口冲突。ES 使用固定 IP 以解决 SkyWalking OAP Netty DNS 解析超时问题。开发环境 Nacos 鉴权默认开启，安全策略与生产保持一致。
 
 
-#### 8.2 K8s 生产部署
+#### 8.2 K8s 生产部署（规划中）
+
+> 当前阶段：K8s 部署配置已编写（`super-market-k8s/`），生产集群尚未搭建。
 
 ```
 集群规划 (最低配置: 3 Master + 5 Worker):
@@ -994,42 +1018,46 @@ MetalLB (Layer 2模式):
 
 ### 10. 开发路线图
 
-```
-Phase 1 (W1-W2): 基础设施搭建
-  ├── Docker Compose 中间件编排
-  ├── Maven 父工程 + 公共模块 (common, api)
-  ├── 项目脚手架生成 (16个微服务模块)
-  └── CI/CD 流水线搭建
+> 当前状态（2026-05）：Phase 1 已完成，Phase 2-5 的核心服务脚手架已全部生成（18 个微服务），基础配置（bootstrap.yml、application-dev.yml、logback-spring.xml）已完成。中间件 Docker Compose 编排就绪（19 个容器）。功能实现按服务逐个推进中。
 
-Phase 2 (W3-W6): 核心业务域 — 用户 + 商品
-  ├── user-service + auth-service + address-service
-  ├── product-service + category-service + inventory-service
-  ├── shop-service
+```
+Phase 1 (W1-W2): 基础设施搭建 ✅ 已完成
+  ├── Docker Compose 中间件编排（19 个容器）
+  ├── Maven 父工程 + 公共模块（5 个 common）
+  ├── 项目脚手架生成（18 个微服务模块 + Gateway）
+  ├── 配置体系建立（bootstrap.yml + application-dev.yml + .env 环境变量）
+  ├── 日志体系建立（logback-spring.xml）
+  └── 运维脚本（start-all / start-service / start-gateway / stop-all）
+
+Phase 2 (W3-W6): 核心业务域 — 用户 + 商品 🔄 进行中
+  ├── service-user + service-auth + service-member + service-address
+  ├── service-product + service-category + service-inventory + service-review
+  ├── service-shop
   └── Gateway + Nacos + Sentinel 集成
 
 Phase 3 (W7-W10): 核心业务域 — 交易 + 支付
-  ├── cart-service + order-service
-  ├── payment-service
+  ├── service-cart + service-order
+  ├── service-payment
   ├── Seata 分布式事务集成
   └── RocketMQ 消息驱动
 
 Phase 4 (W11-W13): 搜索 + 营销
-  ├── search-service + Canal 数据同步
-  ├── coupon-service + seckill-service
-  ├── member-service + 积分体系
+  ├── service-search + Canal 数据同步
+  ├── service-coupon + service-seckill
+  ├── service-member 会员体系完善
   └── ES 搜索引擎集成
 
 Phase 5 (W14-W16): 支撑服务 + 完善
-  ├── review-service + notify-service
-  ├── file-service + MinIO 集成
-  ├── platform-service (运营后台)
+  ├── service-review + service-notify
+  ├── service-file + MinIO 集成
+  ├── service-platform（运营后台）
   ├── XXL-Job 定时任务
-  └── SkyWalking + Prometheus + Grafana
+  └── SkyWalking + Prometheus + Grafana 监控体系
 
 Phase 6 (W17-W18): 压测 + 优化
   ├── JMeter 全链路压测
-  ├── 性能调优 (JVM、DB、缓存)
-  ├── 高可用演练 (故障注入)
+  ├── 性能调优（JVM、DB、缓存）
+  ├── 高可用演练（故障注入）
   └── 文档完善
 ```
 
@@ -1039,48 +1067,69 @@ Phase 6 (W17-W18): 压测 + 优化
 super-market/
 ├── docs/                           # 文档
 │   ├── prd.md                      # 产品需求文档
-│   └── solution-design.md          # 本方案设计文档
-├── middleware-docker/                 # 本地开发环境
-│   ├── middleware-docker.yml
-│   ├── .env
-│   └── conf.d/                     # 各中间件配置
-├── frontend/                       # 前端项目 (Monorepo)
-│   ├── app-b2c/                    # 用户前台
-│   ├── app-b2b/                    # 商家后台
-│   ├── app-admin/                  # 运营后台
-│   └── packages/                   # 公共组件库
-├── super-market-common/            # 公共模块
-│   ├── common-core/                # 核心工具/异常/常量
-│   ├── common-dubbo-api/           # Dubbo API 接口定义
-│   ├── common-security/            # 安全模块 (JWT/RBAC)
-│   ├── common-web/                 # Web 通用配置
-│   └── common-mybatis/             # MyBatis 通用配置
-├── super-market-services/          # 微服务实现
-│   ├── service-user/               # 用户服务
-│   ├── service-auth/               # 认证授权服务
-│   ├── service-member/             # 会员服务
-│   ├── service-address/            # 地址服务
-│   ├── service-product/            # 商品基础服务
-│   ├── service-category/           # 类目服务
-│   ├── service-inventory/          # 库存服务
-│   ├── service-review/             # 评价服务
-│   ├── service-cart/               # 购物车服务
-│   ├── service-order/              # 订单服务
-│   ├── service-payment/            # 支付服务
-│   ├── service-coupon/             # 优惠券服务
-│   ├── service-seckill/            # 秒杀服务
-│   ├── service-search/             # 搜索服务
-│   ├── service-shop/               # 商家/店铺服务
-│   ├── service-platform/           # 运营平台服务
-│   ├── service-file/               # 文件服务
-│   └── service-notify/             # 通知服务
-├── super-market-gateway/           # Spring Cloud Gateway
-├── super-market-k8s/               # K8s 部署配置
-│   ├── base/                       # 基础设施 (中间件 StatefulSet)
-│   ├── apps/                       # 业务服务 (Deployment)
-│   └── monitoring/                 # 监控组件
-├── pom.xml                         # Maven 父 POM
-└── README.md
+│   ├── solution-design.md          # 方案设计文档
+│   └── service-registry.md         # 服务注册信息
+├── middleware-docker/               # 本地开发环境中间件
+│   ├── docker-compose.yml          # 主编排文件（19 个容器）
+│   ├── .env                        # 环境变量（端口、密码等）
+│   ├── .env.example                # 环境变量模板文档
+│   ├── mysql/                      # MySQL 初始化脚本 + 配置
+│   │   ├── init/                   # 10 个 SQL 初始化脚本
+│   │   └── conf/                   # 自定义 MySQL 配置
+│   ├── redis/                      # （配置通过命令行参数）
+│   ├── nacos/                      # （数据卷持久化）
+│   ├── rocketmq/                   # Broker 配置
+│   │   └── conf/broker.conf
+│   ├── elasticsearch/              # （ES 3 节点，配置内联）
+│   ├── minio/                      # MinIO 初始化脚本
+│   │   └── init/
+│   ├── seata/                      # Seata Server 配置
+│   │   └── application.yml
+│   ├── prometheus/                 # Prometheus 采集配置
+│   │   └── prometheus.yml
+│   └── grafana/                    # Grafana 预置仪表盘
+│       └── provisioning/
+├── frontend/                       # 前端项目（pnpm Monorepo）
+│   ├── app-b2c/                    # 用户前台 → localhost:5173
+│   ├── app-b2b/                    # 商家后台 → localhost:5174
+│   ├── app-admin/                  # 运营后台 → localhost:5175
+│   ├── packages/                   # 公共组件库
+│   ├── pnpm-workspace.yaml
+│   └── package.json
+├── scripts/                        # 运维脚本
+│   ├── start-all.sh                # 启动所有 19 个服务
+│   ├── start-gateway.sh            # 启动网关
+│   ├── start-service.sh            # 启动单个服务（含健康检查 + Nacos 验证）
+│   ├── start-frontend.sh           # 启动前端应用
+│   ├── stop-all.sh                 # 停止所有服务
+│   └── stop-frontend.sh            # 停止前端
+├── super-market-common/            # 公共模块（5 个）
+│   ├── common-core/                # R<T> 响应、BizException、GlobalConstants
+│   ├── common-dubbo-api/           # Dubbo 服务接口定义（跨服务共享）
+│   ├── common-security/            # JWT 工具、RBAC 配置
+│   ├── common-web/                 # 全局异常处理、Web 配置
+│   └── common-mybatis/             # MyBatis-Plus 基础实体、分页、MetaObjectHandler
+├── super-market-services/          # 微服务实现（18 个）
+│   ├── service-user/ (9301)        ├── service-auth/ (9302)
+│   ├── service-member/ (9303)      ├── service-address/ (9304)
+│   ├── service-product/ (9311)     ├── service-category/ (9312)
+│   ├── service-inventory/ (9313)   ├── service-review/ (9314)
+│   ├── service-cart/ (9321)        ├── service-order/ (9322)
+│   ├── service-payment/ (9331)     ├── service-shop/ (9341)
+│   ├── service-coupon/ (9351)      ├── service-seckill/ (9352)
+│   ├── service-search/ (9361)      ├── service-file/ (9371)
+│   ├── service-notify/ (9372)      └── service-platform/ (9381)
+├── super-market-gateway/           # Spring Cloud Gateway（端口 8999）
+├── super-market-k8s/               # K8s 部署配置（规划中）
+│   ├── apps/                       # 业务服务 Deployment
+│   ├── base/                       # 基础设施配置
+│   └── statefulset/                # 有状态服务 StatefulSet
+├── logs/                           # 日志输出目录（gitignore）
+│   ├── gateway-service/
+│   ├── service-user/
+│   └── ...
+├── pom.xml                         # Maven 父 POM（Java 21，Spring Boot 3.2.5）
+└── CLAUDE.md                       # Claude Code 项目指南
 ```
 
 ---

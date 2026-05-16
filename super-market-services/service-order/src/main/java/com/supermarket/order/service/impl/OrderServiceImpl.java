@@ -179,6 +179,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     // -- OrderDubboService impl (跨服务 Dubbo 调用) --
 
     @Override
+    public void placeOrder(CreateOrderRequest request) {
+        createOrder(request);
+    }
+
+    @Override
     public void updateStatus(String orderNo, Integer toStatus) {
         switch (toStatus) {
             case 2 -> paySuccess(orderNo, null);

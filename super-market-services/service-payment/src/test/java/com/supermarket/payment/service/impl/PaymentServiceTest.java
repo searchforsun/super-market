@@ -7,8 +7,10 @@ import com.supermarket.payment.entity.PaymentRefund;
 import com.supermarket.payment.mapper.PaymentIdempotentMapper;
 import com.supermarket.payment.mapper.PaymentMapper;
 import com.supermarket.payment.mapper.PaymentRefundMapper;
+import com.supermarket.payment.service.thirdparty.ThirdPartyPaymentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 
@@ -23,6 +25,7 @@ class PaymentServiceTest {
     private PaymentRefundMapper refundMapper;
     private PaymentIdempotentMapper idempotentMapper;
     private OrderDubboService orderDubboService;
+    private ThirdPartyPaymentService thirdPartyPaymentService;
 
     @BeforeEach
     void setUp() {
@@ -30,8 +33,10 @@ class PaymentServiceTest {
         refundMapper = mock(PaymentRefundMapper.class);
         idempotentMapper = mock(PaymentIdempotentMapper.class);
         orderDubboService = mock(OrderDubboService.class);
+        thirdPartyPaymentService = mock(ThirdPartyPaymentService.class);
         paymentService = new TestablePaymentServiceImpl(refundMapper, idempotentMapper, orderDubboService);
         paymentService.setBaseMapper(paymentMapper);
+        ReflectionTestUtils.setField(paymentService, "thirdPartyPaymentService", thirdPartyPaymentService);
     }
 
     @Test

@@ -1,8 +1,9 @@
 spring:
   cloud:
-    config:
-      import-check:
-        enabled: false
+    nacos:
+      config:
+        import-check:
+          enabled: false
   datasource:
     url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
@@ -78,3 +79,19 @@ logging:
   level:
     com.supermarket: DEBUG
     com.baomidou: WARN
+
+springdoc:
+  api-docs:
+    path: /api/order/v3/api-docs
+  group-configs:
+    - group: service-order
+      paths-to-match: /api/order/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

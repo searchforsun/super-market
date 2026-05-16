@@ -21,6 +21,13 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:redis123}
 
+dubbo:
+  application:
+    name: inventory-service
+
+seata:
+  enabled: false
+
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   global-config:

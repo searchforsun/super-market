@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
     user_id     BIGINT NOT NULL,
     role_id     BIGINT NOT NULL,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_user_role (user_id, role_id),
     INDEX idx_user (user_id),
     INDEX idx_role (role_id)

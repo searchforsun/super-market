@@ -7,9 +7,6 @@ spring:
         enabled: false
   autoconfigure:
     exclude:
-      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
-      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBindingAutoConfiguration
-      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBinding2AutoConfiguration
       - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
       - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
@@ -18,9 +15,19 @@ spring:
     redis:
       host: ${DOCKER_HOST_IP:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redis123}
+      password: ${REDIS_PASSWORD:}
+  redis:
+    host: ${DOCKER_HOST_IP:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
 
 dubbo:
+  application:
+    name: test-app
+    qos-enable: false
+  protocol:
+    name: tri
+    port: -1
   registry:
     address: N/A
   config-center:

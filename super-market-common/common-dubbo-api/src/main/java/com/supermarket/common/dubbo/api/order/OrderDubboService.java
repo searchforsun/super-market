@@ -6,5 +6,5 @@ public interface OrderDubboService {
 
     void updateStatus(String orderNo, Integer toStatus);
 
-    void createOrder(CreateOrderRequest request);
+    void placeOrder(CreateOrderRequest request);
 }

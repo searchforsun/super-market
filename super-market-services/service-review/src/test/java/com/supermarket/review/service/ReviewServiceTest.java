@@ -13,7 +13,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
 @Transactional
 class ReviewServiceTest {
 

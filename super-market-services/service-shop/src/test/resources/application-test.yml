@@ -8,8 +8,12 @@ spring:
   autoconfigure:
     exclude:
       - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBindingAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBinding2AutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboListenerAutoConfiguration
       - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
       - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
+      - io.seata.spring.boot.autoconfigure.SeataAutoConfiguration
   datasource:
     url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_shop?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
@@ -20,6 +24,18 @@ spring:
       host: ${DOCKER_HOST_IP:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:redis123}
+
+dubbo:
+  application:
+    name: shop-service-test
+    qos-enable: false
+  protocol:
+    name: tri
+    port: -1
+  registry:
+    address: N/A
+  config-center:
+    address: N/A
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml

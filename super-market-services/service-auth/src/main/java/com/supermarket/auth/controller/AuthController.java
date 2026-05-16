@@ -1,20 +1,17 @@
 package com.supermarket.auth.controller;
 
 import com.supermarket.auth.service.AuthService;
+import com.supermarket.common.core.dto.LoginRequest;
 import com.supermarket.common.core.result.R;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-@Validated
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -25,21 +22,13 @@ public class AuthController {
 
     @Operation(summary = "用户登录认证")
     @PostMapping("/login")
-    public R<Map<String, String>> login(
-            @Parameter(description = "手机号") @RequestParam
-            @NotBlank(message = "手机号不能为空")
-            @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确") String phone,
-            @Parameter(description = "密码") @RequestParam
-            @NotBlank(message = "密码不能为空")
-            @Size(min = 6, max = 32, message = "密码长度为6-32位") String password) {
-        return R.ok(authService.login(phone, password));
+    public R<Map<String, String>> login(@RequestBody @Valid LoginRequest req) {
+        return R.ok(authService.login(req.getPhone(), req.getPassword()));
     }
 
     @Operation(summary = "刷新令牌")
     @PostMapping("/refresh")
-    public R<Map<String, String>> refresh(
-            @Parameter(description = "刷新令牌") @RequestParam
-            @NotBlank(message = "refreshToken不能为空") String refreshToken) {
+    public R<Map<String, String>> refresh(@RequestParam @NotBlank(message = "refreshToken不能为空") String refreshToken) {
         return R.ok(authService.refreshToken(refreshToken));
     }
 }

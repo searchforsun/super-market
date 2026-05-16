@@ -1,8 +1,9 @@
 spring:
   cloud:
-    config:
-      import-check:
-        enabled: false
+    nacos:
+      config:
+        import-check:
+          enabled: false
   datasource:
     url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
@@ -60,3 +61,27 @@ logging:
   level:
     com.supermarket: DEBUG
     com.baomidou: WARN
+
+springdoc:
+  api-docs:
+    path: /api/auth/v3/api-docs
+  group-configs:
+    - group: service-auth
+      paths-to-match: /api/auth/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+jwt:
+  secret: super-market-default-secret-key-change-in-production-min-256-bits
+  access-token-expire: 7200
+  refresh-token-expire: 604800
+
+auth:
+  admin-phones: 13800000000,13900000000

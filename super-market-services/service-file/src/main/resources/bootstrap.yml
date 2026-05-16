@@ -1,19 +1,51 @@
 spring:
-  config:
-    import: optional:nacos:${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
+  application:
+    name: file-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  main:
+    allow-bean-definition-overriding: true
   cloud:
     nacos:
       config:
+        # 配置中心相关配置，默认加载 ${spring.application.name}-${spring.profiles.active}.yaml，优先级最高
         server-addr: ${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
         namespace: public
         username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD:nacos123}
+        password: ${NACOS_PASSWORD:nacos}
         group: DEFAULT_GROUP
         file-extension: yaml
-        enabled: false
+        enabled: true
+        # 共享配置 — 所有微服务共用的基础配置（优先级最低）
+        shared-configs:
+          - data-id: common-redis.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: common-rocketmq.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: common-seata.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+        # 扩展配置 — file-service 按需加载的专属配置（优先级高于 shared-configs）
+        extension-configs:
+          - data-id: file-rate-limit.yaml
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: file-gray-release.yaml
+            group: DEFAULT_GROUP
+            refresh: false
       discovery:
         server-addr: ${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}
         namespace: public
         username: ${NACOS_USERNAME:nacos}
-        password: ${NACOS_PASSWORD:nacos123}
+        password: ${NACOS_PASSWORD:nacos}
         enabled: true
+
+server:
+  port: ${SERVER_PORT:9371}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true

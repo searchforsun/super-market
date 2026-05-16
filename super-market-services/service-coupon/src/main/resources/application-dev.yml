@@ -1,4 +1,9 @@
 spring:
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
   datasource:
     url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_marketing?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
@@ -56,3 +61,19 @@ logging:
   level:
     com.supermarket: DEBUG
     com.baomidou: WARN
+
+springdoc:
+  api-docs:
+    path: /api/coupon/v3/api-docs
+  group-configs:
+    - group: service-coupon
+      paths-to-match: /api/coupon/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

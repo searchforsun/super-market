@@ -1,19 +1,17 @@
 package com.supermarket.user.controller;
 
+import com.supermarket.common.core.dto.LoginRequest;
 import com.supermarket.common.core.result.R;
 import com.supermarket.user.entity.User;
 import com.supermarket.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-@Validated
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
@@ -24,27 +22,16 @@ public class UserController {
 
     @Operation(summary = "用户注册")
     @PostMapping("/register")
-    public R<User> register(
-            @Parameter(description = "手机号") @RequestParam
-            @NotBlank(message = "手机号不能为空")
-            @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确") String phone,
-            @Parameter(description = "密码") @RequestParam
-            @NotBlank(message = "密码不能为空")
-            @Size(min = 6, max = 32, message = "密码长度为6-32位") String password) {
-        User user = userService.register(phone, password);
+    public R<User> register(@RequestBody @Valid LoginRequest req) {
+        User user = userService.register(req.getPhone(), req.getPassword());
         user.setPasswordHash(null);
         return R.ok(user);
     }
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
-    public R<User> login(
-            @Parameter(description = "手机号") @RequestParam
-            @NotBlank(message = "手机号不能为空")
-            @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确") String phone,
-            @Parameter(description = "密码") @RequestParam
-            @NotBlank(message = "密码不能为空") String password) {
-        User user = userService.login(phone, password);
+    public R<User> login(@RequestBody @Valid LoginRequest req) {
+        User user = userService.login(req.getPhone(), req.getPassword());
         user.setPasswordHash(null);
         return R.ok(user);
     }

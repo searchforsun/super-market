@@ -46,7 +46,7 @@ public class SeckillOrderConsumer implements RocketMQListener<String> {
             request.setUserId(userId);
             request.setItems(List.of(buildItem(skuId, price, quantity)));
 
-            orderDubboService.createOrder(request);
+            orderDubboService.placeOrder(request);
             log.info("秒杀订单创建成功: userId={}, skuId={}", userId, skuId);
         } catch (Exception e) {
             log.error("秒杀订单创建失败: message={}", messageJson, e);

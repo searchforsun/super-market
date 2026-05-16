@@ -7,19 +7,35 @@ spring:
         enabled: false
   autoconfigure:
     exclude:
-      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
       - com.alibaba.cloud.nacos.NacosDiscoveryAutoConfiguration
       - com.alibaba.cloud.nacos.NacosConfigAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBindingAutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboRelaxedBinding2AutoConfiguration
+      - org.apache.dubbo.spring.boot.autoconfigure.DubboListenerAutoConfiguration
   datasource:
     url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_user?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
-    password: ${MYSQL_ROOT_PASSWORD:root123}
+    password: ${MYSQL_ROOT_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
       host: ${DOCKER_HOST_IP:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redis123}
+      password: ${REDIS_PASSWORD:}
+
+dubbo:
+  application:
+    name: test-app
+    qos-enable: false
+  protocol:
+    name: tri
+    port: -1
+  registry:
+    address: N/A
+  config-center:
+    address: N/A
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml

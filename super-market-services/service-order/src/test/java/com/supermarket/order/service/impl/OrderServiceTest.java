@@ -35,9 +35,8 @@ class OrderServiceTest {
         orderItemMapper = mock(OrderItemMapper.class);
         inventoryDubboService = mock(InventoryDubboService.class);
         orderEventProducer = mock(OrderEventProducer.class);
-        orderService = new OrderServiceImpl();
+        orderService = new OrderServiceImpl(orderItemMapper);
         ReflectionTestUtils.setField(orderService, "baseMapper", orderMapper);
-        ReflectionTestUtils.setField(orderService, "orderItemMapper", orderItemMapper);
         ReflectionTestUtils.setField(orderService, "inventoryDubboService", inventoryDubboService);
         ReflectionTestUtils.setField(orderService, "orderEventProducer", orderEventProducer);
     }

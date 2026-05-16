@@ -1,6 +1,11 @@
 spring:
+  cloud:
+    nacos:
+      config:
+        import-check:
+          enabled: false
   datasource:
-    url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_payment?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_payment?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: ${MYSQL_ROOT_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -56,3 +61,19 @@ logging:
   level:
     com.supermarket: DEBUG
     com.baomidou: WARN
+
+springdoc:
+  api-docs:
+    path: /api/payment/v3/api-docs
+  group-configs:
+    - group: service-payment
+      paths-to-match: /api/payment/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
