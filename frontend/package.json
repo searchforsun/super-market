@@ -9,23 +9,27 @@
     "build:b2c": "pnpm -F app-b2c build",
     "build:b2b": "pnpm -F app-b2b build",
     "build:admin": "pnpm -F app-admin build",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "vue": "^3.4.21",
-    "vue-router": "^4.3.0",
-    "pinia": "^2.1.7",
+    "@element-plus/icons-vue": "^2.3.1",
     "axios": "^1.6.8",
     "element-plus": "^2.6.3",
-    "@element-plus/icons-vue": "^2.3.1"
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
-    "vite": "^5.2.0",
     "@vitejs/plugin-vue": "^5.0.4",
+    "jsdom": "^29.1.1",
+    "sass": "^1.72.0",
     "typescript": "^5.4.0",
-    "vue-tsc": "^2.0.0",
     "unplugin-auto-import": "^0.17.5",
     "unplugin-vue-components": "^0.26.0",
-    "sass": "^1.72.0"
+    "vite": "^5.2.0",
+    "vitest": "^2.1.9",
+    "vue-tsc": "^2.0.0"
   }
 }
