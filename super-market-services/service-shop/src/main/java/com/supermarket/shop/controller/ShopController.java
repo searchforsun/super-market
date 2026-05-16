@@ -8,9 +8,12 @@ import com.supermarket.shop.service.ShopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+@Validated
 @RestController
 @RequestMapping("/api/shop")
 @RequiredArgsConstructor
@@ -28,8 +31,8 @@ public class ShopController {
     @PutMapping("/merchant/{id}/audit")
     @Operation(summary = "审核商家入驻")
     public R<Void> audit(@Parameter(description = "商家ID") @PathVariable Long id,
-                         @Parameter(description = "审核状态") @RequestParam Integer auditStatus,
-                         @Parameter(description = "审核不通过原因") @RequestParam(required = false) String reason) {
+                         @Parameter(description = "审核状态") @NotNull @RequestParam Integer auditStatus,
+                         @Parameter(description = "审核不通过原因") @Size(max = 500) @RequestParam(required = false) String reason) {
         shopService.auditMerchant(id, auditStatus, reason);
         return R.ok();
     }

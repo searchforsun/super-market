@@ -10,11 +10,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Validated
 @RestController
 @RequestMapping("/api/product")
 @RequiredArgsConstructor
@@ -44,8 +47,8 @@ public class ProductController {
     @Operation(summary = "审核商品")
     @PutMapping("/spu/{spuId}/audit")
     public R<Void> audit(@Parameter(description = "SPU ID") @PathVariable Long spuId,
-                         @Parameter(description = "审核状态") @RequestParam Integer auditStatus,
-                         @Parameter(description = "审核原因") @RequestParam(required = false) String reason) {
+                         @Parameter(description = "审核状态") @NotNull @Min(1) @Max(3) @RequestParam Integer auditStatus,
+                         @Parameter(description = "审核原因") @Size(max = 500) @RequestParam(required = false) String reason) {
         productService.auditProduct(spuId, auditStatus, reason);
         return R.ok();
     }
