@@ -1,5 +1,10 @@
 package com.supermarket.auth.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.supermarket.auth.entity.Role;
+import com.supermarket.auth.entity.UserRole;
+import com.supermarket.auth.mapper.RoleMapper;
+import com.supermarket.auth.mapper.UserRoleMapper;
 import com.supermarket.auth.service.AuthService;
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.dubbo.api.shop.ShopDubboService;
@@ -12,14 +17,15 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthServiceImpl implements AuthService {
 
     private final JwtUtil jwtUtil;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
-    private static final Set<String> ADMIN_PHONES = Set.of("13800000000", "13900000000");
+    private final UserRoleMapper userRoleMapper;
+    private final RoleMapper roleMapper;
 
     @DubboReference(check = false)
     @Autowired(required = false)
@@ -30,13 +36,10 @@ public class AuthServiceImpl implements AuthService {
     private ShopDubboService shopDubboService;
 
     @Autowired
-    public AuthServiceImpl(JwtUtil jwtUtil) {
+    public AuthServiceImpl(JwtUtil jwtUtil, UserRoleMapper userRoleMapper, RoleMapper roleMapper) {
         this.jwtUtil = jwtUtil;
-    }
-
-    public AuthServiceImpl(JwtUtil jwtUtil, UserDubboService userDubboService) {
-        this.jwtUtil = jwtUtil;
-        this.userDubboService = userDubboService;
+        this.userRoleMapper = userRoleMapper;
+        this.roleMapper = roleMapper;
     }
 
     @Override
@@ -52,12 +55,20 @@ public class AuthServiceImpl implements AuthService {
             throw new BizException(401, "手机号或密码错误");
         }
 
-        List<String> roles = new ArrayList<>();
-        roles.add("ROLE_USER");
-        if (ADMIN_PHONES.contains(phone)) {
-            roles.add("ROLE_ADMIN");
+        // 从 DB 查询角色
+        List<String> roles = queryRolesFromDb(user.getId());
+
+        // 兜底：老用户无角色记录时自动赋予 ROLE_USER
+        if (roles.isEmpty()) {
+            assignRole(user.getId(), "ROLE_USER");
+            roles.add("ROLE_USER");
         }
-        if (shopDubboService != null && shopDubboService.hasMerchant(user.getId())) {
+
+        // 商家首次登录时自动同步 user_roles
+        if (!roles.contains("ROLE_MERCHANT")
+            && shopDubboService != null
+            && shopDubboService.hasMerchant(user.getId())) {
+            assignRole(user.getId(), "ROLE_MERCHANT");
             roles.add("ROLE_MERCHANT");
         }
 
@@ -77,11 +88,53 @@ public class AuthServiceImpl implements AuthService {
             throw new BizException(401, "Refresh Token 无效或已过期");
         }
         Long userId = jwtUtil.getUserId(refreshToken);
-        String newAccessToken = jwtUtil.generateAccessToken(userId, List.of("ROLE_USER"));
+
+        // 从 DB 重新查角色，不再硬编码
+        List<String> roles = queryRolesFromDb(userId);
+        if (roles.isEmpty()) {
+            roles.add("ROLE_USER");
+        }
+
+        String newAccessToken = jwtUtil.generateAccessToken(userId, roles);
         String newRefreshToken = jwtUtil.generateRefreshToken(userId);
         return Map.of(
             "accessToken", newAccessToken,
             "refreshToken", newRefreshToken
         );
+    }
+
+    /**
+     * 为用户分配角色
+     */
+    public void assignRole(Long userId, String roleName) {
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>().eq(Role::getName, roleName));
+        if (role == null) {
+            return;
+        }
+        UserRole exist = userRoleMapper.selectOne(new LambdaQueryWrapper<UserRole>()
+            .eq(UserRole::getUserId, userId)
+            .eq(UserRole::getRoleId, role.getId()));
+        if (exist != null) {
+            return; // 已有该角色
+        }
+        UserRole ur = new UserRole();
+        ur.setUserId(userId);
+        ur.setRoleId(role.getId());
+        userRoleMapper.insert(ur);
+    }
+
+    private List<String> queryRolesFromDb(Long userId) {
+        List<UserRole> userRoles = userRoleMapper.selectList(
+            new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
+
+        if (userRoles.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        return userRoles.stream()
+            .map(ur -> roleMapper.selectById(ur.getRoleId()))
+            .filter(Objects::nonNull)
+            .map(Role::getName)
+            .collect(Collectors.toList());
     }
 }

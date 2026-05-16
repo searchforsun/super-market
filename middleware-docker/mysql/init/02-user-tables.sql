@@ -52,3 +52,31 @@ CREATE TABLE IF NOT EXISTS addresses (
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='收货地址表';
+
+-- 角色定义表
+CREATE TABLE IF NOT EXISTS roles (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name        VARCHAR(30) NOT NULL UNIQUE COMMENT '角色编码 ROLE_ADMIN/ROLE_MERCHANT/ROLE_USER',
+    label       VARCHAR(50) COMMENT '显示名称',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色表';
+
+-- 用户-角色关联表
+CREATE TABLE IF NOT EXISTS user_roles (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id     BIGINT NOT NULL,
+    role_id     BIGINT NOT NULL,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_role (user_id, role_id),
+    INDEX idx_user (user_id),
+    INDEX idx_role (role_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户角色关联表';
+
+-- 权限定义表（留扩展点）
+CREATE TABLE IF NOT EXISTS permissions (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    code        VARCHAR(50) NOT NULL UNIQUE COMMENT '权限编码',
+    label       VARCHAR(50) COMMENT '显示名称',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限表';

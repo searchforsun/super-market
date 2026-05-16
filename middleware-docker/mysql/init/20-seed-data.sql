@@ -1,5 +1,14 @@
 -- Seed Data for Super Market
--- Categories, Products, SKUs, Inventory, Shops
+-- Roles, Categories, Products, SKUs, Inventory, Shops
+
+-- ============ 角色数据 ============
+INSERT INTO db_user.roles (id, name, label) VALUES
+(1, 'ROLE_USER', '普通用户'),
+(2, 'ROLE_ADMIN', '管理员'),
+(3, 'ROLE_MERCHANT', '商家');
+
+-- 为管理员手机号赋予 ROLE_ADMIN（user_id 参考 13800000000 注册后的 id）
+-- INSERT INTO db_user.user_roles (user_id, role_id) VALUES (1, 2);
 
 -- ============ 类目数据 ============
 INSERT INTO db_product.categories (id, parent_id, name, level, sort_order, status) VALUES

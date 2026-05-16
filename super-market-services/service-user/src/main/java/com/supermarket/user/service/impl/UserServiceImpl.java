@@ -6,9 +6,13 @@ import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.dubbo.api.user.UserDubboService;
 import com.supermarket.common.dubbo.api.user.dto.UserDTO;
 import com.supermarket.user.entity.User;
+import com.supermarket.user.entity.UserRole;
+import com.supermarket.user.mapper.RoleMapper;
 import com.supermarket.user.mapper.UserMapper;
+import com.supermarket.user.mapper.UserRoleMapper;
 import com.supermarket.user.service.UserService;
 import org.apache.dubbo.config.annotation.DubboService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -18,6 +22,12 @@ import java.time.LocalDateTime;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService, UserDubboService {
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    @Autowired
+    private UserRoleMapper userRoleMapper;
+
+    @Autowired
+    private RoleMapper roleMapper;
 
     @Override
     public User register(String phone, String password) {
@@ -43,6 +53,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname("用户" + phone.substring(phone.length() - 4));
         user.setStatus(1);
         save(user);
+
+        // 自动赋予 ROLE_USER 角色
+        var roleUser = roleMapper.selectOne(
+            new LambdaQueryWrapper<com.supermarket.user.entity.Role>()
+                .eq(com.supermarket.user.entity.Role::getName, "ROLE_USER"));
+        if (roleUser != null) {
+            var ur = new UserRole();
+            ur.setUserId(user.getId());
+            ur.setRoleId(roleUser.getId());
+            userRoleMapper.insert(ur);
+        }
+
         return user;
     }
 
