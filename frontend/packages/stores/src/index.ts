@@ -1,2 +1,6 @@
 export { useUserStore } from './useUserStore'
 export { useCartStore } from './useCartStore'
+export { useAddressStore } from './useAddressStore'
+export { useOrderStore } from './useOrderStore'
+export { useCouponStore } from './useCouponStore'
+export { useNotifyStore } from './useNotifyStore'
