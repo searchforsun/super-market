@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-cart
       paths-to-match: /api/cart/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

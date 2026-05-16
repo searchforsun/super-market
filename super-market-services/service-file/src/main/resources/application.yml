@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-file
       paths-to-match: /api/file/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

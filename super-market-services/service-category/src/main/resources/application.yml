@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-category
       paths-to-match: /api/category/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

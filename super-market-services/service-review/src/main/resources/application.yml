@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-review
       paths-to-match: /api/review/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

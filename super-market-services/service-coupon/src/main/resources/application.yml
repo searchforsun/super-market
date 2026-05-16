@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-coupon
       paths-to-match: /api/coupon/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

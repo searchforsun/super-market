@@ -22,3 +22,9 @@ springdoc:
   group-configs:
     - group: service-order
       paths-to-match: /api/order/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
