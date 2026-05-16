@@ -1,5 +1,5 @@
 <template>
-  <div class="orders-page">
+  <div class="orders-page page-enter">
     <h2>我的订单</h2>
     <div class="status-tabs">
       <span v-for="tab in tabs" :key="tab.value" :class="{ active: currentStatus === tab.value }"

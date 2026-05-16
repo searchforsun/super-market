@@ -1,5 +1,5 @@
 <template>
-  <div class="review-page"><h2>我的评价</h2>
+  <div class="review-page page-enter"><h2>我的评价</h2>
     <div v-for="r in reviews" :key="r.id" class="review-item">
       <RatingStars :rating="r.rating" /><p>{{ r.content }}</p>
       <span class="date">{{ r.createdAt }}</span>

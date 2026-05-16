@@ -1,5 +1,5 @@
 <template>
-  <div class="center-page">
+  <div class="center-page page-enter">
     <h2>个人中心</h2>
     <div v-if="userStore.userInfo" class="user-info-card">
       <div class="user-avatar">{{ (userStore.userInfo.nickname || '用户')[0] }}</div>

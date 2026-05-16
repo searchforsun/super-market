@@ -1,5 +1,5 @@
 <template>
-  <div class="result-page">
+  <div class="result-page page-enter">
     <el-result icon="success" title="订单提交成功！" :sub-title="`订单号: ${route.query.orderNo}`">
       <template #extra>
         <el-button type="primary" @click="$router.push(`/order/${route.query.orderNo}`)">查看订单</el-button>

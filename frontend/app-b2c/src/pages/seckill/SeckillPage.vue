@@ -1,5 +1,5 @@
 <template>
-  <div class="seckill-page">
+  <div class="seckill-page page-enter">
     <h2>⚡ 限时秒杀</h2>
     <div v-if="currentSession">
       <Countdown :endTime="currentSession.endTime" />

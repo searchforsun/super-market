@@ -1,5 +1,5 @@
 <template>
-  <div class="confirm-page">
+  <div class="confirm-page page-enter">
     <h2>确认订单</h2>
     <div class="confirm-section"><h3>收货地址</h3>
       <el-select v-model="addressId" placeholder="请选择收货地址" style="width:300px">

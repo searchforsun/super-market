@@ -1,5 +1,5 @@
 <template>
-  <div class="detail-page" v-if="order">
+  <div class="detail-page page-enter" v-if="order">
     <h2>订单详情</h2>
     <OrderStatusTag :status="order.orderStatus" />
     <p class="order-no">订单号: {{ order.orderNo }}</p>

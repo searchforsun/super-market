@@ -1,5 +1,5 @@
 <template>
-  <div class="register-page">
+  <div class="register-page page-enter">
     <div class="register-card">
       <router-link to="/" class="register-logo">
         <span class="logo-mark">S</span>

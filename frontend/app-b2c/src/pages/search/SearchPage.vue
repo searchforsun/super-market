@@ -1,5 +1,5 @@
 <template>
-  <div class="search-page">
+  <div class="search-page page-enter">
     <SearchBar @search="onSearch" />
     <div v-loading="loading" class="search-content">
       <div class="search-toolbar" v-if="results">

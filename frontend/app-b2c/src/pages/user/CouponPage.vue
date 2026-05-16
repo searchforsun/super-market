@@ -1,5 +1,5 @@
 <template>
-  <div class="coupon-page"><h2>我的优惠券</h2>
+  <div class="coupon-page page-enter"><h2>我的优惠券</h2>
     <div v-if="coupons.length === 0" class="empty">暂无优惠券</div>
     <div v-for="c in coupons" :key="c.id" class="coupon-card" :class="{ expired: c.status === 3 }">
       <div class="coupon-info">

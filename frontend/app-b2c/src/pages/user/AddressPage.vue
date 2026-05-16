@@ -1,5 +1,5 @@
 <template>
-  <div class="addr-page"><h2>收货地址</h2>
+  <div class="addr-page page-enter"><h2>收货地址</h2>
     <el-button type="primary" @click="showForm=true">新增地址</el-button>
     <div v-for="a in addresses" :key="a.id" class="addr-card">
       <strong>{{ a.receiverName }}</strong> {{ a.receiverPhone }}

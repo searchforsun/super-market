@@ -1,5 +1,5 @@
 <template>
-  <div class="notify-page"><h2>消息通知</h2>
+  <div class="notify-page page-enter"><h2>消息通知</h2>
     <el-button @click="markAll">全部已读</el-button>
     <div v-for="n in notifications" :key="n.id" class="notify-item" :class="{ unread: n.status === 0 }">
       <strong>{{ n.title }}</strong><p>{{ n.content }}</p><span class="date">{{ n.createdAt }}</span>

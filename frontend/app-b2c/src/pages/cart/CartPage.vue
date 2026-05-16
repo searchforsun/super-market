@@ -1,5 +1,5 @@
 <template>
-  <div class="cart-page">
+  <div class="cart-page page-enter">
     <h2>我的购物车</h2>
     <div v-if="items.length === 0" class="empty">购物车是空的，<router-link to="/">去逛逛</router-link></div>
     <div v-else>

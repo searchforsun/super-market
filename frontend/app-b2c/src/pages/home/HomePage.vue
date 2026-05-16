@@ -1,5 +1,5 @@
 <template>
-  <div class="home">
+  <div class="home page-enter">
     <!-- Hero Section -->
     <section class="hero">
       <div class="container hero-inner">
