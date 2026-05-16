@@ -8,9 +8,13 @@ import com.supermarket.notify.service.NotifyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @Validated
 @RestController
@@ -53,5 +57,16 @@ public class NotifyController {
     @Operation(summary = "创建通知模板")
     public R<NotifyTemplate> createTemplate(@Parameter(description = "通知模板信息") @RequestBody NotifyTemplate template) {
         return R.ok(notifyService.createTemplate(template));
+    }
+
+    @PostMapping("/send")
+    @Operation(summary = "发送通知（内部服务调用）")
+    public R<Void> send(
+        @RequestHeader(value = "X-Source-Service", required = false) String sourceService,
+        @RequestParam @NotBlank(message = "模板编码不能为空") String templateCode,
+        @RequestParam @NotNull(message = "用户ID不能为空") Long userId,
+        @RequestBody Map<String, String> params) {
+        notifyService.send(userId, templateCode, params);
+        return R.ok();
     }
 }

@@ -6,6 +6,8 @@ import com.supermarket.member.service.MemberService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +32,15 @@ public class MemberController {
     public R<Void> addPoints(@Parameter(description = "用户ID") @RequestParam Long userId,
                              @Parameter(description = "积分数") @RequestParam int points) {
         memberService.addPoints(userId, points);
+        return R.ok();
+    }
+
+    @PostMapping("/points/deduct")
+    @Operation(summary = "扣减积分")
+    public R<Void> deductPoints(
+        @RequestParam @NotNull(message = "用户ID不能为空") Long userId,
+        @RequestParam @NotNull(message = "积分不能为空") @Min(value = 1, message = "积分必须大于0") Integer points) {
+        memberService.deductPoints(userId, points);
         return R.ok();
     }
 }

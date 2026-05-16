@@ -8,9 +8,17 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Validated
 @RestController
@@ -33,6 +41,20 @@ public class FileController {
     @Operation(summary = "获取文件详情")
     public R<FileRecord> detail(@Parameter(description = "文件记录ID") @PathVariable Long id) {
         return R.ok(fileService.getById(id));
+    }
+
+    @GetMapping("/{id}/download")
+    @Operation(summary = "下载文件")
+    public ResponseEntity<byte[]> download(@PathVariable Long id) throws IOException {
+        var record = fileService.getById(id);
+        try (InputStream in = fileService.download(id)) {
+            byte[] data = in.readAllBytes();
+            return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + URLEncoder.encode(record.getFileName(), StandardCharsets.UTF_8) + "\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(data);
+        }
     }
 
     @GetMapping("/list")
