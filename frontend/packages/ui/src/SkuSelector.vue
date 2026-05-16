@@ -3,7 +3,7 @@
     <div v-for="spec in specs" :key="spec.name" class="spec-group">
       <span class="spec-label">{{ spec.name }}:</span>
       <span v-for="val in spec.values" :key="val" :class="['spec-val', selected[spec.name] === val ? 'active' : '']"
-            @click="$emit('select', spec.name, val)">{{ val }}</span>
+            @click="onSelect(spec.name, val)">{{ val }}</span>
     </div>
   </div>
 </template>
@@ -11,9 +11,14 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
 
-defineProps<{ specs: Array<{ name: string; values: string[] }> }>()
+const props = defineProps<{ specs: Array<{ name: string; values: string[] }> }>()
 const selected = reactive<Record<string, string>>({})
-defineEmits<{ select: [name: string, value: string] }>()
+const emit = defineEmits<{ select: [name: string, value: string] }>()
+
+function onSelect(name: string, value: string) {
+  selected[name] = value
+  emit('select', name, value)
+}
 </script>
 
 <style scoped>
