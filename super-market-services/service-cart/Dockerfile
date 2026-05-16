@@ -9,4 +9,4 @@ USER appuser
 
 EXPOSE 9321
 
-ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UseG1GC", "-XX:MaxRAMPercentage=75.0", "-Dspring.lifecycle.timeout-per-shutdown-phase=30s", "-jar", "app.jar"]
