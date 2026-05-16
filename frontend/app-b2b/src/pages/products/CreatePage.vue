@@ -255,7 +255,7 @@
           type="info"
           show-icon
           :closable="false"
-          description="请点击"生成 SKU"按钮生成商品规格组合"
+          description="请点击「生成 SKU」按钮生成商品规格组合"
           style="margin-top: 12px;"
         />
       </el-card>
