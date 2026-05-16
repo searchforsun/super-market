@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,6 +28,9 @@ public class AuthServiceImpl implements AuthService {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
+
+    @Value("${auth.admin-phones:}")
+    private String adminPhonesConfig;
 
     @DubboReference(check = false)
     @Autowired(required = false)
@@ -62,6 +67,12 @@ public class AuthServiceImpl implements AuthService {
         if (roles.isEmpty()) {
             assignRole(user.getId(), "ROLE_USER");
             roles.add("ROLE_USER");
+        }
+
+        // 管理员手机号首次登录自动赋予 ROLE_ADMIN
+        if (!roles.contains("ROLE_ADMIN") && isAdminPhone(phone)) {
+            assignRole(user.getId(), "ROLE_ADMIN");
+            roles.add("ROLE_ADMIN");
         }
 
         // 商家首次登录时自动同步 user_roles
@@ -121,6 +132,13 @@ public class AuthServiceImpl implements AuthService {
         ur.setUserId(userId);
         ur.setRoleId(role.getId());
         userRoleMapper.insert(ur);
+    }
+
+    private boolean isAdminPhone(String phone) {
+        if (adminPhonesConfig == null || adminPhonesConfig.isBlank()) {
+            return false;
+        }
+        return Arrays.asList(adminPhonesConfig.split(",")).contains(phone);
     }
 
     private List<String> queryRolesFromDb(Long userId) {
