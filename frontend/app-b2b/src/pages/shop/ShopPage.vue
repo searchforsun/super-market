@@ -1,5 +1,5 @@
 <template>
-  <div class="shop-page">
+  <div class="shop-page page-enter">
     <h2 class="page-title">店铺设置</h2>
 
     <el-card shadow="never" class="section-card">

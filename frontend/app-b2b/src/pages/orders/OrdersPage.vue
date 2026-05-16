@@ -1,5 +1,5 @@
 <template>
-  <div class="orders-page">
+  <div class="orders-page page-enter">
     <h2>订单处理</h2>
 
     <div class="filter-bar">

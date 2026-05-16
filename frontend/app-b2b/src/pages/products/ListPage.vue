@@ -1,5 +1,5 @@
 <template>
-  <div class="product-list-page">
+  <div class="product-list-page page-enter">
     <div class="page-header">
       <h2>商品管理</h2>
       <router-link to="/merchant/products/create">

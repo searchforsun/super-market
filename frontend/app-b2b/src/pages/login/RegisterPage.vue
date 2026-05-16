@@ -1,5 +1,5 @@
 <template>
-  <div class="register-wrapper">
+  <div class="register-wrapper page-enter">
     <div class="register-card">
       <div class="register-header">
         <h1>Super Market</h1>

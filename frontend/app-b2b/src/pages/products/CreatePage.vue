@@ -1,5 +1,5 @@
 <template>
-  <div class="product-create-page">
+  <div class="product-create-page page-enter">
     <div class="page-header">
       <el-breadcrumb separator="/">
         <el-breadcrumb-item :to="{ path: '/merchant/products' }">商品管理</el-breadcrumb-item>

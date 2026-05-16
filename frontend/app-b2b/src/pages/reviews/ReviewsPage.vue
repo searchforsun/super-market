@@ -1,5 +1,5 @@
 <template>
-  <div class="review-page">
+  <div class="review-page page-enter">
     <h2 class="page-title">评价管理</h2>
 
     <div class="filters">

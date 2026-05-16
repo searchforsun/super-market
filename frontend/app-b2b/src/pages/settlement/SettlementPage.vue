@@ -1,5 +1,5 @@
 <template>
-  <div class="settlement-page">
+  <div class="settlement-page page-enter">
     <el-card shadow="never" class="header-card">
       <div class="page-header">
         <h2>结算查询</h2>

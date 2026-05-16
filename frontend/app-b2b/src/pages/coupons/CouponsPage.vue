@@ -1,5 +1,5 @@
 <template>
-  <div class="coupon-page">
+  <div class="coupon-page page-enter">
     <h2 class="page-title">优惠券管理</h2>
     <el-tabs v-model="activeTab" class="page-tabs">
       <el-tab-pane label="优惠券模板" name="templates">

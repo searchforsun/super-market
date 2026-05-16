@@ -1,5 +1,5 @@
 <template>
-  <div class="inventory-page">
+  <div class="inventory-page page-enter">
     <div class="page-header">
       <h2>库存管理</h2>
     </div>

@@ -1,5 +1,5 @@
 <template>
-  <div class="b2b-notifications">
+  <div class="b2b-notifications page-enter">
     <div class="page-header">
       <h2>通知中心</h2>
       <el-badge :value="unreadCount" :hidden="unreadCount === 0" type="danger">

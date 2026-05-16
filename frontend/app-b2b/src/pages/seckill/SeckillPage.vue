@@ -1,5 +1,5 @@
 <template>
-  <div class="seckill-container">
+  <div class="seckill-container page-enter">
     <h2>秒杀活动管理</h2>
 
     <el-tabs v-model="activeTab" type="border-card">

@@ -1,5 +1,5 @@
 <template>
-  <div class="b2b-order-detail">
+  <div class="b2b-order-detail page-enter">
     <div class="page-header">
       <el-button :icon="ArrowLeft" text @click="goBack">返回</el-button>
       <h2>订单详情</h2>
