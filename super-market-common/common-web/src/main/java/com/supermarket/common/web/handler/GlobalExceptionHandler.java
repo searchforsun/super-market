@@ -2,6 +2,8 @@ package com.supermarket.common.web.handler;
 
 import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.core.result.R;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.FieldError;
@@ -29,6 +31,15 @@ public class GlobalExceptionHandler {
         String message = e.getBindingResult().getFieldErrors().stream()
             .map(FieldError::getDefaultMessage)
             .collect(Collectors.joining(", "));
+        return R.fail(400, message);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public R<Void> handleConstraintViolation(ConstraintViolationException e) {
+        String message = e.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining(", "));
         return R.fail(400, message);
     }
 
