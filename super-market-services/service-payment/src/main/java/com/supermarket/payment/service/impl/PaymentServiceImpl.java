@@ -12,6 +12,7 @@ import com.supermarket.payment.mapper.PaymentIdempotentMapper;
 import com.supermarket.payment.mapper.PaymentMapper;
 import com.supermarket.payment.mapper.PaymentRefundMapper;
 import com.supermarket.payment.service.PaymentService;
+import com.supermarket.payment.service.thirdparty.ThirdPartyPaymentService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,13 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
 
     @DubboReference(check = false)
     private OrderDubboService orderDubboService;
+
+    /**
+     * 生产环境替换为 WechatPayService 或 AlipayService
+     * 开发环境自动注入 {@link com.supermarket.payment.service.thirdparty.MockThirdPartyPaymentService}
+     */
+    @Autowired
+    private ThirdPartyPaymentService thirdPartyPaymentService;
 
     @Autowired
     public PaymentServiceImpl(PaymentRefundMapper refundMapper, PaymentIdempotentMapper idempotentMapper) {
@@ -115,6 +123,11 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         }
 
         String refundNo = "RFD" + IdUtil.getSnowflakeNextId();
+
+        // 调用第三方支付退款（开发环境走 Mock）
+        thirdPartyPaymentService.refund(payment.getPayNo(), refundNo,
+                payment.getAmount(), refundAmount, reason);
+
         PaymentRefund refund = new PaymentRefund();
         refund.setRefundNo(refundNo);
         refund.setPayNo(payment.getPayNo());

@@ -8,10 +8,9 @@ import com.supermarket.notify.entity.NotifyTemplate;
 import com.supermarket.notify.mapper.NotificationMapper;
 import com.supermarket.notify.mapper.NotifyTemplateMapper;
 import com.supermarket.notify.service.NotifyService;
+import com.supermarket.notify.service.email.EmailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,8 +23,12 @@ public class NotifyServiceImpl implements NotifyService {
     private final NotificationMapper notificationMapper;
     private final NotifyTemplateMapper templateMapper;
 
-    @Autowired(required = false)
-    private JavaMailSender mailSender;
+    /**
+     * 生产环境替换为 AliyunEmailService 或 TencentCloudEmailService
+     * 开发环境自动注入 {@link com.supermarket.notify.service.email.MockEmailService}
+     */
+    @Autowired
+    private EmailService emailService;
 
     public NotifyServiceImpl(NotificationMapper notificationMapper, NotifyTemplateMapper templateMapper) {
         this.notificationMapper = notificationMapper;
@@ -61,20 +64,19 @@ public class NotifyServiceImpl implements NotifyService {
         notif.setSendAt(LocalDateTime.now());
         notificationMapper.insert(notif);
 
-        // 邮件通道
-        if (tpl.getChannel() == 2 && mailSender != null) {
-            try {
-                SimpleMailMessage msg = new SimpleMailMessage();
-                msg.setTo(params.get("email"));
-                msg.setSubject(title);
-                msg.setText(content);
-                mailSender.send(msg);
-                notif.setSendStatus(1);
-            } catch (Exception e) {
-                log.error("邮件发送失败", e);
-                notif.setSendStatus(2);
+        // 邮件通道（开发环境走 Mock 日志打印，生产对接阿里云/腾讯云）
+        if (tpl.getChannel() == 2) {
+            String email = params.get("email");
+            if (email != null && !email.isBlank()) {
+                try {
+                    emailService.send(email, title, content);
+                    notif.setSendStatus(1);
+                } catch (Exception e) {
+                    log.error("邮件发送失败: {}", email, e);
+                    notif.setSendStatus(2);
+                }
+                notificationMapper.updateById(notif);
             }
-            notificationMapper.updateById(notif);
         }
     }
 

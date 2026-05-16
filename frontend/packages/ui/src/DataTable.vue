@@ -25,6 +25,13 @@ defineEmits<{ 'sort-change': [sort: any]; 'page-change': [page: number] }>()
 </script>
 
 <style scoped>
-.data-table-wrap { background: #fff; }
+.data-table-wrap { background: var(--color-surface, #fff); }
 .table-pagination { display: flex; justify-content: flex-end; padding: 12px 0; }
+
+:deep(.el-table__body tr) {
+  transition: background-color 0.15s ease;
+}
+:deep(.el-table__body tr:hover) {
+  background-color: var(--color-surface-hover, #f5f1ea) !important;
+}
 </style>

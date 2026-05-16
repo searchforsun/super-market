@@ -19,7 +19,7 @@ const decimal = computed(() => parts.value[1])
 </script>
 
 <style scoped>
-.price-display { font-weight: 700; color: #f30213; }
+.price-display { font-weight: 700; color: var(--color-accent, #b91c1c); }
 .symbol { font-size: 12px; }
 .value { font-size: 18px; }
 .decimal { font-size: 12px; }
