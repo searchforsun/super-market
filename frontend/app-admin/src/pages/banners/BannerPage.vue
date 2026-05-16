@@ -1,5 +1,5 @@
 <template>
-  <div class="banner-page">
+  <div class="banner-page page-enter">
     <el-card>
       <div class="page-header">
         <h2>Banner/广告位管理</h2>

@@ -1,5 +1,5 @@
 <template>
-  <div class="audit-page">
+  <div class="audit-page page-enter">
     <h2 class="page-title">商品审核</h2>
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">

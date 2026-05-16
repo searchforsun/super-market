@@ -1,5 +1,5 @@
 <template>
-  <div class="category-page">
+  <div class="category-page page-enter">
     <h2 class="page-title">类目管理</h2>
     <div class="category-layout">
       <div class="tree-panel">

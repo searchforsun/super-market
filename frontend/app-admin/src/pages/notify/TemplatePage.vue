@@ -1,5 +1,5 @@
 <template>
-  <div class="template-page">
+  <div class="template-page page-enter">
     <div class="page-header">
       <h2 class="page-title">通知模板管理</h2>
       <el-button type="primary" @click="openCreate">新建模板</el-button>

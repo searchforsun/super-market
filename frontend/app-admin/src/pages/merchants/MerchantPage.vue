@@ -1,5 +1,5 @@
 <template>
-  <div class="merchant-page">
+  <div class="merchant-page page-enter">
     <h2>商家审核</h2>
 
     <div class="filter-bar">

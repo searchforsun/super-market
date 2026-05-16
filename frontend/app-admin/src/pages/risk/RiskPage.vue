@@ -1,5 +1,5 @@
 <template>
-  <div class="risk-page">
+  <div class="risk-page page-enter">
     <h2 class="page-title">风控管理</h2>
 
     <el-card shadow="never">

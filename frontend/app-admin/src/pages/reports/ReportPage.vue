@@ -1,5 +1,5 @@
 <template>
-  <div class="report-page">
+  <div class="report-page page-enter">
     <h2>数据报表</h2>
 
     <div class="filter-bar">

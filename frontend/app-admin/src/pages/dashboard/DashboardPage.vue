@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-page">
+  <div class="dashboard-page page-enter">
     <h2 class="page-title">运营看板</h2>
 
     <el-row :gutter="16" class="stat-row">
