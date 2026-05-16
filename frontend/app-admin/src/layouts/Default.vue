@@ -10,6 +10,7 @@
         <nav class="header-nav">
           <a href="http://localhost:5173" target="_self" class="nav-link">&#x1F6CD; 商城</a>
           <a href="http://localhost:5174" target="_self" class="nav-link">&#x1F3EA; 商家</a>
+          <ThemeToggle />
           <button class="nav-link logout-btn" @click="doLogout">退出</button>
         </nav>
       </div>
@@ -37,6 +38,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { clearAuth } from '@supermarket/utils'
+import { ThemeToggle } from '@supermarket/ui'
 
 const router = useRouter()
 function doLogout() { clearAuth(); router.push('/login') }
@@ -84,8 +86,8 @@ function doLogout() { clearAuth(); router.push('/login') }
 
 .admin-body { display: flex; min-height: calc(100vh - 56px); }
 .admin-sidebar {
-  width: 200px; background: var(--color-surface, #fff);
-  border-right: 1px solid var(--color-border-light, #f0ece6);
+  width: 220px; background: var(--color-surface, #fff);
+  border-right: 0.5px solid var(--color-border, #e2e8f0);
   padding: var(--space-md, 16px) 0; flex-shrink: 0;
 }
 .sidebar-item {
@@ -104,6 +106,6 @@ function doLogout() { clearAuth(); router.push('/login') }
 }
 .admin-content {
   flex: 1; padding: var(--space-lg, 24px);
-  max-width: calc(100vw - 200px);
+  max-width: calc(100vw - 220px);
 }
 </style>
