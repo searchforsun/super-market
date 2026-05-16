@@ -273,7 +273,18 @@ watch(() => userStore.userId, fetchUnread)
 .nav-seckill { color: var(--color-accent); font-weight: 500; }
 
 /* ===== Footer ===== */
-.site-footer { background: var(--color-text-primary); color: rgba(255,255,255,0.7); margin-top: var(--space-3xl); }
+.site-footer {
+  background: var(--color-text-primary);
+  color: rgba(255,255,255,0.7);
+  margin-top: var(--space-3xl);
+  border-top: 1px solid transparent;
+  background-image:
+    linear-gradient(to right, rgba(185,28,28,0.4), rgba(185,28,28,0.05) 50%, transparent 70%),
+    linear-gradient(var(--color-text-primary), var(--color-text-primary));
+  background-position: top, top;
+  background-repeat: no-repeat;
+  background-size: 100% 1px, 100% 100%;
+}
 .footer-inner {
   display: flex; gap: var(--space-3xl);
   padding: var(--space-3xl) var(--space-lg);

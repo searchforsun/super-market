@@ -26,7 +26,7 @@
           </div>
         </div>
       </div>
-      <div class="hero-dot-pattern"></div>
+      <div class="hero-decor"></div>
     </section>
 
     <!-- Category Pills -->
@@ -121,7 +121,8 @@ onMounted(async () => {
 <style scoped>
 /* ===== Hero ===== */
 .hero {
-  background: linear-gradient(160deg, #faf8f5 0%, #f0ebe0 40%, #e8ded0 100%);
+  background:
+    linear-gradient(160deg, #faf7f2 0%, #f0e8dc 35%, #e8dcc8 100%);
   position: relative; overflow: hidden;
   padding: var(--space-3xl) 0;
 }
@@ -181,12 +182,18 @@ onMounted(async () => {
 .hero-card.card-3 { margin-top: 40px; }
 .hero-card-icon { font-size: 32px; }
 .hero-card-label { font-size: 13px; color: var(--color-text-secondary); font-weight: 500; }
-.hero-dot-pattern {
-  position: absolute; right: -80px; top: -80px;
-  width: 400px; height: 400px;
-  background: radial-gradient(circle, var(--color-accent-soft) 2px, transparent 2px);
-  background-size: 24px 24px;
-  opacity: 0.5; pointer-events: none;
+.hero-decor {
+  position: absolute; right: -60px; top: -60px;
+  width: 360px; height: 360px;
+  border: 2px solid rgba(185, 28, 28, 0.06);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.hero-decor::after {
+  content: '';
+  position: absolute; inset: 40px;
+  border: 2px solid rgba(185, 28, 28, 0.04);
+  border-radius: 50%;
 }
 
 /* ===== Sections ===== */
