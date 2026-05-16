@@ -31,11 +31,11 @@ dubbo:
     name: tri
     port: -1
   registry:
-    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:nacos123}
+    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:-nacos}
     parameters:
       namespace: public
   config-center:
-    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:nacos123}
+    address: nacos://${DOCKER_HOST_IP:localhost}:${NACOS_PORT:8848}?group=dubbo&username=${NACOS_USERNAME:nacos}&password=${NACOS_PASSWORD:-nacos}
     highest-priority: false
   consumer:
     check: false
