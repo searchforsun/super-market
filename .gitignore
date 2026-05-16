@@ -92,3 +92,7 @@ kubeconfig*
 
 worktrees/
 settings.local.json
+
+# === Kubernetes secrets ===
+**/secret.yaml
+!**/secret.yaml.example
