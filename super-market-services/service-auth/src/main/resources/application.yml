@@ -31,3 +31,6 @@ management:
   endpoint:
     health:
       show-details: always
+
+auth:
+  admin-phones: 13800000000,13900000000

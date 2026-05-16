@@ -13,10 +13,9 @@ import com.supermarket.common.dubbo.api.user.dto.UserDTO;
 import com.supermarket.common.security.util.JwtUtil;
 import org.apache.dubbo.config.annotation.DubboReference;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import org.springframework.beans.factory.annotation.Value;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -29,9 +28,6 @@ public class AuthServiceImpl implements AuthService {
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
 
-    @Value("${auth.admin-phones:}")
-    private String adminPhonesConfig;
-
     @DubboReference(check = false)
     @Autowired(required = false)
     private UserDubboService userDubboService;
@@ -39,6 +35,9 @@ public class AuthServiceImpl implements AuthService {
     @DubboReference(check = false)
     @Autowired(required = false)
     private ShopDubboService shopDubboService;
+
+    @Value("${auth.admin-phones:}")
+    private String adminPhones;
 
     @Autowired
     public AuthServiceImpl(JwtUtil jwtUtil, UserRoleMapper userRoleMapper, RoleMapper roleMapper) {
@@ -69,7 +68,7 @@ public class AuthServiceImpl implements AuthService {
             roles.add("ROLE_USER");
         }
 
-        // 管理员手机号首次登录自动赋予 ROLE_ADMIN
+        // 管理员兜底：config 中的管理员手机号自动同步到 DB
         if (!roles.contains("ROLE_ADMIN") && isAdminPhone(phone)) {
             assignRole(user.getId(), "ROLE_ADMIN");
             roles.add("ROLE_ADMIN");
@@ -135,10 +134,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private boolean isAdminPhone(String phone) {
-        if (adminPhonesConfig == null || adminPhonesConfig.isBlank()) {
-            return false;
-        }
-        return Arrays.asList(adminPhonesConfig.split(",")).contains(phone);
+        if (adminPhones == null || adminPhones.isBlank()) return false;
+        return Set.of(adminPhones.split(",")).contains(phone);
     }
 
     private List<String> queryRolesFromDb(Long userId) {

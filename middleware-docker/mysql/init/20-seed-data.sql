@@ -7,8 +7,23 @@ INSERT INTO db_user.roles (id, name, label) VALUES
 (2, 'ROLE_ADMIN', '管理员'),
 (3, 'ROLE_MERCHANT', '商家');
 
--- 为管理员手机号赋予 ROLE_ADMIN（user_id 参考 13800000000 注册后的 id）
--- INSERT INTO db_user.user_roles (user_id, role_id) VALUES (1, 2);
+-- 为管理员手机号赋予 ROLE_ADMIN（用户注册后执行 INSERT...SELECT 生效）
+INSERT INTO db_user.user_roles (user_id, role_id)
+SELECT u.id, r.id FROM db_user.users u, db_user.roles r
+WHERE u.phone IN ('13800000000', '13900000000') AND r.name = 'ROLE_ADMIN'
+  AND NOT EXISTS (
+    SELECT 1 FROM db_user.user_roles ur
+    WHERE ur.user_id = u.id AND ur.role_id = r.id
+  );
+
+-- 为已注册用户赋予 ROLE_USER（兜底：老用户注册时未自动分配角色）
+INSERT INTO db_user.user_roles (user_id, role_id)
+SELECT u.id, r.id FROM db_user.users u, db_user.roles r
+WHERE r.name = 'ROLE_USER'
+  AND NOT EXISTS (
+    SELECT 1 FROM db_user.user_roles ur
+    WHERE ur.user_id = u.id AND ur.role_id = r.id
+  );
 
 -- ============ 类目数据 ============
 INSERT INTO db_product.categories (id, parent_id, name, level, sort_order, status) VALUES
