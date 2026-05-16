@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: super-market
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - port: 8999
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dubbo-internal
+  namespace: super-market
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 9301
+        - port: 9302
+        - port: 9303
+        - port: 9304
+        - port: 9311
+        - port: 9312
+        - port: 9313
+        - port: 9314
+        - port: 9321
+        - port: 9322
+        - port: 9331
+        - port: 9341
+        - port: 9351
+        - port: 9352
+        - port: 9361
+        - port: 9371
+        - port: 9372
+        - port: 9381
+        - port: 8999
