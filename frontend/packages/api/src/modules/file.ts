@@ -5,7 +5,5 @@ export function uploadFile(file: File, bucket?: string, uploaderId?: number) {
   form.append('file', file)
   if (bucket) form.append('bucket', bucket)
   if (uploaderId) form.append('uploaderId', String(uploaderId))
-  return request.post('/file/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  return request.post('/file/upload', form)
 }

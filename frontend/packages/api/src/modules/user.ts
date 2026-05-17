@@ -11,3 +11,7 @@ export function login(phone: string, password: string) {
 export function getUserInfo(userId: string) {
   return request.get('/user/info', { params: { userId } })
 }
+
+export function updateUserProfile(userId: string, data: { nickname?: string; email?: string; avatarUrl?: string }) {
+  return request.put('/user/profile', data, { params: { userId } })
+}

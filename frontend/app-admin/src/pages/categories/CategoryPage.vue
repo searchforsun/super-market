@@ -102,8 +102,14 @@
           <el-input-number v-model="form.sortOrder" :min="0" :max="9999" style="width:200px" />
           <span class="form-hint">数字越小越靠前</span>
         </el-form-item>
-        <el-form-item label="图标URL">
-          <el-input v-model="form.iconUrl" placeholder="可选，输入图标的图片地址" />
+        <el-form-item label="分类图标">
+          <FileUploader
+            :max-count="1"
+            :current-files="form.iconUrl ? [form.iconUrl] : []"
+            tip="支持 jpg/png，不超过 10MB"
+            @success="onIconUploaded"
+            @update:files="(urls: string[]) => form.iconUrl = urls[0] || ''"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.statusBool" active-text="启用" inactive-text="停用" />
@@ -121,6 +127,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCategoryTree, getCategoryChildren, request } from '@supermarket/api'
+import { FileUploader } from '@supermarket/ui'
 
 const treeRef = ref<any>(null)
 const treeKey = ref(0)
@@ -236,6 +243,10 @@ async function openEditDialog(row: any) {
   form.iconUrl = row.iconUrl || ''
   form.statusBool = row.status === 1
   dialogVisible.value = true
+}
+
+function onIconUploaded(url: string) {
+  form.iconUrl = url
 }
 
 function handleDialogClose() {

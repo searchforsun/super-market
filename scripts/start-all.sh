@@ -103,7 +103,7 @@ for svc in "${SERVICES[@]}"; do
   PIDS["$svc_name"]=$PID
   echo "PID $PID"
 
-  sleep 5
+  sleep 8
 done
 
 echo ""
@@ -188,6 +188,32 @@ for svc in "${SERVICES[@]}"; do
     RESULTS["$svc_name"]="TIMEOUT"
     echo "TIMEOUT (health: $([ "$HEALTH_OK" = true ] && echo UP || echo DOWN))"
   fi
+done
+
+# ============================================================
+# Phase 3 — Retry DIED services (up to 2 retries each)
+# ============================================================
+RETRY_MAX=2
+for svc in "${SERVICES[@]}"; do
+  svc_name=$(basename "$svc")
+  if [ "${RESULTS[$svc_name]}" != "DIED" ]; then
+    continue
+  fi
+
+  APP_NAME="${APP_NAMES[$svc_name]}"
+  svc_path="$svc"
+
+  for attempt in $(seq 1 $RETRY_MAX); do
+    echo ""
+    echo "  Retrying $APP_NAME (attempt $attempt/$RETRY_MAX) ..."
+
+    "$PROJECT_ROOT/scripts/start-service.sh" "${svc_path#super-market-services/}" 2>/dev/null && {
+      RESULTS["$svc_name"]="OK"
+      break
+    } || {
+      echo "  Retry $attempt failed for $APP_NAME"
+    }
+  done
 done
 
 # ============================================================

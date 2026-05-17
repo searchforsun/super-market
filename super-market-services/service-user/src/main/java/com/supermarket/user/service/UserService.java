@@ -13,4 +13,6 @@ public interface UserService {
     User getByPhone(String phone);
 
     void updateLoginTime(Long userId);
+
+    User updateProfile(Long userId, String nickname, String email, String avatarUrl);
 }

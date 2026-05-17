@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { authLogin, getUserInfo } from '@supermarket/api'
+import { authLogin, getUserInfo, updateUserProfile } from '@supermarket/api'
 import { saveAuth, clearAuth, getRoles, isAuthenticated, getPrimaryRole, redirectByRole } from '@supermarket/utils'
 
 export const useUserStore = defineStore('user', () => {
@@ -26,6 +26,11 @@ export const useUserStore = defineStore('user', () => {
     try { userInfo.value = await getUserInfo(userId.value) } catch {}
   }
 
+  async function updateProfile(data: { nickname?: string; email?: string; avatarUrl?: string }) {
+    if (!userId.value) return
+    userInfo.value = await updateUserProfile(userId.value, data)
+  }
+
   function logout() {
     clearAuth()
     token.value = false
@@ -38,5 +43,5 @@ export const useUserStore = defineStore('user', () => {
     redirectByRole()
   }
 
-  return { token, userId, userInfo, roles, isLoggedIn, primaryRole, login, fetchUserInfo, logout, goToApp }
+  return { token, userId, userInfo, roles, isLoggedIn, primaryRole, login, fetchUserInfo, updateProfile, logout, goToApp }
 })

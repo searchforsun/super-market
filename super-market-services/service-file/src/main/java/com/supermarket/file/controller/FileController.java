@@ -57,6 +57,19 @@ public class FileController {
         }
     }
 
+    @GetMapping("/raw/{bucket}/{objectKey}")
+    @Operation(summary = "查看原始文件（用于图片展示）")
+    public ResponseEntity<byte[]> raw(@Parameter(description = "存储桶") @PathVariable String bucket,
+                                       @Parameter(description = "对象键") @PathVariable String objectKey) throws IOException {
+        try (InputStream in = fileService.downloadRaw(bucket, objectKey)) {
+            byte[] data = in.readAllBytes();
+            String contentType = java.nio.file.Files.probeContentType(java.nio.file.Path.of(objectKey));
+            return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType != null ? contentType : "image/jpeg"))
+                .body(data);
+        }
+    }
+
     @GetMapping("/list")
     @Operation(summary = "分页查询上传文件列表")
     public R<Page<FileRecord>> list(@Parameter(description = "上传者ID") @RequestParam Long uploaderId,

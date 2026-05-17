@@ -17,4 +17,6 @@ public interface FileService {
     void delete(Long fileId);
 
     InputStream download(Long fileId);
+
+    InputStream downloadRaw(String bucket, String objectKey);
 }

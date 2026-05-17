@@ -219,16 +219,16 @@ async function fetchAll() {
       try { Object.assign(stats, await getDashboardStats()) } catch { /* keep defaults */ }
     })(),
     (async () => {
-      try { trendData.value = await getDailyTrend(7) } catch { trendData.value = [] }
+      try { trendData.value = await getDailyTrend(7); refreshTrend() } catch { trendData.value = [] }
     })(),
     (async () => {
-      try { categorySales.value = await getCategorySales() } catch { categorySales.value = [] }
+      try { categorySales.value = await getCategorySales(); refreshCategory() } catch { categorySales.value = [] }
     })(),
     (async () => {
-      try { statusDist.value = await getStatusDistribution() } catch { statusDist.value = [] }
+      try { statusDist.value = await getStatusDistribution(); refreshStatus() } catch { statusDist.value = [] }
     })(),
     (async () => {
-      try { userTrend.value = await getUserTrend(7) } catch { userTrend.value = [] }
+      try { userTrend.value = await getUserTrend(7); refreshUser() } catch { userTrend.value = [] }
     })(),
     (async () => {
       ordersLoading.value = true

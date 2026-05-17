@@ -12,6 +12,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
@@ -41,6 +43,15 @@ public class UserController {
     public R<User> info(@Parameter(description = "用户ID") @RequestParam Long userId) {
         User user = userService.getById(userId);
         user.setPasswordHash(null);
+        return R.ok(user);
+    }
+
+    @Operation(summary = "更新用户资料")
+    @PutMapping("/profile")
+    public R<User> updateProfile(@Parameter(description = "用户ID") @RequestParam Long userId,
+                                  @RequestBody Map<String, String> body) {
+        User user = userService.updateProfile(userId,
+            body.get("nickname"), body.get("email"), body.get("avatarUrl"));
         return R.ok(user);
     }
 }

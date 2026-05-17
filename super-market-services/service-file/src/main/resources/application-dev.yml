@@ -1,3 +1,8 @@
+minio:
+  endpoint: http://${DOCKER_HOST_IP:localhost}:${MINIO_API_PORT:9000}
+  access-key: ${MINIO_ROOT_USER:minioadmin}
+  secret-key: ${MINIO_ROOT_PASSWORD:minioadmin123}
+
 spring:
   servlet:
     multipart:

@@ -12,14 +12,19 @@ if [ -z "$PIDS" ]; then
   exit 0
 fi
 
+# Use PowerShell on Windows (more reliable than taskkill in Git Bash)
+IS_WINDOWS=false
+if [ "$(uname -s 2>/dev/null | cut -c1-6)" = "CYGWIN" ] || [ "$(uname -s 2>/dev/null)" = "MINGW"* ] || [ "${OS:-}" = "Windows_NT" ]; then
+  IS_WINDOWS=true
+fi
+
 COUNT=0
 for pid in $PIDS; do
   app_name=$(jps -l 2>/dev/null | grep "^$pid " | awk '{print $2}' | sed 's/com.supermarket.//' | sed 's/.Application//')
   echo -n "  Stopping $app_name (PID $pid) ... "
 
-  # Try Windows taskkill first, fall back to Unix kill
-  if command -v taskkill &>/dev/null; then
-    taskkill //PID "$pid" //F &>/dev/null && { echo "OK"; COUNT=$((COUNT + 1)); } || echo "FAILED"
+  if [ "$IS_WINDOWS" = true ]; then
+    powershell -Command "Stop-Process -Id $pid -Force" 2>/dev/null && { echo "OK"; COUNT=$((COUNT + 1)); } || echo "FAILED"
   else
     kill "$pid" 2>/dev/null && { echo "OK"; COUNT=$((COUNT + 1)); } || echo "FAILED"
   fi
@@ -32,5 +37,7 @@ REMAINING=${REMAINING:-0}
 echo "Stopped $COUNT services ($REMAINING remaining)."
 
 if [ "$REMAINING" -gt 0 ]; then
-  echo "Some processes may still be alive — check with: jps -l | grep Application"
+  echo "Some processes may still be alive — running force cleanup..."
+  powershell -Command "Get-Process java -ErrorAction SilentlyContinue | Where-Object { \$_.Id -ne \$PID } | Stop-Process -Force" 2>/dev/null
+  echo "Cleanup done."
 fi

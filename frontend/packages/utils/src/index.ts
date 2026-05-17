@@ -1,6 +1,7 @@
 export * from './constants'
 export * from './format'
 export * from './sso'
+export * from './imageUrl'
 export { useRevealOnScroll } from './useRevealOnScroll'
 export { useECharts } from './useECharts'
 export * as echarts from 'echarts'

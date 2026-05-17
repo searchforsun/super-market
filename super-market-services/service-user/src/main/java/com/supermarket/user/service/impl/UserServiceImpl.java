@@ -110,6 +110,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         updateById(user);
     }
 
+    @Override
+    public User updateProfile(Long userId, String nickname, String email, String avatarUrl) {
+        User user = getById(userId);
+        if (nickname != null && !nickname.isBlank()) {
+            user.setNickname(nickname);
+        }
+        if (email != null) {
+            user.setEmail(email.isBlank() ? null : email);
+        }
+        if (avatarUrl != null) {
+            user.setAvatarUrl(avatarUrl.isBlank() ? null : avatarUrl);
+        }
+        updateById(user);
+        user.setPasswordHash(null);
+        return user;
+    }
+
     // -- UserDubboService impl --
 
     @Override

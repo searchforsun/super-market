@@ -12,7 +12,7 @@
         </p>
       </div>
       <div class="user-extra">
-        <el-button size="small" plain @click="$router.push('/user/center')">编辑资料</el-button>
+        <el-button size="small" plain @click="$router.push('/user/profile')">编辑资料</el-button>
       </div>
     </div>
 

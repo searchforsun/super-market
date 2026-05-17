@@ -33,6 +33,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         "/api/user/login",
         "/api/auth/login",
         "/api/search",
+        "/api/file/raw",
         "/actuator",
         "/doc.html",
         "/swagger-ui",

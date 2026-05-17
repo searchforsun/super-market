@@ -88,7 +88,7 @@ public class FileServiceImpl implements FileService {
         record.setMd5(md5);
         record.setBucket(bucket);
         record.setObjectKey(objectKey);
-        record.setUrl(minioEndpoint + "/" + bucket + "/" + objectKey);
+        record.setUrl("/api/file/raw/" + bucket + "/" + objectKey);
         record.setUploaderId(uploaderId);
         fileRecordMapper.insert(record);
         return record;
@@ -129,6 +129,17 @@ public class FileServiceImpl implements FileService {
                     .bucket(r.getBucket()).object(r.getObjectKey()).build());
         } catch (Exception e) {
             log.error("MinIO download failed", e);
+            throw new BizException(ResultCode.FILE_DOWNLOAD_FAILED);
+        }
+    }
+
+    @Override
+    public InputStream downloadRaw(String bucket, String objectKey) {
+        try {
+            return minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(bucket).object(objectKey).build());
+        } catch (Exception e) {
+            log.error("MinIO raw download failed: {}/{}", bucket, objectKey, e);
             throw new BizException(ResultCode.FILE_DOWNLOAD_FAILED);
         }
     }

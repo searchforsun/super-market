@@ -17,6 +17,7 @@ const routes = [
       { path: 'order/:no', name: 'orderDetail', meta: { requiresAuth: true }, component: () => import('../pages/order/DetailPage.vue') },
       { path: 'user/orders', name: 'userOrders', meta: { requiresAuth: true }, component: () => import('../pages/user/OrdersPage.vue') },
       { path: 'user/center', name: 'userCenter', meta: { requiresAuth: true }, component: () => import('../pages/user/CenterPage.vue') },
+      { path: 'user/profile', name: 'userProfile', meta: { requiresAuth: true }, component: () => import('../pages/user/ProfileEditPage.vue') },
       { path: 'user/addresses', name: 'addresses', meta: { requiresAuth: true }, component: () => import('../pages/user/AddressPage.vue') },
       { path: 'user/coupons', name: 'coupons', meta: { requiresAuth: true }, component: () => import('../pages/user/CouponPage.vue') },
       { path: 'user/reviews', name: 'reviews', meta: { requiresAuth: true }, component: () => import('../pages/user/ReviewPage.vue') },
