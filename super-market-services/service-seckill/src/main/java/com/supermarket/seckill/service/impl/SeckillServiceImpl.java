@@ -3,6 +3,7 @@ package com.supermarket.seckill.service.impl;
 import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.seckill.entity.SeckillProduct;
 import com.supermarket.seckill.entity.SeckillSession;
 import com.supermarket.seckill.mapper.SeckillProductMapper;
@@ -83,15 +84,42 @@ public class SeckillServiceImpl implements SeckillService {
     }
 
     @Override
+    public List<SeckillSession> listAllSessions() {
+        return sessionMapper.selectList(new LambdaQueryWrapper<SeckillSession>()
+                .orderByDesc(SeckillSession::getStartTime));
+    }
+
+    @Override
+    @Transactional
+    public SeckillSession updateSession(SeckillSession session) {
+        sessionMapper.updateById(session);
+        return sessionMapper.selectById(session.getId());
+    }
+
+    @Override
+    @Transactional
+    public void deleteSession(Long id) {
+        productMapper.delete(new LambdaQueryWrapper<SeckillProduct>()
+                .eq(SeckillProduct::getSessionId, id));
+        sessionMapper.deleteById(id);
+    }
+
+    @Override
     public List<SeckillProduct> listProducts(Long sessionId) {
         return productMapper.selectList(new LambdaQueryWrapper<SeckillProduct>()
                 .eq(SeckillProduct::getSessionId, sessionId));
     }
 
     @Override
+    @Transactional
+    public void deleteProduct(Long id) {
+        productMapper.deleteById(id);
+    }
+
+    @Override
     public void preheat(Long seckillProductId) {
         SeckillProduct sp = productMapper.selectById(seckillProductId);
-        if (sp == null) throw new BizException(404, "秒杀商品不存在");
+        if (sp == null) throw new BizException(ResultCode.SECKILL_PRODUCT_NOT_FOUND);
 
         String stockKey = STOCK_KEY + seckillProductId;
         String productKey = PRODUCT_KEY + seckillProductId;

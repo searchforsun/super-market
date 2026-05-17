@@ -163,7 +163,7 @@ public class RoleBasedFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.FORBIDDEN);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String body = "{\"code\":403,\"message\":\"" + message + "\"}";
+        String body = String.format("{\"code\":%d,\"message\":\"%s\"}", ResultCode.FORBIDDEN.getCode(), message);
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return response.writeWith(Mono.just(buffer));
     }
@@ -1054,7 +1054,7 @@ public class UpdateSkuRequest {
 @Override
 public void updateSpu(Long spuId, UpdateProductRequest request) {
     Spu spu = spuMapper.selectById(spuId);
-    if (spu == null) throw new BizException(404, "商品不存在");
+    if (spu == null) throw new BizException(10040, "商品不存在");
     if (request.getName() != null) spu.setName(request.getName());
     if (request.getSubtitle() != null) spu.setSubtitle(request.getSubtitle());
     if (request.getMainImage() != null) spu.setMainImage(request.getMainImage());
@@ -1066,7 +1066,7 @@ public void updateSpu(Long spuId, UpdateProductRequest request) {
 @Override
 public void updateSku(Long skuId, UpdateSkuRequest request) {
     Sku sku = skuMapper.selectById(skuId);
-    if (sku == null) throw new BizException(404, "SKU不存在");
+    if (sku == null) throw new BizException(10040, "SKU不存在");
     if (request.getPrice() != null) sku.setPrice(request.getPrice());
     if (request.getMarketPrice() != null) sku.setMarketPrice(request.getMarketPrice());
     if (request.getImage() != null) sku.setImage(request.getImage());
@@ -2235,7 +2235,7 @@ git commit -m "feat: parallel CI build, security scan, graceful shutdown for all
 
 - [ ] **输入校验验证**
   ```bash
-  # 短密码 → 400 + "密码长度为6-32位"
+  # 短密码 → 20004 + "密码长度为6-32位"
   curl -X POST http://localhost:8999/api/auth/login -d "phone=13800138000&password=12"
   ```
 

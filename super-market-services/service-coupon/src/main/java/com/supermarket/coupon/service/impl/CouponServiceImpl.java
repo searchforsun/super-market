@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.coupon.CouponDubboService;
 import com.supermarket.coupon.entity.CouponBatch;
 import com.supermarket.coupon.entity.CouponTemplate;
@@ -51,8 +52,30 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
     @Override
     public CouponTemplate getTemplateById(Long id) {
         CouponTemplate t = getById(id);
-        if (t == null) throw new BizException(404, "优惠券模板不存在");
+        if (t == null) throw new BizException(ResultCode.COUPON_TEMPLATE_NOT_FOUND);
         return t;
+    }
+
+    @Override
+    @Transactional
+    public CouponTemplate updateTemplate(CouponTemplate template) {
+        updateById(template);
+        return getById(template.getId());
+    }
+
+    @Override
+    @Transactional
+    public boolean setTemplateStatus(Long id, Integer status) {
+        CouponTemplate t = new CouponTemplate();
+        t.setId(id);
+        t.setStatus(status);
+        return updateById(t);
+    }
+
+    @Override
+    @Transactional
+    public void deleteTemplate(Long id) {
+        removeById(id);
     }
 
     @Override
@@ -62,11 +85,18 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
     }
 
     @Override
+    public Page<CouponBatch> listBatches(int page, int size) {
+        return batchMapper.selectPage(new Page<>(page, size),
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CouponBatch>()
+                        .orderByDesc(CouponBatch::getCreatedAt));
+    }
+
+    @Override
     @Transactional
     public CouponBatch distribute(Long templateId, List<Long> userIds) {
         CouponTemplate template = getTemplateById(templateId);
         if (template.getRemainingStock() < userIds.size()) {
-            throw new BizException(400, "优惠券库存不足");
+            throw new BizException(ResultCode.COUPON_STOCK_INSUFFICIENT);
         }
 
         CouponBatch batch = new CouponBatch();
@@ -94,15 +124,15 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
         RLock lock = redissonClient.getLock(lockKey);
         try {
             if (!lock.tryLock(3, 5, TimeUnit.SECONDS)) {
-                throw new BizException(429, "领取过于频繁，请稍后再试");
+                throw new BizException(ResultCode.RATE_LIMITED);
             }
 
             CouponTemplate template = getTemplateById(templateId);
             if (template.getStatus() != 1) {
-                throw new BizException(400, "该优惠券已停用");
+                throw new BizException(ResultCode.COUPON_DISABLED);
             }
             if (template.getRemainingStock() <= 0) {
-                throw new BizException(400, "优惠券已领完");
+                throw new BizException(ResultCode.COUPON_STOCK_INSUFFICIENT);
             }
 
             // 检查是否已领取过
@@ -110,13 +140,13 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
                     .eq(UserCoupon::getUserId, userId)
                     .eq(UserCoupon::getTemplateId, templateId));
             if (count >= template.getPerUserLimit()) {
-                throw new BizException(400, "已达每人限领数量");
+                throw new BizException(ResultCode.COUPON_CLAIM_LIMIT);
             }
 
             // 扣减库存
             int rows = baseMapper.decrStock(templateId);
             if (rows == 0) {
-                throw new BizException(400, "优惠券已领完");
+                throw new BizException(ResultCode.COUPON_STOCK_INSUFFICIENT);
             }
 
             UserCoupon uc = buildCoupon(userId, template, null);
@@ -125,7 +155,7 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new BizException(500, "系统繁忙");
+            throw new BizException(ResultCode.SYSTEM_ERROR);
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
@@ -167,13 +197,13 @@ public class CouponServiceImpl extends ServiceImpl<CouponTemplateMapper, CouponT
     @Transactional
     public UserCoupon useCoupon(Long userId, Long couponId, String orderNo) {
         UserCoupon uc = userCouponMapper.selectById(couponId);
-        if (uc == null) throw new BizException(404, "优惠券不存在");
-        if (!uc.getUserId().equals(userId)) throw new BizException(403, "此优惠券不属于您");
-        if (uc.getStatus() != 1) throw new BizException(400, "优惠券不可用");
+        if (uc == null) throw new BizException(ResultCode.COUPON_TEMPLATE_NOT_FOUND);
+        if (!uc.getUserId().equals(userId)) throw new BizException(ResultCode.COUPON_NOT_OWNED);
+        if (uc.getStatus() != 1) throw new BizException(ResultCode.COUPON_UNAVAILABLE);
         if (uc.getExpireTime().isBefore(LocalDateTime.now())) {
             uc.setStatus(3);
             userCouponMapper.updateById(uc);
-            throw new BizException(400, "优惠券已过期");
+            throw new BizException(ResultCode.COUPON_EXPIRED);
         }
         uc.setStatus(2);
         uc.setOrderNo(orderNo);

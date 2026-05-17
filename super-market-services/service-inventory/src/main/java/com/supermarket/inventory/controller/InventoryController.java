@@ -1,6 +1,8 @@
 package com.supermarket.inventory.controller;
 
+import com.supermarket.common.core.exception.BizException;
 import com.supermarket.common.core.result.R;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.inventory.entity.Inventory;
 import com.supermarket.inventory.service.InventoryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,9 +34,17 @@ public class InventoryController {
     public R<Inventory> getBySku(@Parameter(description = "SKU ID") @PathVariable Long skuId) {
         Inventory inv = inventoryService.getBySkuId(skuId);
         if (inv == null) {
-            return R.fail(404, "库存信息不存在");
+            throw new BizException(ResultCode.STOCK_NOT_FOUND);
         }
         return R.ok(inv);
+    }
+
+    @PostMapping("/restock")
+    @Operation(summary = "增加库存")
+    public R<Boolean> restock(@Parameter(description = "SKU ID") @RequestParam Long skuId,
+                              @Parameter(description = "增加数量") @RequestParam int quantity) {
+        boolean success = inventoryService.restoreStock(skuId, quantity);
+        return R.ok(success);
     }
 
     @PostMapping("/deduct")
@@ -42,6 +52,9 @@ public class InventoryController {
     public R<Boolean> deduct(@Parameter(description = "SKU ID") @RequestParam Long skuId,
                              @Parameter(description = "扣减数量") @RequestParam int quantity) {
         boolean success = inventoryService.deductStock(skuId, quantity);
-        return success ? R.ok(true) : R.fail(400, "库存不足或扣减失败");
+        if (!success) {
+            throw new BizException(ResultCode.STOCK_INSUFFICIENT);
+        }
+        return R.ok(true);
     }
 }

@@ -19,6 +19,17 @@ export interface CategorySales {
   percentage: number
 }
 
+export interface StatusDistItem {
+  name: string
+  status: number
+  value: number
+}
+
+export interface UserTrendItem {
+  date: string
+  count: number
+}
+
 export interface RecentOrder {
   orderNo: string
   userName: string
@@ -32,6 +43,14 @@ export interface PendingAuditResult {
   pendingProducts: number
 }
 
+export interface MerchantStats {
+  todayOrders: number
+  todayGmv: number
+  pendingShip: number
+  pendingRefund: number
+  productCount?: number
+}
+
 export interface PageResult<T> {
   records: T[]
   total: number
@@ -39,6 +58,7 @@ export interface PageResult<T> {
   size: number
 }
 
+// Admin dashboard
 export function getDashboardStats(): Promise<DashboardStats> {
   return request.get('/platform/admin/dashboard/stats') as Promise<DashboardStats>
 }
@@ -51,6 +71,14 @@ export function getCategorySales(): Promise<CategorySales[]> {
   return request.get('/platform/admin/dashboard/category-sales') as Promise<CategorySales[]>
 }
 
+export function getStatusDistribution(): Promise<StatusDistItem[]> {
+  return request.get('/platform/admin/dashboard/status-distribution') as Promise<StatusDistItem[]>
+}
+
+export function getUserTrend(days = 7): Promise<UserTrendItem[]> {
+  return request.get('/platform/admin/dashboard/user-trend', { params: { days } }) as Promise<UserTrendItem[]>
+}
+
 export function getAdminOrders(params: {
   page?: number
   size?: number
@@ -61,4 +89,17 @@ export function getAdminOrders(params: {
 
 export function getPendingAudit(): Promise<PendingAuditResult> {
   return request.get('/platform/admin/dashboard/pending-audit') as Promise<PendingAuditResult>
+}
+
+// Merchant dashboard
+export function getMerchantStats(shopId: number): Promise<MerchantStats> {
+  return request.get('/platform/merchant/dashboard/stats', { params: { shopId } }) as Promise<MerchantStats>
+}
+
+export function getMerchantTrend(shopId: number, days = 7): Promise<DailyTrend[]> {
+  return request.get('/platform/merchant/dashboard/trend', { params: { shopId, days } }) as Promise<DailyTrend[]>
+}
+
+export function getMerchantStatusDistribution(shopId: number): Promise<StatusDistItem[]> {
+  return request.get('/platform/merchant/dashboard/status-distribution', { params: { shopId } }) as Promise<StatusDistItem[]>
 }

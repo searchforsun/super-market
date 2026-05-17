@@ -3,11 +3,14 @@ package com.supermarket.payment.controller;
 import com.supermarket.payment.entity.Payment;
 import com.supermarket.payment.entity.PaymentRefund;
 import com.supermarket.payment.service.PaymentService;
-import com.supermarket.payment.service.impl.PaymentServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,19 +21,33 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(PaymentController.class)
+/**
+ * Uses @SpringBootTest with a minimal TestConfig instead of @WebMvcTest to avoid
+ * loading the main application class which has @EnableDubbo. The @EnableDubbo
+ * annotation triggers Dubbo service export and @DubboReference resolution that
+ * cannot be disabled through auto-configuration exclusions alone.
+ * <p>
+ * The inner TestConfig uses @EnableAutoConfiguration to restore web-related
+ * auto-configurations (Jackson, MVC) that are needed for MockMvc to work,
+ * while explicitly excluding infrastructure auto-configurations (Dubbo, Nacos,
+ * DataSource, MyBatis-Plus).
+ */
+@SpringBootTest(classes = {PaymentController.class, PaymentControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PaymentControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    /**
-     * Mock the concrete impl class so the mock inherits both PaymentService and
-     * PaymentDubboService interfaces, satisfying Dubbo's service export check.
-     */
     @MockBean
-    private PaymentServiceImpl paymentService;
+    private PaymentService paymentService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = PaymentController.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreatePaymentWhenValidParams() throws Exception {
@@ -50,7 +67,7 @@ class PaymentControllerTest {
                         .param("amount", "199.99")
                         .param("payMethod", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.payNo").value("PAY202405160001"))
                 .andExpect(jsonPath("$.data.amount").value(199.99));
     }
@@ -64,7 +81,7 @@ class PaymentControllerTest {
                         .param("requestId", "REQ001")
                         .param("payNo", "PAY001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").value("SUCCESS"));
     }
 
@@ -79,7 +96,7 @@ class PaymentControllerTest {
 
         mockMvc.perform(get("/api/payment/PAY001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.payNo").value("PAY001"))
                 .andExpect(jsonPath("$.data.payStatus").value(1));
     }
@@ -100,7 +117,7 @@ class PaymentControllerTest {
                         .param("refundAmount", "99.99")
                         .param("reason", "商品质量问题"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.refundNo").value("RF202405160001"))
                 .andExpect(jsonPath("$.data.refundStatus").value(0));
     }

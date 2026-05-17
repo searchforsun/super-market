@@ -1991,7 +1991,7 @@ JEOF
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        <span class="tok-typ">String</span> body = <span class="tok-str">&quot;{\&quot;code\&quot;:401,\&quot;message\&quot;:\&quot;&quot;</span> + message + <span class="tok-str">&quot;\&quot;}&quot;</span>;
+        <span class="tok-typ">String</span> body = <span class="tok-str">&quot;{\&quot;code\&quot;:20001,\&quot;message\&quot;:\&quot;&quot;</span> + message + <span class="tok-str">&quot;\&quot;}&quot;</span>;
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         <span class="tok-kw">return</span> response.writeWith(Mono.just(buffer));
     }

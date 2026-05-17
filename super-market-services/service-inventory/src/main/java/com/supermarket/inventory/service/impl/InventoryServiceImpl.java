@@ -3,6 +3,7 @@ package com.supermarket.inventory.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.inventory.entity.Inventory;
 import com.supermarket.inventory.mapper.InventoryMapper;
 import com.supermarket.common.dubbo.api.inventory.InventoryDubboService;
@@ -29,7 +30,7 @@ public class InventoryServiceImpl extends ServiceImpl<InventoryMapper, Inventory
     public Inventory initStock(Long skuId, int totalStock, int safetyStock) {
         Inventory exist = getBySkuId(skuId);
         if (exist != null) {
-            throw new BizException(400, "该SKU库存已初始化");
+            throw new BizException(ResultCode.STOCK_ALREADY_INIT);
         }
         Inventory inv = new Inventory();
         inv.setSkuId(skuId);

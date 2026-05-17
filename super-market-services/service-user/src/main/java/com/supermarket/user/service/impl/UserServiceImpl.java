@@ -3,6 +3,7 @@ package com.supermarket.user.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.user.UserDubboService;
 import com.supermarket.common.dubbo.api.user.dto.UserDTO;
 import com.supermarket.user.entity.User;
@@ -16,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @DubboService(interfaceClass = UserDubboService.class)
 @org.springframework.stereotype.Service
@@ -32,20 +35,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public User register(String phone, String password) {
         if (phone == null || phone.isBlank()) {
-            throw new BizException(400, "手机号不能为空");
+            throw new BizException(ResultCode.USER_PHONE_EMPTY);
         }
         if (!phone.matches("^1[3-9]\\d{9}$")) {
-            throw new BizException(400, "手机号格式不正确");
+            throw new BizException(ResultCode.USER_PHONE_INVALID);
         }
         if (password == null || password.isBlank()) {
-            throw new BizException(400, "密码不能为空");
+            throw new BizException(ResultCode.USER_PASSWORD_EMPTY);
         }
         if (password.length() < 6) {
-            throw new BizException(400, "密码长度至少6位");
+            throw new BizException(ResultCode.USER_PASSWORD_WEAK);
         }
         User exist = getByPhone(phone);
         if (exist != null) {
-            throw new BizException(400, "该手机号已注册");
+            throw new BizException(ResultCode.USER_PHONE_EXISTS);
         }
         User user = new User();
         user.setPhone(phone);
@@ -72,13 +75,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User login(String phone, String password) {
         User user = getByPhone(phone);
         if (user == null) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(ResultCode.USER_PASSWORD_ERROR);
         }
         if (user.getStatus() != 1) {
-            throw new BizException(403, "账号已被禁用或注销");
+            throw new BizException(ResultCode.USER_ACCOUNT_DISABLED);
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(ResultCode.USER_PASSWORD_ERROR);
         }
         user.setLastLoginAt(LocalDateTime.now());
         updateById(user);
@@ -89,7 +92,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User getById(Long userId) {
         User user = getBaseMapper().selectById(userId);
         if (user == null) {
-            throw new BizException(404, "用户不存在");
+            throw new BizException(ResultCode.USER_NOT_FOUND);
         }
         return user;
     }
@@ -119,6 +122,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = getByPhone(phone);
         if (user == null) return null;
         return toDTO(user);
+    }
+
+    @Override
+    public List<Map<String, Object>> getDailyNewUsers(int days) {
+        return getBaseMapper().selectDailyNewUsers(days);
+    }
+
+    @Override
+    public long countTotalUsers() {
+        return getBaseMapper().selectTotalUsers();
+    }
+
+    @Override
+    public long countTodayNewUsers() {
+        return getBaseMapper().selectTodayNewUsers();
     }
 
     private UserDTO toDTO(User user) {

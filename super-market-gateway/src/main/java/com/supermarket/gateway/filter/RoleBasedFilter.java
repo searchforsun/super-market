@@ -1,5 +1,6 @@
 package com.supermarket.gateway.filter;
 
+import com.supermarket.common.core.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -39,7 +40,7 @@ public class RoleBasedFilter implements GlobalFilter, Ordered {
         "/api/platform/admin", Set.of("ROLE_ADMIN"),
         "/api/coupon/admin",   Set.of("ROLE_ADMIN", "ROLE_MERCHANT"),
         "/api/seckill/admin",  Set.of("ROLE_ADMIN", "ROLE_MERCHANT"),
-        "/api/shop/merchant",  Set.of("ROLE_MERCHANT"),
+        "/api/shop/merchant",  Set.of("ROLE_ADMIN", "ROLE_MERCHANT"),
         "/api/order/admin",    Set.of("ROLE_ADMIN")
     );
 
@@ -86,7 +87,7 @@ public class RoleBasedFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.FORBIDDEN);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String body = "{\"code\":403,\"message\":\"" + message + "\"}";
+        String body = String.format("{\"code\":%d,\"message\":\"%s\"}", ResultCode.FORBIDDEN.getCode(), message);
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return response.writeWith(Mono.just(buffer));
     }

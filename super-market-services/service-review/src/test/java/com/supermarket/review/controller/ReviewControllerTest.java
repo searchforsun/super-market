@@ -1,12 +1,18 @@
 package com.supermarket.review.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import com.supermarket.review.entity.Review;
 import com.supermarket.review.service.ReviewService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,7 +25,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ReviewController.class)
+@SpringBootTest(classes = {ReviewController.class, ReviewControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ReviewControllerTest {
 
@@ -28,6 +35,13 @@ class ReviewControllerTest {
 
     @MockBean
     private ReviewService reviewService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = ReviewController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateReviewWhenValidBody() throws Exception {
@@ -48,7 +62,7 @@ class ReviewControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.rating").value(5))
                 .andExpect(jsonPath("$.data.content").value("Great product!"));
     }
@@ -65,7 +79,7 @@ class ReviewControllerTest {
                         .param("userId", "100")
                         .param("content", "追加评价内容"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.content").value("Original + appended"));
     }
 
@@ -76,7 +90,7 @@ class ReviewControllerTest {
         mockMvc.perform(put("/api/review/1/reply")
                         .param("content", "感谢您的评价"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -94,7 +108,7 @@ class ReviewControllerTest {
 
         mockMvc.perform(get("/api/review/list/spu/200"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].content").value("Good"));
     }
 
@@ -111,7 +125,7 @@ class ReviewControllerTest {
 
         mockMvc.perform(get("/api/review/list/user/100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].content").value("My review"));
     }
 
@@ -130,7 +144,7 @@ class ReviewControllerTest {
                         .param("minRating", "3")
                         .param("maxRating", "5"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].rating").value(4));
     }
 
@@ -142,7 +156,7 @@ class ReviewControllerTest {
 
         mockMvc.perform(get("/api/review/rating/200"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.avgRating").value(4.5))
                 .andExpect(jsonPath("$.data.distribution.5").value(10));
     }

@@ -70,7 +70,6 @@
               style="width:140px"
               @change="fetchLogs(1)"
             >
-              <el-option label="全部类型" :value="undefined" />
               <el-option label="刷单" :value="1" />
               <el-option label="恶意退款" :value="2" />
               <el-option label="辱骂" :value="3" />
@@ -83,7 +82,6 @@
               style="width:130px"
               @change="fetchLogs(1)"
             >
-              <el-option label="全部等级" :value="undefined" />
               <el-option label="高" :value="3" />
               <el-option label="中" :value="2" />
               <el-option label="低" :value="1" />
@@ -465,15 +463,15 @@ const logTotal = ref(0)
 
 const logFilter = reactive({
   userId: '',
-  ruleType: undefined as number | undefined,
-  riskLevel: undefined as number | undefined,
+  ruleType: null as number | null,
+  riskLevel: null as number | null,
 })
 const logDateRange = ref<[string, string] | null>(null)
 
 function resetLogFilter() {
   logFilter.userId = ''
-  logFilter.ruleType = undefined
-  logFilter.riskLevel = undefined
+  logFilter.ruleType = null
+  logFilter.riskLevel = null
   logDateRange.value = null
   fetchLogs(1)
 }
@@ -487,8 +485,8 @@ async function fetchLogs(page?: number) {
       size: logPageSize.value,
     }
     if (logFilter.userId) params.userId = logFilter.userId
-    if (logFilter.ruleType !== undefined) params.ruleType = logFilter.ruleType
-    if (logFilter.riskLevel !== undefined) params.riskLevel = logFilter.riskLevel
+    if (logFilter.ruleType != null) params.ruleType = logFilter.ruleType
+    if (logFilter.riskLevel != null) params.riskLevel = logFilter.riskLevel
     if (logDateRange.value) {
       params.startTime = logDateRange.value[0]
       params.endTime = logDateRange.value[1]
@@ -561,14 +559,16 @@ onMounted(() => {
 
 <style scoped>
 .risk-page {
-  padding: 0;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  margin: 0 0 16px 0;
-  color: #1a1a1a;
+  margin: 0 0 20px;
+  color: var(--color-text-primary, #303133);
 }
 
 .toolbar {
@@ -598,7 +598,7 @@ onMounted(() => {
 .detail-row {
   display: flex;
   padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border, #f0f0f0);
 }
 
 .detail-row:last-child {
@@ -608,13 +608,13 @@ onMounted(() => {
 .detail-label {
   width: 100px;
   flex-shrink: 0;
-  color: #666;
+  color: var(--color-text-secondary, #666);
   font-size: 14px;
 }
 
 .detail-value {
   flex: 1;
-  color: #1a1a1a;
+  color: var(--color-text-primary, #1a1a1a);
   font-size: 14px;
   word-break: break-all;
 }

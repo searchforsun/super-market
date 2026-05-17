@@ -328,7 +328,7 @@
       - text: ":"
     - generic [ref=e241]:
       - text: java
-      - code [ref=e242]: "package com.supermarket.common.core.result; import lombok.Data; import java.io.Serializable; @Data public class R<T> implements Serializable { private int code; private String message; private T data; private long timestamp; private R() { this.timestamp = System.currentTimeMillis(); } public static <T> R<T> ok() { R<T> r = new R<>(); r.code = 200; r.message = \"success\"; return r; } public static <T> R<T> ok(T data) { R<T> r = ok(); r.data = data; return r; } public static <T> R<T> fail(int code, String message) { R<T> r = new R<>(); r.code = code; r.message = message; return r; } public static <T> R<T> fail(String message) { return fail(500, message); } public boolean isSuccess() { return this.code == 200; } }"
+      - code [ref=e242]: "package com.supermarket.common.core.result; import lombok.Data; import java.io.Serializable; @Data public class R<T> implements Serializable { private int code; private String message; private T data; private long timestamp; private R() { this.timestamp = System.currentTimeMillis(); } public static <T> R<T> ok() { R<T> r = new R<>(); r.code = 200; r.message = \"success\"; return r; } public static <T> R<T> ok(T data) { R<T> r = ok(); r.data = data; return r; } public static <T> R<T> fail(int code, String message) { R<T> r = new R<>(); r.code = code; r.message = message; return r; } public static <T> R<T> fail(String message) { return fail(900001, message); } public boolean isSuccess() { return this.code == 200; } }"
     - list [ref=e243]:
       - listitem [ref=e244]:
         - text: "[ ]"
@@ -339,7 +339,7 @@
       - text: ":"
     - generic [ref=e248]:
       - text: java
-      - code [ref=e249]: "package com.supermarket.common.core.exception; import lombok.Getter; @Getter public class BizException extends RuntimeException { private final int code; public BizException(int code, String message) { super(message); this.code = code; } public BizException(String message) { this(500, message); } }"
+      - code [ref=e249]: "package com.supermarket.common.core.exception; import lombok.Getter; @Getter public class BizException extends RuntimeException { private final int code; public BizException(int code, String message) { super(message); this.code = code; } public BizException(String message) { this(900001, message); } }"
     - list [ref=e250]:
       - listitem [ref=e251]:
         - text: "[ ]"
@@ -512,7 +512,7 @@
       - text: ":"
     - generic [ref=e368]:
       - text: java
-      - code [ref=e369]: "package com.supermarket.common.web.handler; import com.supermarket.common.core.exception.BizException; import com.supermarket.common.core.result.R; import lombok.extern.slf4j.Slf4j; import org.springframework.http.HttpStatus; import org.springframework.validation.FieldError; import org.springframework.web.bind.MethodArgumentNotValidException; import org.springframework.web.bind.annotation.ExceptionHandler; import org.springframework.web.bind.annotation.ResponseStatus; import org.springframework.web.bind.annotation.RestControllerAdvice; import java.util.stream.Collectors; @Slf4j @RestControllerAdvice public class GlobalExceptionHandler { @ExceptionHandler(BizException.class) public R<Void> handleBizException(BizException e) { log.warn(\"Business exception: code={}, message={}\", e.getCode(), e.getMessage()); return R.fail(e.getCode(), e.getMessage()); } @ExceptionHandler(MethodArgumentNotValidException.class) @ResponseStatus(HttpStatus.BAD_REQUEST) public R<Void> handleValidation(MethodArgumentNotValidException e) { String message = e.getBindingResult().getFieldErrors().stream() .map(FieldError::getDefaultMessage) .collect(Collectors.joining(\", \")); return R.fail(400, message); } @ExceptionHandler(Exception.class) @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR) public R<Void> handleException(Exception e) { log.error(\"Unexpected error\", e); return R.fail(500, \"系统繁忙，请稍后重试\"); } }"
+      - code [ref=e369]: "package com.supermarket.common.web.handler; import com.supermarket.common.core.exception.BizException; import com.supermarket.common.core.result.R; import lombok.extern.slf4j.Slf4j; import org.springframework.http.HttpStatus; import org.springframework.validation.FieldError; import org.springframework.web.bind.MethodArgumentNotValidException; import org.springframework.web.bind.annotation.ExceptionHandler; import org.springframework.web.bind.annotation.ResponseStatus; import org.springframework.web.bind.annotation.RestControllerAdvice; import java.util.stream.Collectors; @Slf4j @RestControllerAdvice public class GlobalExceptionHandler { @ExceptionHandler(BizException.class) public R<Void> handleBizException(BizException e) { log.warn(\"Business exception: code={}, message={}\", e.getCode(), e.getMessage()); return R.fail(e.getCode(), e.getMessage()); } @ExceptionHandler(MethodArgumentNotValidException.class) @ResponseStatus(HttpStatus.BAD_REQUEST) public R<Void> handleValidation(MethodArgumentNotValidException e) { String message = e.getBindingResult().getFieldErrors().stream() .map(FieldError::getDefaultMessage) .collect(Collectors.joining(\", \")); return R.fail(400, message); } @ExceptionHandler(Exception.class) @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR) public R<Void> handleException(Exception e) { log.error(\"Unexpected error\", e); return R.fail(900001, \"系统繁忙，请稍后重试\"); } }"
     - list [ref=e370]:
       - listitem [ref=e371]:
         - text: "[ ]"
@@ -699,7 +699,7 @@
       - listitem [ref=e498]:
         - text: "Create:"
         - code [ref=e499]: super-market-services/service-user/src/main/java/com/supermarket/user/UserApplication.java
-      - listitem [ref=e500]:
+      - listitem [ref=e900001]:
         - text: "Create:"
         - code [ref=e501]: super-market-services/service-user/src/main/java/com/supermarket/user/config/DubboProviderConfig.java
       - listitem [ref=e502]:
@@ -768,7 +768,7 @@
       - text: ":"
     - generic [ref=e543]:
       - text: yaml
-      - code [ref=e544]: "spring: datasource: url: jdbc:mysql://localhost:3306/db_user?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true username: root password: root123 driver-class-name: com.mysql.cj.jdbc.Driver hikari: minimum-idle: 5 maximum-pool-size: 20 idle-timeout: 30000 max-lifetime: 1800000 connection-timeout: 5000 data: redis: host: localhost port: 6379 password: redis123 database: 0 lettuce: pool: max-active: 8 max-idle: 8 min-idle: 2 dubbo: application: name: user-service qos-enable: false protocol: name: tri port: -1 registry: address: nacos://localhost:8848 parameters: namespace: public consumer: check: false timeout: 5000 retries: 0 mybatis-plus: mapper-locations: classpath*:mapper/**/*.xml type-aliases-package: com.supermarket.user.entity global-config: db-config: id-type: assign_id logic-delete-field: isDeleted logic-delete-value: 1 logic-not-delete-value: 0 logging: level: com.supermarket: DEBUG com.baomidou: WARN"
+      - code [ref=e544]: "spring: datasource: url: jdbc:mysql://localhost:3306/db_user?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true username: root password: root123 driver-class-name: com.mysql.cj.jdbc.Driver hikari: minimum-idle: 5 maximum-pool-size: 20 idle-timeout: 30000 max-lifetime: 1800000 connection-timeout: 9000010 data: redis: host: localhost port: 6379 password: redis123 database: 0 lettuce: pool: max-active: 8 max-idle: 8 min-idle: 2 dubbo: application: name: user-service qos-enable: false protocol: name: tri port: -1 registry: address: nacos://localhost:8848 parameters: namespace: public consumer: check: false timeout: 9000010 retries: 0 mybatis-plus: mapper-locations: classpath*:mapper/**/*.xml type-aliases-package: com.supermarket.user.entity global-config: db-config: id-type: assign_id logic-delete-field: isDeleted logic-delete-value: 1 logic-not-delete-value: 0 logging: level: com.supermarket: DEBUG com.baomidou: WARN"
     - paragraph [ref=e545]:
       - text: 写入
       - code [ref=e546]: super-market-services/service-user/src/main/resources/bootstrap.yml

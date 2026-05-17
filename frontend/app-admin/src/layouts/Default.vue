@@ -51,7 +51,8 @@ function doLogout() { clearAuth(); router.push('/login') }
   font-family: var(--font-body, 'Inter', sans-serif);
 }
 .admin-header {
-  background: #3b1d6e;
+  background: #0f172a;
+  border-bottom: 1px solid var(--color-border, #334155);
   padding: 0 var(--space-lg, 24px);
   position: sticky; top: 0; z-index: 100;
 }
@@ -70,19 +71,19 @@ function doLogout() { clearAuth(); router.push('/login') }
 }
 .logo-mark {
   width: 32px; height: 32px;
-  background: #7c3aed;
+  background: var(--color-accent, #2563eb);
   color: #fff; border-radius: var(--radius-sm, 4px);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-weight: 700; font-size: 18px;
+  font-family: var(--font-body); font-weight: 700; font-size: 18px;
 }
-.header-nav { display: flex; align-items: center; gap: var(--space-lg, 24px); }
+.header-nav { display: flex; align-items: center; gap: var(--space-lg, 24px); color: #fff; }
 .nav-link {
-  color: rgba(255,255,255,0.65); font-size: 13px;
-  text-decoration: none; transition: color 0.2s;
+  color: #fff; opacity: 0.65; font-size: 13px;
+  text-decoration: none; transition: opacity 0.2s;
   background: none; border: none; cursor: pointer;
 }
-.nav-link:hover { color: #fff; }
-.logout-btn { color: rgba(255,255,255,0.4); padding: 0; }
+.nav-link:hover { opacity: 1; }
+.logout-btn { opacity: 0.4; padding: 0; }
 
 .admin-body { display: flex; min-height: calc(100vh - 56px); }
 .admin-sidebar {
@@ -101,8 +102,8 @@ function doLogout() { clearAuth(); router.push('/login') }
   color: var(--color-text-primary, #1a1816);
 }
 .sidebar-item.router-link-active {
-  background: #f5f0ff; color: #7c3aed;
-  border-left-color: #7c3aed; font-weight: 500;
+  background: var(--color-accent-light, #eff6ff); color: var(--color-accent, #2563eb);
+  border-left-color: var(--color-accent, #2563eb); font-weight: 500;
 }
 .admin-content {
   flex: 1; padding: var(--space-lg, 24px);

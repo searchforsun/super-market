@@ -1,12 +1,14 @@
 package com.supermarket.search.entity;
 
 import lombok.Data;
+import org.springframework.data.elasticsearch.annotations.Document;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
+@Document(indexName = "product_document")
 public class ProductDocument {
     private Long spuId;
     private String spuNo;

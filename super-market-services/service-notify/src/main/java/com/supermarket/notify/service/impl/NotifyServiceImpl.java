@@ -3,6 +3,7 @@ package com.supermarket.notify.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.notify.entity.Notification;
 import com.supermarket.notify.entity.NotifyTemplate;
 import com.supermarket.notify.mapper.NotificationMapper;
@@ -39,6 +40,48 @@ public class NotifyServiceImpl implements NotifyService {
     public NotifyTemplate createTemplate(NotifyTemplate template) {
         templateMapper.insert(template);
         return template;
+    }
+
+    @Override
+    public NotifyTemplate updateTemplate(NotifyTemplate template) {
+        templateMapper.updateById(template);
+        return templateMapper.selectById(template.getId());
+    }
+
+    @Override
+    public boolean setTemplateStatus(Long id, Integer status) {
+        NotifyTemplate t = new NotifyTemplate();
+        t.setId(id);
+        t.setStatus(status);
+        return templateMapper.updateById(t) > 0;
+    }
+
+    @Override
+    public void deleteTemplate(Long id) {
+        templateMapper.deleteById(id);
+    }
+
+    @Override
+    public Page<NotifyTemplate> listTemplates(int page, int size) {
+        return templateMapper.selectPage(new Page<>(page, size),
+                new LambdaQueryWrapper<NotifyTemplate>().orderByDesc(NotifyTemplate::getCreatedAt));
+    }
+
+    @Override
+    public void testSend(Long templateId, Long userId, String phone, String email) {
+        NotifyTemplate tpl = templateMapper.selectById(templateId);
+        if (tpl == null) throw new BizException(ResultCode.NOTIFY_TEMPLATE_NOT_FOUND);
+        Notification notif = new Notification();
+        notif.setUserId(userId);
+        notif.setTemplateId(tpl.getId());
+        notif.setChannel(tpl.getChannel());
+        notif.setTitle(tpl.getTitle());
+        notif.setContent(tpl.getContent());
+        notif.setStatus(0);
+        notif.setSendStatus(1);
+        notif.setSendAt(LocalDateTime.now());
+        notificationMapper.insert(notif);
+        log.info("测试通知已发送: templateId={}, userId={}", templateId, userId);
     }
 
     @Override
@@ -112,7 +155,7 @@ public class NotifyServiceImpl implements NotifyService {
     @Override
     public void markRead(Long notifyId) {
         Notification n = notificationMapper.selectById(notifyId);
-        if (n == null) throw new BizException(404, "通知不存在");
+        if (n == null) throw new BizException(ResultCode.NOTIFY_NOT_FOUND);
         n.setStatus(1);
         n.setReadAt(LocalDateTime.now());
         notificationMapper.updateById(n);

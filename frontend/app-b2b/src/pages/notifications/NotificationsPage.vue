@@ -173,7 +173,7 @@ onMounted(() => {
 
 <style scoped>
 .b2b-notifications {
-  background: #f5f7fa;
+  background: var(--color-bg, #f5f7fa);
   min-height: 100%;
 }
 
@@ -185,9 +185,9 @@ onMounted(() => {
 }
 
 .page-header h2 {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1a1a2e;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
   margin: 0;
 }
 
@@ -220,20 +220,20 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border, #f0f0f0);
   transition: background-color 0.2s;
 }
 
 .notify-item:hover {
-  background-color: #fafafa;
+  background-color: var(--color-surface-hover, #fafafa);
 }
 
 .notify-item.unread {
-  background-color: #f0f7ff;
+  background-color: var(--color-accent-light, #f0f7ff);
 }
 
 .notify-item.unread:hover {
-  background-color: #e6f2ff;
+  background-color: var(--color-accent-soft, #e6f2ff);
 }
 
 .notify-item__main {
@@ -251,7 +251,7 @@ onMounted(() => {
 
 .notify-item__title {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -259,7 +259,7 @@ onMounted(() => {
 
 .notify-item__title.is-bold {
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-text-primary, #1a1a2e);
 }
 
 .notify-item__meta {
@@ -271,14 +271,14 @@ onMounted(() => {
 
 .notify-item__type {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-muted, #999);
   white-space: nowrap;
 }
 
 .notify-item__content {
   margin: 0;
   font-size: 13px;
-  color: #606266;
+  color: var(--color-text-secondary, #606266);
   line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;

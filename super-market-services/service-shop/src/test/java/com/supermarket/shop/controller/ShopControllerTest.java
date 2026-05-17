@@ -9,9 +9,13 @@ import com.supermarket.shop.entity.Shop;
 import com.supermarket.shop.service.ShopService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
@@ -22,8 +26,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ShopController.class)
-@Import({GlobalExceptionHandler.class, ShopControllerTest.TestConfig.class})
+@SpringBootTest(classes = {ShopController.class, ShopControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ShopControllerTest {
 
@@ -35,7 +39,10 @@ class ShopControllerTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @TestConfiguration
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = ShopController.class)
+    @Import(GlobalExceptionHandler.class)
     static class TestConfig {
         @Bean
         @Primary
@@ -65,7 +72,7 @@ class ShopControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(merchant)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(1L))
                 .andExpect(jsonPath("$.data.companyName").value("测试公司"));
 
@@ -82,7 +89,7 @@ class ShopControllerTest {
                 .param("auditStatus", "1")
                 .param("reason", "通过审核"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(shopService).auditMerchant(1L, 1, "通过审核");
@@ -105,7 +112,7 @@ class ShopControllerTest {
                 .param("page", "1")
                 .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].companyName").value("测试公司"))
                 .andExpect(jsonPath("$.data.total").value(1));
 
@@ -126,7 +133,7 @@ class ShopControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/shop/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.shopName").value("测试店铺"));
 
         verify(shopService).getShopById(1L);
@@ -145,7 +152,7 @@ class ShopControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/shop/merchant/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.shopName").value("商家店铺"));
 
         verify(shopService).getShopByMerchantId(1L);

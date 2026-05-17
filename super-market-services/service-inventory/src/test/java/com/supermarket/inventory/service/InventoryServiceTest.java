@@ -1,21 +1,40 @@
 package com.supermarket.inventory.service;
 
 import com.supermarket.inventory.entity.Inventory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.TimeUnit;
+
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
 class InventoryServiceTest {
 
+    @MockBean
+    private RedissonClient redissonClient;
+
     @Autowired
     private InventoryService inventoryService;
+
+    @BeforeEach
+    void setUp() throws InterruptedException {
+        RLock mockLock = mock(RLock.class);
+        when(mockLock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+        when(mockLock.isHeldByCurrentThread()).thenReturn(true);
+        when(redissonClient.getLock(anyString())).thenReturn(mockLock);
+    }
 
     @Test
     void shouldInitStock() {

@@ -1082,7 +1082,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         for (var item : request.getItems()) {
             boolean deducted = inventoryDubboService.deduct(item.getSkuId(), item.getQuantity());
             if (!deducted) {
-                throw new BizException(400, "库存不足: skuId=" + item.getSkuId());
+                throw new BizException(100011, "库存不足: skuId=" + item.getSkuId());
             }
         }
 
@@ -1093,14 +1093,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     public Order getByOrderNo(String orderNo) {
         Order order = getOne(new LambdaQueryWrapper<Order>().eq(Order::getOrderNo, orderNo));
-        if (order == null) throw new BizException(404, "订单不存在");
+        if (order == null) throw new BizException(10040, "订单不存在");
         return order;
     }
 
     @Override
     public Order getById(Long orderId) {
         Order order = super.getById(orderId);
-        if (order == null) throw new BizException(404, "订单不存在");
+        if (order == null) throw new BizException(10040, "订单不存在");
         return order;
     }
 
@@ -1127,7 +1127,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public void cancelOrder(String orderNo, String reason) {
         Order order = getByOrderNo(orderNo);
         if (order.getOrderStatus() != 1) {
-            throw new BizException(400, "仅待付款订单可取消");
+            throw new BizException(100012, "仅待付款订单可取消");
         }
         order.setOrderStatus(5); // 已取消
         updateById(order);
@@ -1140,7 +1140,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     public void paySuccess(String orderNo, String payNo) {
         Order order = getByOrderNo(orderNo);
         if (order.getOrderStatus() != 1) {
-            throw new BizException(400, "订单状态不正确");
+            throw new BizException(100013, "订单状态不正确");
         }
         order.setOrderStatus(2); // 待发货
         order.setPayNo(payNo);
@@ -1152,7 +1152,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void ship(String orderNo) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 2) throw new BizException(400, "仅待发货订单可发货");
+        if (order.getOrderStatus() != 2) throw new BizException(100014, "仅待发货订单可发货");
         order.setOrderStatus(3); // 待收货
         order.setShippedAt(LocalDateTime.now());
         updateById(order);
@@ -1162,7 +1162,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void confirmReceive(String orderNo) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 3) throw new BizException(400, "仅待收货订单可确认");
+        if (order.getOrderStatus() != 3) throw new BizException(100015, "仅待收货订单可确认");
         order.setOrderStatus(4); // 已完成
         order.setReceivedAt(LocalDateTime.now());
         updateById(order);
@@ -1572,7 +1572,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     @Transactional
     public Payment createPayment(String orderNo, Long userId, BigDecimal amount, Integer payMethod) {
         Payment exist = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getOrderNo, orderNo));
-        if (exist != null) throw new BizException(400, "该订单已创建支付单");
+        if (exist != null) throw new BizException(100016, "该订单已创建支付单");
 
         String payNo = "PAY" + IdUtil.getSnowflakeNextId();
         Payment payment = new Payment();
@@ -1589,7 +1589,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     @Override
     public Payment getByPayNo(String payNo) {
         Payment p = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getPayNo, payNo));
-        if (p == null) throw new BizException(404, "支付单不存在");
+        if (p == null) throw new BizException(10040, "支付单不存在");
         return p;
     }
 
@@ -1610,7 +1610,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
 
         Payment payment = getByPayNo(payNo);
         if (payment.getPayStatus() != 1) {
-            throw new BizException(400, "支付单状态不正确");
+            throw new BizException(100017, "支付单状态不正确");
         }
 
         // 更新支付单
@@ -1638,7 +1638,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     public PaymentRefund refund(String orderNo, BigDecimal refundAmount, String reason) {
         Payment payment = getByOrderNo(orderNo);
         if (payment == null || payment.getPayStatus() != 2) {
-            throw new BizException(400, "仅已支付订单可退款");
+            throw new BizException(100018, "仅已支付订单可退款");
         }
 
         String refundNo = "RFD" + IdUtil.getSnowflakeNextId();

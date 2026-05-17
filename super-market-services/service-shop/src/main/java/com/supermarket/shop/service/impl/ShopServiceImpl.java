@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.shop.ShopDubboService;
 import com.supermarket.shop.entity.Merchant;
 import com.supermarket.shop.entity.Shop;
@@ -32,7 +33,7 @@ public class ShopServiceImpl implements ShopService, ShopDubboService {
         Merchant exist = merchantMapper.selectOne(
             new LambdaQueryWrapper<Merchant>().eq(Merchant::getUserId, merchant.getUserId()));
         if (exist != null) {
-            throw new BizException(400, "该用户已提交入驻申请");
+            throw new BizException(ResultCode.MERCHANT_ALREADY_APPLIED);
         }
         merchant.setAuditStatus(0);
         merchant.setStatus(1);
@@ -45,7 +46,7 @@ public class ShopServiceImpl implements ShopService, ShopDubboService {
     public void auditMerchant(Long merchantId, Integer auditStatus, String reason) {
         Merchant merchant = getMerchantById(merchantId);
         if (merchant.getAuditStatus() != 0) {
-            throw new BizException(400, "该商家已审核");
+            throw new BizException(ResultCode.MERCHANT_ALREADY_AUDITED);
         }
         merchant.setAuditStatus(auditStatus);
         merchant.setAuditReason(reason);
@@ -76,7 +77,7 @@ public class ShopServiceImpl implements ShopService, ShopDubboService {
     public Merchant getMerchantById(Long id) {
         Merchant m = merchantMapper.selectById(id);
         if (m == null) {
-            throw new BizException(404, "商家不存在");
+            throw new BizException(ResultCode.MERCHANT_NOT_FOUND);
         }
         return m;
     }
@@ -96,7 +97,7 @@ public class ShopServiceImpl implements ShopService, ShopDubboService {
     public Shop getShopById(Long id) {
         Shop shop = shopMapper.selectById(id);
         if (shop == null) {
-            throw new BizException(404, "店铺不存在");
+            throw new BizException(ResultCode.SHOP_NOT_FOUND);
         }
         return shop;
     }
@@ -108,6 +109,16 @@ public class ShopServiceImpl implements ShopService, ShopDubboService {
         Merchant m = merchantMapper.selectOne(
             new LambdaQueryWrapper<Merchant>().eq(Merchant::getUserId, userId));
         return m != null;
+    }
+
+    @Override
+    public Long getShopIdByUserId(Long userId) {
+        Merchant m = merchantMapper.selectOne(
+            new LambdaQueryWrapper<Merchant>().eq(Merchant::getUserId, userId));
+        if (m == null) return null;
+        Shop shop = shopMapper.selectOne(
+            new LambdaQueryWrapper<Shop>().eq(Shop::getMerchantId, m.getId()));
+        return shop != null ? shop.getId() : null;
     }
 
     @Override

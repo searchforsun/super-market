@@ -9,8 +9,12 @@ import com.supermarket.seckill.entity.SeckillSession;
 import com.supermarket.seckill.service.SeckillService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -26,8 +30,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SeckillController.class)
-@Import(GlobalExceptionHandler.class)
+@SpringBootTest(classes = {SeckillController.class, SeckillControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SeckillControllerTest {
 
@@ -40,6 +44,13 @@ class SeckillControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = SeckillController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateSessionWhenRequestIsValid() throws Exception {
@@ -61,7 +72,7 @@ class SeckillControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(session)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.id").value(1L))
                 .andExpect(jsonPath("$.data.name").value("限时秒杀"));
@@ -72,12 +83,6 @@ class SeckillControllerTest {
     @Test
     void shouldCreateProductWhenRequestIsValid() throws Exception {
         // Arrange
-        SeckillProduct product = new SeckillProduct();
-        product.setSessionId(1L);
-        product.setSpuId(100L);
-        product.setSeckillPrice(new BigDecimal("99.99"));
-        product.setSeckillStock(100);
-
         SeckillProduct created = new SeckillProduct();
         created.setId(1L);
         created.setSessionId(1L);
@@ -85,12 +90,20 @@ class SeckillControllerTest {
 
         when(seckillService.createProduct(any(SeckillProduct.class))).thenReturn(created);
 
+        // The controller expects sessionId as @RequestParam and body as Map<String, Object>
+        // with keys: productId, seckillPrice, stock
+        Map<String, Object> body = new HashMap<>();
+        body.put("productId", 100L);
+        body.put("seckillPrice", 99.99);
+        body.put("stock", 100);
+
         // Act & Assert
         mockMvc.perform(post("/api/seckill/admin/product")
+                .param("sessionId", "1")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(product)))
+                .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.sessionId").value(1L));
 
@@ -105,7 +118,7 @@ class SeckillControllerTest {
         // Act & Assert
         mockMvc.perform(post("/api/seckill/admin/preheat/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(seckillService).preheat(1L);
@@ -124,7 +137,7 @@ class SeckillControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/seckill/sessions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].id").value(1L))
                 .andExpect(jsonPath("$.data[0].name").value("今日秒杀"));
 
@@ -145,7 +158,7 @@ class SeckillControllerTest {
         mockMvc.perform(get("/api/seckill/products")
                 .param("sessionId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].sessionId").value(1L));
 
         verify(seckillService).listProducts(1L);
@@ -166,7 +179,7 @@ class SeckillControllerTest {
                 .param("seckillProductId", "1")
                 .param("quantity", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderId").value(10001L));
 
         verify(seckillService).execute(1L, 1L, 1);
@@ -186,9 +199,9 @@ class SeckillControllerTest {
                 .param("userId", "1")
                 .param("seckillProductId", "1")
                 .param("quantity", "10"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message").value("库存不足"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(40010))
+                .andExpect(jsonPath("$.message").value("秒杀库存不足"));
 
         verify(seckillService).execute(1L, 1L, 10);
     }

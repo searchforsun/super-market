@@ -11,6 +11,19 @@ import java.util.Map;
 
 public interface PlatformService {
 
+    // Dashboard
+    Map<String, Object> getDashboardStats();
+    List<Map<String, Object>> getDailyTrend(int days);
+    List<Map<String, Object>> getCategorySales();
+    List<Map<String, Object>> getStatusDistribution();
+    List<Map<String, Object>> getUserTrend(int days);
+    Map<String, Object> getPendingAudit();
+
+    // Merchant Dashboard
+    Map<String, Object> getMerchantStats(Long shopId);
+    List<Map<String, Object>> getMerchantDailyTrend(Long shopId, int days);
+    List<Map<String, Object>> getMerchantStatusDistribution(Long shopId);
+
     Banner createBanner(Banner banner);
     Banner updateBanner(Banner banner);
     void deleteBanner(Long id);
@@ -25,4 +38,8 @@ public interface PlatformService {
     Map<String, Object> evaluateRisk(Long userId, String targetId, Integer riskType);
 
     Page<RiskLog> listRiskLogs(Integer riskType, int page, int size);
+
+    Map<String, Object> getGmvReport(String startDate, String endDate);
+    Map<String, Object> getOrderReport(String startDate, String endDate);
+    Map<String, Object> getUserReport(String startDate, String endDate);
 }

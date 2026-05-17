@@ -18,8 +18,8 @@ public class R<T> implements Serializable {
 
     public static <T> R<T> ok() {
         R<T> r = new R<>();
-        r.code = 200;
-        r.message = "success";
+        r.code = ResultCode.SUCCESS.getCode();
+        r.message = ResultCode.SUCCESS.getMessage();
         return r;
     }
 
@@ -37,10 +37,22 @@ public class R<T> implements Serializable {
     }
 
     public static <T> R<T> fail(String message) {
-        return fail(500, message);
+        return fail(ResultCode.SYSTEM_ERROR.getCode(), message);
+    }
+
+    public static <T> R<T> fail(IResultCode rc) {
+        return fail(rc.getCode(), rc.getMessage());
+    }
+
+    public static <T> R<T> fail(IResultCode rc, String message) {
+        return fail(rc.getCode(), message);
     }
 
     public boolean isSuccess() {
-        return this.code == 200;
+        return this.code == 0;
+    }
+
+    public boolean isFail() {
+        return !isSuccess();
     }
 }

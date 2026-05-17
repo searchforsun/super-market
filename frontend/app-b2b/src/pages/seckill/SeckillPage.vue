@@ -1,6 +1,6 @@
 <template>
   <div class="seckill-container page-enter">
-    <h2>秒杀活动管理</h2>
+    <h2 class="page-title">秒杀活动管理</h2>
 
     <el-tabs v-model="activeTab" type="border-card">
       <el-tab-pane label="秒杀场次" name="sessions">
@@ -463,16 +463,16 @@ onMounted(() => {
 
 <style scoped>
 .seckill-container {
-  background: #fff;
-  padding: 20px;
-  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 
-.seckill-container h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
+.page-title {
+  margin: 0 0 20px;
   font-size: 20px;
-  color: #303133;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
 }
 
 .toolbar {
@@ -516,8 +516,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--color-surface-hover, #f5f7fa);
+  color: var(--color-text-muted, #c0c4cc);
   font-size: 12px;
 }
 </style>

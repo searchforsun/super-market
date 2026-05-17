@@ -94,7 +94,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper">
+    <div class="pagination-wrap">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -457,7 +457,7 @@ onMounted(() => {
 
 <style scoped>
 .audit-page {
-  background: #fff;
+  background: var(--color-surface, #fff);
   padding: 24px;
   border-radius: 8px;
 }
@@ -465,8 +465,8 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  margin-bottom: 16px;
-  color: #303133;
+  margin: 0 0 20px;
+  color: var(--color-text-primary, #303133);
 }
 
 .filter-bar {
@@ -484,31 +484,31 @@ onMounted(() => {
   width: 200px;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
 }
 
 .product-name {
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   font-weight: 500;
 }
 
 .img-placeholder {
   width: 56px;
   height: 56px;
-  background: #f5f5f5;
+  background: var(--color-surface-hover, #f5f5f5);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-muted, #999);
 }
 
 .no-price {
-  color: #999;
+  color: var(--color-text-muted, #999);
   font-size: 12px;
 }
 
@@ -530,7 +530,7 @@ onMounted(() => {
 
 .description-text {
   white-space: pre-wrap;
-  color: #606266;
+  color: var(--color-text-secondary, #606266);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -538,16 +538,16 @@ onMounted(() => {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   margin: 16px 0 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--color-border, #ebeef5);
 }
 
 .audit-section {
   margin-top: 20px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--color-surface-hover, #fafafa);
   border-radius: 6px;
 }
 

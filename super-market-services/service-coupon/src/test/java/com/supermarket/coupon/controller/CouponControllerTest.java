@@ -2,15 +2,20 @@ package com.supermarket.coupon.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import com.supermarket.coupon.entity.CouponBatch;
 import com.supermarket.coupon.entity.CouponTemplate;
 import com.supermarket.coupon.entity.UserCoupon;
-import com.supermarket.coupon.service.CouponService;
 import com.supermarket.coupon.service.impl.CouponServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,7 +28,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(CouponController.class)
+@SpringBootTest(classes = {CouponController.class, CouponControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CouponControllerTest {
 
@@ -39,6 +45,13 @@ class CouponControllerTest {
      */
     @MockBean
     private CouponServiceImpl couponService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = CouponController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateTemplateWhenValidBody() throws Exception {
@@ -61,7 +74,7 @@ class CouponControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.name").value("满100减20"))
                 .andExpect(jsonPath("$.data.discountValue").value(20));
     }
@@ -82,7 +95,7 @@ class CouponControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(userIds)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.templateId").value(10))
                 .andExpect(jsonPath("$.data.quantity").value(2));
     }
@@ -100,7 +113,7 @@ class CouponControllerTest {
 
         mockMvc.perform(get("/api/coupon/available"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].name").value("新人优惠券"));
     }
 
@@ -118,7 +131,7 @@ class CouponControllerTest {
                         .param("userId", "101")
                         .param("templateId", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.userId").value(101))
                 .andExpect(jsonPath("$.data.templateId").value(10));
     }
@@ -138,7 +151,7 @@ class CouponControllerTest {
         mockMvc.perform(get("/api/coupon/my")
                         .param("userId", "101"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].userId").value(101))
                 .andExpect(jsonPath("$.data.records[0].status").value(0));
     }
@@ -155,7 +168,7 @@ class CouponControllerTest {
         mockMvc.perform(get("/api/coupon/available/list")
                         .param("userId", "101"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].userId").value(101));
     }
 }

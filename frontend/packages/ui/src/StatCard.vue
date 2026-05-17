@@ -31,6 +31,6 @@ defineProps<{ label: string; value: string | number; trend?: 'up' | 'down'; tren
 .stat-label { font-size: 12px; color: var(--color-text-muted, #999); margin-bottom: 6px; }
 .stat-value { font-size: 24px; font-weight: 700; color: var(--color-text-primary, #333); }
 .stat-trend { font-size: 11px; margin-top: 4px; }
-.stat-card.up .stat-trend { color: #10b981; }
-.stat-card.down .stat-trend { color: #ef4444; }
+.stat-card.up .stat-trend { color: var(--color-success, #10b981); }
+.stat-card.down .stat-trend { color: var(--color-danger, #ef4444); }
 </style>

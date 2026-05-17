@@ -19,4 +19,6 @@ public interface ShopService {
     Shop getShopById(Long id);
 
     Shop getShopByMerchantId(Long merchantId);
+
+    Long getShopIdByUserId(Long userId);
 }

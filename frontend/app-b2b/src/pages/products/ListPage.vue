@@ -164,19 +164,20 @@ onMounted(fetchData)
 
 <style scoped>
 .product-list-page {
-  background: #fff;
-  padding: 20px;
-  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .page-header h2 {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
+  color: var(--color-text-primary, #303133);
   margin: 0;
 }
 .search-bar {

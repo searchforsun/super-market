@@ -8,6 +8,6 @@ export function login(phone: string, password: string) {
   return request.post('/user/login', { phone, password })
 }
 
-export function getUserInfo(userId: number) {
+export function getUserInfo(userId: string) {
   return request.get('/user/info', { params: { userId } })
 }

@@ -2,6 +2,7 @@ package com.supermarket.product.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import com.supermarket.product.dto.CreateProductRequest;
 import com.supermarket.product.dto.UpdateProductRequest;
 import com.supermarket.product.dto.UpdateSkuRequest;
@@ -10,8 +11,13 @@ import com.supermarket.product.entity.Spu;
 import com.supermarket.product.service.ProductService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,7 +30,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ProductController.class)
+@SpringBootTest(classes = {ProductController.class, ProductControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ProductControllerTest {
 
@@ -36,6 +43,13 @@ class ProductControllerTest {
 
     @MockBean
     private ProductService productService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = ProductController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateProductWhenValidRequest() throws Exception {
@@ -55,7 +69,7 @@ class ProductControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"))
                 .andExpect(jsonPath("$.data.name").value("Test Product"));
     }
@@ -71,7 +85,7 @@ class ProductControllerTest {
 
         mockMvc.perform(get("/api/product/spu/100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.name").value("Test Spu"))
                 .andExpect(jsonPath("$.data.spuNo").value("SPU20240001"));
     }
@@ -88,7 +102,7 @@ class ProductControllerTest {
 
         mockMvc.perform(get("/api/product/spu/100/skus"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].specName").value("Size M"));
     }
 
@@ -100,7 +114,7 @@ class ProductControllerTest {
                         .param("auditStatus", "1")
                         .param("reason", "Approved"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -111,7 +125,7 @@ class ProductControllerTest {
         mockMvc.perform(put("/api/product/spu/100/shelf")
                         .param("shelfStatus", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -130,7 +144,7 @@ class ProductControllerTest {
                         .param("page", "1")
                         .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].name").value("Shop Product"));
     }
 
@@ -147,7 +161,7 @@ class ProductControllerTest {
 
         mockMvc.perform(get("/api/product/list/category/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].name").value("Category Product"));
     }
 
@@ -165,7 +179,7 @@ class ProductControllerTest {
         mockMvc.perform(get("/api/product/search")
                         .param("keyword", "phone"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].name").value("Searched Product"));
     }
 
@@ -182,7 +196,7 @@ class ProductControllerTest {
 
         mockMvc.perform(get("/api/product/list"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].name").value("Admin Product"));
     }
 
@@ -197,7 +211,7 @@ class ProductControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -212,7 +226,7 @@ class ProductControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 }

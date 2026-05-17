@@ -358,17 +358,17 @@ onMounted(() => {
 
 <style scoped>
 .category-page {
-  background: #fff;
-  padding: 20px;
-  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
   min-height: 500px;
 }
 
 .page-title {
-  margin: 0 0 20px 0;
+  margin: 0 0 20px;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .category-layout {
@@ -421,17 +421,17 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 16px;
   padding: 8px 12px;
-  background: #f5f7fa;
+  background: var(--color-surface-hover, #f5f7fa);
   border-radius: 4px;
   font-size: 13px;
 }
 
 .selected-label {
-  color: #606266;
+  color: var(--color-text-secondary, #606266);
 }
 
 .selected-hint {
-  color: #909399;
+  color: var(--color-text-muted, #909399);
   font-size: 12px;
 }
 

@@ -59,6 +59,45 @@ public class NotifyController {
         return R.ok(notifyService.createTemplate(template));
     }
 
+    @GetMapping("/admin/templates")
+    @Operation(summary = "分页查询通知模板列表")
+    public R<Page<NotifyTemplate>> adminTemplates(@Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                                   @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
+        return R.ok(notifyService.listTemplates(page, size));
+    }
+
+    @PutMapping("/admin/template")
+    @Operation(summary = "更新通知模板")
+    public R<NotifyTemplate> updateTemplate(@Parameter(description = "通知模板信息") @RequestBody NotifyTemplate template) {
+        return R.ok(notifyService.updateTemplate(template));
+    }
+
+    @PutMapping("/admin/template/status")
+    @Operation(summary = "设置通知模板状态")
+    public R<Boolean> setTemplateStatus(@Parameter(description = "模板ID") @RequestParam Long id,
+                                        @Parameter(description = "状态") @RequestParam Integer status) {
+        return R.ok(notifyService.setTemplateStatus(id, status));
+    }
+
+    @DeleteMapping("/admin/template/{id}")
+    @Operation(summary = "删除通知模板")
+    public R<Void> deleteTemplate(@Parameter(description = "模板ID") @PathVariable Long id) {
+        notifyService.deleteTemplate(id);
+        return R.ok();
+    }
+
+    @PostMapping("/admin/template/test")
+    @Operation(summary = "测试发送通知")
+    public R<Void> testSend(@Parameter(description = "测试参数") @RequestBody Map<String, Object> body) {
+        notifyService.testSend(
+                Long.valueOf(body.get("templateId").toString()),
+                Long.valueOf(body.get("userId").toString()),
+                (String) body.get("phone"),
+                (String) body.get("email")
+        );
+        return R.ok();
+    }
+
     @PostMapping("/send")
     @Operation(summary = "发送通知（内部服务调用）")
     public R<Void> send(

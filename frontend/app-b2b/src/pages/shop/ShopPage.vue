@@ -162,8 +162,8 @@ onMounted(() => {
 .page-title {
   font-size: 20px;
   font-weight: 600;
-  margin-bottom: 24px;
-  color: #303133;
+  margin: 0 0 20px;
+  color: var(--color-text-primary, #303133);
 }
 
 .section-card {

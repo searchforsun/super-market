@@ -17,7 +17,7 @@ export function createSeckillSession(data: {
   startTime: string
   endTime: string
 }) {
-  return request.post('/seckill/session', data)
+  return request.post('/seckill/admin/session', data)
 }
 
 export function updateSeckillSession(id: number, data: {
@@ -25,11 +25,11 @@ export function updateSeckillSession(id: number, data: {
   startTime?: string
   endTime?: string
 }) {
-  return request.put(`/seckill/session/${id}`, data)
+  return request.put(`/seckill/admin/session/${id}`, data)
 }
 
 export function deleteSeckillSession(id: number) {
-  return request.delete(`/seckill/session/${id}`)
+  return request.delete(`/seckill/admin/session/${id}`)
 }
 
 export function addSeckillProduct(sessionId: number, data: {
@@ -37,9 +37,9 @@ export function addSeckillProduct(sessionId: number, data: {
   seckillPrice: number
   stock: number
 }) {
-  return request.post('/seckill/product', data, { params: { sessionId } })
+  return request.post('/seckill/admin/product', data, { params: { sessionId } })
 }
 
 export function removeSeckillProduct(id: number) {
-  return request.delete(`/seckill/product/${id}`)
+  return request.delete(`/seckill/admin/product/${id}`)
 }

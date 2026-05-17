@@ -395,13 +395,13 @@ service-{name}/src/test/java/com/supermarket/{name}/
     <span class="tok-kw">public</span> User login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password) {
         User user = getByPhone(phone);
         <span class="tok-kw">if</span> (user == <span class="tok-kw">null</span>) {
-            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">20001</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
         }
         <span class="tok-kw">if</span> (user.getStatus() != <span class="tok-num">1</span>) {
             <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">403</span>, <span class="tok-str">&quot;账号已被禁用或注销&quot;</span>);
         }
         <span class="tok-kw">if</span> (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">20001</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
         }
         updateLoginTime(user.getId());
         <span class="tok-kw">return</span> user;
@@ -729,7 +729,7 @@ JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> 
     <span class="tok-kw">public</span> <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; login(<span class="tok-typ">String</span> phone, <span class="tok-typ">String</span> password) {
         UserDTO user = userDubboService.getByPhone(phone);
         <span class="tok-kw">if</span> (user == <span class="tok-kw">null</span>) {
-            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">20001</span>, <span class="tok-str">&quot;手机号或密码错误&quot;</span>);
         }
         <span class="tok-typ">String</span> accessToken = jwtUtil.generateAccessToken(user.getId(), <span class="tok-typ">List</span>.of(<span class="tok-str">&quot;ROLE_USER&quot;</span>));
         <span class="tok-typ">String</span> refreshToken = jwtUtil.generateRefreshToken(user.getId());
@@ -743,7 +743,7 @@ JAVA_HOME=<span class="tok-str">&quot;C:/Program Files/Java/jdk-21&quot;</span> 
     <span class="tok-ann">@Override</span>
     <span class="tok-kw">public</span> <span class="tok-typ">Map</span>&lt;<span class="tok-typ">String</span>, <span class="tok-typ">String</span>&gt; refreshToken(<span class="tok-typ">String</span> refreshToken) {
         <span class="tok-kw">if</span> (!jwtUtil.validate(refreshToken)) {
-            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">401</span>, <span class="tok-str">&quot;Refresh Token 无效或已过期&quot;</span>);
+            <span class="tok-kw">throw</span> <span class="tok-kw">new</span> BizException(<span class="tok-num">20001</span>, <span class="tok-str">&quot;Refresh Token 无效或已过期&quot;</span>);
         }
         <span class="tok-typ">Long</span> userId = jwtUtil.getUserId(refreshToken);
         <span class="tok-typ">String</span> newAccessToken = jwtUtil.generateAccessToken(userId, <span class="tok-typ">List</span>.of(<span class="tok-str">&quot;ROLE_USER&quot;</span>));

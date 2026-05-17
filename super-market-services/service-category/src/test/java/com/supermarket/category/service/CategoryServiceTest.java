@@ -54,7 +54,7 @@ class CategoryServiceTest {
         categoryService.create(child);
 
         assertThatThrownBy(() -> categoryService.delete(parent.getId()))
-            .hasMessageContaining("存在子类目");
+            .hasMessageContaining("子类目");
     }
 
     @Test

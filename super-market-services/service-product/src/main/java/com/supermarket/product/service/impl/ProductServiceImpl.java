@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.product.dto.CreateProductRequest;
 import com.supermarket.product.dto.UpdateProductRequest;
 import com.supermarket.product.dto.UpdateSkuRequest;
@@ -16,8 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -66,8 +67,9 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public Spu getSpuById(Long spuId) {
         Spu spu = getById(spuId);
         if (spu == null || spu.getIsDeleted() == 1) {
-            throw new BizException(404, "商品不存在");
+            throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         }
+        populatePrices(List.of(spu));
         return spu;
     }
 
@@ -80,7 +82,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public Sku getSkuById(Long skuId) {
         Sku sku = skuMapper.selectById(skuId);
         if (sku == null) {
-            throw new BizException(404, "SKU不存在");
+            throw new BizException(ResultCode.SKU_NOT_FOUND);
         }
         return sku;
     }
@@ -93,11 +95,11 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     @Override
     public void auditProduct(Long spuId, Integer auditStatus, String reason) {
         if (auditStatus != 1 && auditStatus != 2) {
-            throw new BizException(400, "审核状态仅支持 1=通过 2=驳回");
+            throw new BizException(ResultCode.PARAM_ERROR);
         }
         Spu spu = getSpuById(spuId);
         if (spu.getAuditStatus() != 0) {
-            throw new BizException(400, "该商品已审核");
+            throw new BizException(ResultCode.PRODUCT_ALREADY_AUDITED);
         }
         spu.setAuditStatus(auditStatus);
         if (auditStatus == 1) {
@@ -110,7 +112,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public void updateShelfStatus(Long spuId, Integer shelfStatus) {
         Spu spu = getSpuById(spuId);
         if (spu.getAuditStatus() != 1) {
-            throw new BizException(400, "仅审核通过的商品可以上下架");
+            throw new BizException(ResultCode.PRODUCT_NOT_APPROVED);
         }
         spu.setShelfStatus(shelfStatus);
         updateById(spu);
@@ -163,13 +165,29 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
             wrapper.like(Spu::getName, keyword);
         }
         wrapper.orderByDesc(Spu::getCreatedAt);
-        return page(new Page<>(page, size), wrapper);
+        Page<Spu> result = page(new Page<>(page, size), wrapper);
+        populatePrices(result.getRecords());
+        return result;
+    }
+
+    private void populatePrices(List<Spu> spuList) {
+        if (spuList.isEmpty()) return;
+        List<Long> spuIds = spuList.stream().map(Spu::getId).toList();
+        List<Sku> allSkus = skuMapper.selectList(new LambdaQueryWrapper<Sku>().in(Sku::getSpuId, spuIds));
+        Map<Long, List<Sku>> skuMap = allSkus.stream().collect(Collectors.groupingBy(Sku::getSpuId));
+        for (Spu spu : spuList) {
+            List<Sku> skus = skuMap.getOrDefault(spu.getId(), List.of());
+            if (!skus.isEmpty()) {
+                spu.setMinPrice(skus.stream().map(Sku::getPrice).min(java.math.BigDecimal::compareTo).orElse(java.math.BigDecimal.ZERO));
+                spu.setMaxPrice(skus.stream().map(Sku::getPrice).max(java.math.BigDecimal::compareTo).orElse(java.math.BigDecimal.ZERO));
+            }
+        }
     }
 
     @Override
     public void updateSpu(Long spuId, UpdateProductRequest request) {
         Spu spu = getById(spuId);
-        if (spu == null || spu.getIsDeleted() == 1) throw new BizException(404, "商品不存在");
+        if (spu == null || spu.getIsDeleted() == 1) throw new BizException(ResultCode.PRODUCT_NOT_FOUND);
         if (request.getName() != null) spu.setName(request.getName());
         if (request.getSubtitle() != null) spu.setSubtitle(request.getSubtitle());
         if (request.getMainImage() != null) spu.setMainImage(request.getMainImage());
@@ -181,7 +199,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     @Override
     public void updateSku(Long skuId, UpdateSkuRequest request) {
         Sku sku = skuMapper.selectById(skuId);
-        if (sku == null) throw new BizException(404, "SKU不存在");
+        if (sku == null) throw new BizException(ResultCode.SKU_NOT_FOUND);
         if (request.getPrice() != null) sku.setPrice(request.getPrice());
         if (request.getMarketPrice() != null) sku.setMarketPrice(request.getMarketPrice());
         if (request.getImage() != null) sku.setImage(request.getImage());

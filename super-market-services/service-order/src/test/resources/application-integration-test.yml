@@ -1,0 +1,37 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+      config:
+        enabled: false
+  datasource:
+    url: jdbc:mysql://${DOCKER_HOST_IP:localhost}:${MYSQL_PORT:3306}/db_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD:root123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 5
+      connection-timeout: 5000
+
+dubbo:
+  enabled: false
+  application:
+    qos-enable: false
+  registry:
+    address: N/A
+  config-center:
+    address: N/A
+  protocol:
+    port: -1
+
+seata:
+  enabled: false
+
+mybatis-plus:
+  global-config:
+    db-config:
+      id-type: assign_id
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

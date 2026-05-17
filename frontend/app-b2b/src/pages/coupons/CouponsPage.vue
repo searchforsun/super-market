@@ -421,16 +421,16 @@ async function submitDistribute() {
 
 <style scoped>
 .coupon-page {
-  background: #fff;
+  background: var(--color-surface, #fff);
   padding: 24px;
-  border-radius: 4px;
+  border-radius: 8px;
   min-height: 400px;
 }
 .page-title {
-  margin: 0 0 16px 0;
+  margin: 0 0 20px;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 .page-tabs {
   margin-bottom: 0;

@@ -5,6 +5,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.file.entity.FileRecord;
 import com.supermarket.file.mapper.FileRecordMapper;
 import com.supermarket.file.service.FileService;
@@ -45,12 +46,12 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public FileRecord upload(MultipartFile file, String bucket, Long uploaderId) {
-        if (file.isEmpty()) throw new BizException(400, "文件不能为空");
-        if (file.getSize() > MAX_SIZE) throw new BizException(400, "文件大小不能超过10MB");
+        if (file.isEmpty()) throw new BizException(ResultCode.FILE_EMPTY);
+        if (file.getSize() > MAX_SIZE) throw new BizException(ResultCode.FILE_SIZE_EXCEEDED);
 
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_TYPES.contains(contentType)) {
-            throw new BizException(400, "不支持的文件类型: " + contentType);
+            throw new BizException(ResultCode.FILE_TYPE_NOT_ALLOWED, ResultCode.FILE_TYPE_NOT_ALLOWED.getMessage() + ": " + contentType);
         }
 
         bucket = (bucket != null && !bucket.isBlank()) ? bucket : "smt-product";
@@ -63,7 +64,7 @@ public class FileServiceImpl implements FileService {
             bytes = file.getBytes();
         } catch (Exception e) {
             log.error("Read file bytes failed", e);
-            throw new BizException(500, "读取文件失败");
+            throw new BizException(ResultCode.FILE_READ_FAILED);
         }
 
         String md5 = DigestUtil.md5Hex(bytes);
@@ -78,7 +79,7 @@ public class FileServiceImpl implements FileService {
                     .contentType(contentType).build());
         } catch (Exception e) {
             log.error("MinIO upload failed", e);
-            throw new BizException(500, "文件上传失败");
+            throw new BizException(ResultCode.FILE_UPLOAD_FAILED);
         }
 
         FileRecord record = new FileRecord();
@@ -96,7 +97,7 @@ public class FileServiceImpl implements FileService {
     @Override
     public FileRecord getById(Long fileId) {
         FileRecord r = fileRecordMapper.selectById(fileId);
-        if (r == null) throw new BizException(404, "文件不存在");
+        if (r == null) throw new BizException(ResultCode.FILE_NOT_FOUND);
         return r;
     }
 
@@ -128,7 +129,7 @@ public class FileServiceImpl implements FileService {
                     .bucket(r.getBucket()).object(r.getObjectKey()).build());
         } catch (Exception e) {
             log.error("MinIO download failed", e);
-            throw new BizException(500, "文件下载失败");
+            throw new BizException(ResultCode.FILE_DOWNLOAD_FAILED);
         }
     }
 }

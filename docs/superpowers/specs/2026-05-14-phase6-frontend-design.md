@@ -224,7 +224,7 @@ packages:
 - [ ] B2B 商品管理 + 订单处理 + 发货流程可走通
 - [ ] Admin 审核 + Banner + 报表可走通
 - [ ] 所有页面响应式适配（PC 端 1200px+）
-- [ ] Axios 拦截器正确注入 Token + 处理 401
+- [ ] Axios 拦截器正确注入 Token + 处理 20001
 - [ ] 三端独立打包，`pnpm build` 通过
 
 ---

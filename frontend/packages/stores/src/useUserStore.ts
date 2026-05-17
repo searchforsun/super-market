@@ -5,18 +5,18 @@ import { saveAuth, clearAuth, getRoles, isAuthenticated, getPrimaryRole, redirec
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(isAuthenticated())
-  const userId = ref(Number(localStorage.getItem('userId')) || 0)
+  const userId = ref(localStorage.getItem('userId') || '')
   const userInfo = ref<any>(null)
   const roles = ref<string[]>(getRoles())
 
-  const isLoggedIn = computed(() => isAuthenticated())
+  const isLoggedIn = computed(() => token.value)
   const primaryRole = computed(() => getPrimaryRole())
 
   async function login(phone: string, password: string) {
     const res: any = await authLogin(phone, password)
     saveAuth(res)
     token.value = true
-    userId.value = Number(res.userId)
+    userId.value = res.userId
     roles.value = getRoles()
     await fetchUserInfo()
   }
@@ -29,7 +29,7 @@ export const useUserStore = defineStore('user', () => {
   function logout() {
     clearAuth()
     token.value = false
-    userId.value = 0
+    userId.value = ''
     userInfo.value = null
     roles.value = []
   }

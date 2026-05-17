@@ -10,4 +10,10 @@ public interface ShopDubboService {
      * @return true if the user has a merchant with approved status
      */
     boolean hasMerchant(Long userId);
+
+    /**
+     * Get the shop ID for a given user ID (via merchant record).
+     * @return shop ID, or null if the user has no approved shop
+     */
+    Long getShopIdByUserId(Long userId);
 }

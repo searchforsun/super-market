@@ -1,12 +1,11 @@
 <template>
   <div class="banner-page page-enter">
-    <el-card>
-      <div class="page-header">
-        <h2>Banner/广告位管理</h2>
-        <el-button type="primary" @click="handleAdd">新建Banner</el-button>
-      </div>
+    <div class="page-header">
+      <h2>Banner/广告位管理</h2>
+      <el-button type="primary" @click="handleAdd">新建Banner</el-button>
+    </div>
 
-      <el-table :data="tableData" v-loading="loading" stripe style="width: 100%">
+    <el-table :data="tableData" v-loading="loading" stripe style="width: 100%">
         <el-table-column label="预览" width="140">
           <template #default="{ row }">
             <el-image :src="row.imageUrl" style="width: 100px; height: 56px" fit="cover" />
@@ -48,7 +47,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper" v-if="total > 0">
+      <div class="pagination-wrap" v-if="total > 0">
         <el-pagination
           v-model:current-page="queryParams.page"
           v-model:page-size="queryParams.size"
@@ -59,7 +58,6 @@
           @current-change="fetchData"
         />
       </div>
-    </el-card>
 
     <el-dialog
       v-model="dialogVisible"
@@ -328,7 +326,9 @@ onMounted(() => {
 
 <style scoped>
 .banner-page {
-  padding: 20px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 
 .page-header {
@@ -342,12 +342,13 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
+  color: var(--color-text-primary, #303133);
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .upload-preview {

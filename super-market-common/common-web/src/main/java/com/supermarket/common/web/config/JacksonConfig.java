@@ -3,6 +3,7 @@ package com.supermarket.common.web.config;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -24,8 +25,9 @@ public class JacksonConfig {
                 DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES
             );
             JavaTimeModule module = new JavaTimeModule();
-            module.addSerializer(LocalDateTime.class,
-                new LocalDateTimeSerializer(DateTimeFormatter.ofPattern(DATETIME_PATTERN)));
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATETIME_PATTERN);
+            module.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(formatter));
+            module.addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer(formatter));
             builder.modules(module);
         };
     }

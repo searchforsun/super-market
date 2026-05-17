@@ -39,3 +39,7 @@ export function getShopByMerchantId(merchantId: number) {
 export function getShopById(id: number) {
   return request.get(`/shop/${id}`)
 }
+
+export function getShopIdByUserId(userId: number): Promise<number> {
+  return request.get(`/shop/by-user/${userId}`) as Promise<number>
+}

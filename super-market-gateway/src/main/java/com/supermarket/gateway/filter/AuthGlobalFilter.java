@@ -1,6 +1,7 @@
 package com.supermarket.gateway.filter;
 
 import com.supermarket.common.core.constants.GlobalConstants;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.security.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,7 +83,7 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         ServerHttpResponse response = exchange.getResponse();
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String body = "{\"code\":401,\"message\":\"" + message + "\"}";
+        String body = String.format("{\"code\":%d,\"message\":\"%s\"}", ResultCode.UNAUTHORIZED.getCode(), message);
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return response.writeWith(Mono.just(buffer));
     }

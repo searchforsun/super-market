@@ -13,7 +13,15 @@ public interface CouponService {
 
     CouponTemplate getTemplateById(Long id);
 
+    CouponTemplate updateTemplate(CouponTemplate template);
+
+    boolean setTemplateStatus(Long id, Integer status);
+
+    void deleteTemplate(Long id);
+
     Page<CouponTemplate> listTemplates(int page, int size);
+
+    Page<CouponBatch> listBatches(int page, int size);
 
     CouponBatch distribute(Long templateId, List<Long> userIds);
 

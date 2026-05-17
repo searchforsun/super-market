@@ -721,10 +721,10 @@ onMounted(async () => {
 }
 
 .page-title {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
-  color: #303133;
-  margin: 12px 0 0 0;
+  color: var(--color-text-primary, #303133);
+  margin: 0 0 20px;
 }
 
 .product-form {
@@ -735,19 +735,19 @@ onMounted(async () => {
 
 .form-card {
   border-radius: 8px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border, #ebeef5);
 }
 
 .form-card :deep(.el-card__header) {
   padding: 16px 24px;
-  border-bottom: 1px solid #ebeef5;
-  background: #fafafa;
+  border-bottom: 1px solid var(--color-border, #ebeef5);
+  background: var(--color-surface-hover, #fafafa);
 }
 
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .image-upload-area {
@@ -785,7 +785,7 @@ onMounted(async () => {
 
 .upload-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-muted, #909399);
   margin-top: 8px;
 }
 
@@ -796,8 +796,8 @@ onMounted(async () => {
 }
 
 .spec-item {
-  background: #fafafa;
-  border: 1px solid #ebeef5;
+  background: var(--color-surface-hover, #fafafa);
+  border: 1px solid var(--color-border, #ebeef5);
   border-radius: 6px;
   padding: 16px;
 }
@@ -816,8 +816,8 @@ onMounted(async () => {
   gap: 8px;
   min-height: 32px;
   padding: 4px 8px;
-  background: #fff;
-  border: 1px solid #dcdfe6;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #dcdfe6);
   border-radius: 4px;
 }
 

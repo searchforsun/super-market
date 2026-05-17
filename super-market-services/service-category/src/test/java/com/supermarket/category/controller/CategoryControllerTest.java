@@ -3,10 +3,16 @@ package com.supermarket.category.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supermarket.category.entity.Category;
 import com.supermarket.category.service.CategoryService;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -17,7 +23,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(CategoryController.class)
+@SpringBootTest(classes = {CategoryController.class, CategoryControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CategoryControllerTest {
 
@@ -28,6 +35,13 @@ class CategoryControllerTest {
     private CategoryService categoryService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = CategoryController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateWhenValidBody() throws Exception {
@@ -50,7 +64,7 @@ class CategoryControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(category)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(1))
                 .andExpect(jsonPath("$.data.name").value("电子产品"));
         verify(categoryService).create(any(Category.class));
@@ -74,7 +88,7 @@ class CategoryControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(category)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.name").value("电子设备"));
         verify(categoryService).update(any(Category.class));
     }
@@ -97,7 +111,7 @@ class CategoryControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/category/tree"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].name").value("电子产品"))
                 .andExpect(jsonPath("$.data[1].name").value("服装"));
@@ -118,7 +132,7 @@ class CategoryControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/category/children/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].name").value("手机"));
         verify(categoryService).getChildren(1L);
@@ -137,7 +151,7 @@ class CategoryControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/category/level/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].name").value("电子产品"));
         verify(categoryService).getByLevel(1);
@@ -151,7 +165,7 @@ class CategoryControllerTest {
         // Act & Assert
         mockMvc.perform(delete("/api/category/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(categoryService).delete(1L);
     }

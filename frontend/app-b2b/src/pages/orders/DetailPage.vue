@@ -234,9 +234,9 @@ onMounted(fetchDetail)
 
 .page-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .detail-body {
@@ -259,7 +259,7 @@ onMounted(fetchDetail)
 .order-no {
   font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .time-row {
@@ -280,10 +280,10 @@ onMounted(fetchDetail)
 .product-img {
   width: 60px;
   height: 60px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--color-border, #ebeef5);
   border-radius: 4px;
   flex-shrink: 0;
-  background: #fafafa;
+  background: var(--color-surface-hover, #fafafa);
 }
 
 .img-placeholder {
@@ -293,7 +293,7 @@ onMounted(fetchDetail)
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  color: #c0c4cc;
+  color: var(--color-text-muted, #c0c4cc);
 }
 
 .product-meta {
@@ -302,7 +302,7 @@ onMounted(fetchDetail)
 
 .product-name {
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   margin-bottom: 4px;
   line-height: 1.4;
 }

@@ -10,8 +10,12 @@ import com.supermarket.platform.entity.RiskRule;
 import com.supermarket.platform.service.PlatformService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,8 +29,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(PlatformController.class)
-@Import(GlobalExceptionHandler.class)
+@SpringBootTest(classes = {PlatformController.class, PlatformControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PlatformControllerTest {
 
@@ -37,6 +41,13 @@ class PlatformControllerTest {
     private PlatformService platformService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = PlatformController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldReturnActiveBannersWhenPositionProvided() throws Exception {
@@ -53,7 +64,7 @@ class PlatformControllerTest {
         mockMvc.perform(get("/api/platform/banners")
                 .param("position", "HOME_TOP"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].title").value("首页Banner"));
 
         verify(platformService).getActiveBanners("HOME_TOP");
@@ -79,7 +90,7 @@ class PlatformControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(banner)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(1L))
                 .andExpect(jsonPath("$.data.title").value("新品推荐"));
 
@@ -103,7 +114,7 @@ class PlatformControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(banner)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.title").value("更新后的Banner"));
 
         verify(platformService).updateBanner(any(Banner.class));
@@ -117,7 +128,7 @@ class PlatformControllerTest {
         // Act & Assert
         mockMvc.perform(delete("/api/platform/admin/banner/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(platformService).deleteBanner(1L);
@@ -140,7 +151,7 @@ class PlatformControllerTest {
                 .param("page", "1")
                 .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].title").value("测试Banner"))
                 .andExpect(jsonPath("$.data.total").value(1));
 
@@ -165,7 +176,7 @@ class PlatformControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(position)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.code").value("HOME_BANNER"));
 
         verify(platformService).createPosition(any(AdPosition.class));
@@ -183,7 +194,7 @@ class PlatformControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/platform/admin/positions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].code").value("HOME_BANNER"));
 
         verify(platformService).listPositions();
@@ -208,7 +219,7 @@ class PlatformControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(rule)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.name").value("登录风控"));
 
         verify(platformService).createRule(any(RiskRule.class));
@@ -227,7 +238,7 @@ class PlatformControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/platform/admin/risk/rules"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].name").value("登录风控"));
 
         verify(platformService).listRules();
@@ -249,7 +260,7 @@ class PlatformControllerTest {
                 .param("targetId", "order_100")
                 .param("riskType", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.riskScore").value(85))
                 .andExpect(jsonPath("$.data.decision").value("REJECT"));
 
@@ -276,7 +287,7 @@ class PlatformControllerTest {
                 .param("page", "1")
                 .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].userId").value(1L))
                 .andExpect(jsonPath("$.data.total").value(1));
 

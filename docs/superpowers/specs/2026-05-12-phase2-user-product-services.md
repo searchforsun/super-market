@@ -396,7 +396,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User register(String phone, String password) {
         User exist = getByPhone(phone);
         if (exist != null) {
-            throw new BizException(400, "该手机号已注册");
+            throw new BizException(10002, "该手机号已注册");
         }
         User user = new User();
         user.setPhone(phone);
@@ -411,13 +411,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User login(String phone, String password) {
         User user = getByPhone(phone);
         if (user == null) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(20001, "手机号或密码错误");
         }
         if (user.getStatus() != 1) {
-            throw new BizException(403, "账号已被禁用或注销");
+            throw new BizException(20003, "账号已被禁用或注销");
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(20001, "手机号或密码错误");
         }
         updateLoginTime(user.getId());
         return user;
@@ -427,7 +427,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public User getById(Long userId) {
         User user = getBaseMapper().selectById(userId);
         if (user == null) {
-            throw new BizException(404, "用户不存在");
+            throw new BizException(10040, "用户不存在");
         }
         return user;
     }
@@ -787,7 +787,7 @@ public class AuthServiceImpl implements AuthService {
     public Map<String, String> login(String phone, String password) {
         UserDTO user = userDubboService.getByPhone(phone);
         if (user == null) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(20001, "手机号或密码错误");
         }
         String accessToken = jwtUtil.generateAccessToken(user.getId(), List.of("ROLE_USER"));
         String refreshToken = jwtUtil.generateRefreshToken(user.getId());
@@ -801,7 +801,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public Map<String, String> refreshToken(String refreshToken) {
         if (!jwtUtil.validate(refreshToken)) {
-            throw new BizException(401, "Refresh Token 无效或已过期");
+            throw new BizException(20001, "Refresh Token 无效或已过期");
         }
         Long userId = jwtUtil.getUserId(refreshToken);
         String newAccessToken = jwtUtil.generateAccessToken(userId, List.of("ROLE_USER"));
@@ -1027,7 +1027,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address create(Address address) {
         List<Address> existing = listByUser(address.getUserId());
         if (existing.size() >= 20) {
-            throw new BizException(400, "收货地址最多20个");
+            throw new BizException(10004, "收货地址最多20个");
         }
         if (existing.isEmpty()) {
             address.setIsDefault(1);
@@ -1040,7 +1040,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address update(Address address) {
         Address exist = getById(address.getId());
         if (exist == null) {
-            throw new BizException(404, "地址不存在");
+            throw new BizException(10040, "地址不存在");
         }
         updateById(address);
         return getById(address.getId());
@@ -1059,7 +1059,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address getById(Long addressId) {
         Address addr = super.getById(addressId);
         if (addr == null || addr.getIsDeleted() == 1) {
-            throw new BizException(404, "地址不存在");
+            throw new BizException(10040, "地址不存在");
         }
         return addr;
     }
@@ -1759,7 +1759,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public Spu getSpuById(Long spuId) {
         Spu spu = getById(spuId);
         if (spu == null || spu.getIsDeleted() == 1) {
-            throw new BizException(404, "商品不存在");
+            throw new BizException(10040, "商品不存在");
         }
         return spu;
     }
@@ -1773,7 +1773,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public Sku getSkuById(Long skuId) {
         Sku sku = skuMapper.selectById(skuId);
         if (sku == null) {
-            throw new BizException(404, "SKU不存在");
+            throw new BizException(10040, "SKU不存在");
         }
         return sku;
     }
@@ -1786,11 +1786,11 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     @Override
     public void auditProduct(Long spuId, Integer auditStatus, String reason) {
         if (auditStatus != 1 && auditStatus != 2) {
-            throw new BizException(400, "审核状态仅支持 1=通过 2=驳回");
+            throw new BizException(10005, "审核状态仅支持 1=通过 2=驳回");
         }
         Spu spu = getSpuById(spuId);
         if (spu.getAuditStatus() != 0) {
-            throw new BizException(400, "该商品已审核");
+            throw new BizException(10006, "该商品已审核");
         }
         spu.setAuditStatus(auditStatus);
         if (auditStatus == 1) {
@@ -1803,7 +1803,7 @@ public class ProductServiceImpl extends ServiceImpl<SpuMapper, Spu> implements P
     public void updateShelfStatus(Long spuId, Integer shelfStatus) {
         Spu spu = getSpuById(spuId);
         if (spu.getAuditStatus() != 1) {
-            throw new BizException(400, "仅审核通过的商品可以上下架");
+            throw new BizException(10007, "仅审核通过的商品可以上下架");
         }
         spu.setShelfStatus(shelfStatus);
         updateById(spu);
@@ -2146,7 +2146,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
     public void delete(Long id) {
         List<Category> children = getChildren(id);
         if (!children.isEmpty()) {
-            throw new BizException(400, "存在子类目,无法删除");
+            throw new BizException(10008, "存在子类目,无法删除");
         }
         removeById(id);
     }
@@ -2155,7 +2155,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
     public Category getById(Long id) {
         Category cat = super.getById(id);
         if (cat == null) {
-            throw new BizException(404, "类目不存在");
+            throw new BizException(10040, "类目不存在");
         }
         return cat;
     }
@@ -2481,7 +2481,7 @@ public class InventoryServiceImpl extends ServiceImpl<InventoryMapper, Inventory
     public Inventory initStock(Long skuId, int totalStock, int safetyStock) {
         Inventory exist = getBySkuId(skuId);
         if (exist != null) {
-            throw new BizException(400, "该SKU库存已初始化");
+            throw new BizException(10009, "该SKU库存已初始化");
         }
         Inventory inv = new Inventory();
         inv.setSkuId(skuId);
@@ -2582,7 +2582,7 @@ public class InventoryController {
     public R<Inventory> getBySku(@PathVariable Long skuId) {
         Inventory inv = inventoryService.getBySkuId(skuId);
         if (inv == null) {
-            return R.fail(404, "库存信息不存在");
+            return R.fail(10040, "库存信息不存在");
         }
         return R.ok(inv);
     }
@@ -2590,7 +2590,7 @@ public class InventoryController {
     @PostMapping("/deduct")
     public R<Boolean> deduct(@RequestParam Long skuId, @RequestParam int quantity) {
         boolean success = inventoryService.deductStock(skuId, quantity);
-        return success ? R.ok(true) : R.fail(400, "库存不足或扣减失败");
+        return success ? R.ok(true) : R.fail(10010, "库存不足或扣减失败");
     }
 }
 ```
@@ -2827,7 +2827,7 @@ public class ShopServiceImpl implements ShopService {
         Merchant exist = merchantMapper.selectOne(
             new LambdaQueryWrapper<Merchant>().eq(Merchant::getUserId, merchant.getUserId()));
         if (exist != null) {
-            throw new BizException(400, "该用户已提交入驻申请");
+            throw new BizException(10003, "该用户已提交入驻申请");
         }
         merchant.setAuditStatus(0);
         merchant.setStatus(1);
@@ -2840,7 +2840,7 @@ public class ShopServiceImpl implements ShopService {
     public void auditMerchant(Long merchantId, Integer auditStatus, String reason) {
         Merchant merchant = getMerchantById(merchantId);
         if (merchant.getAuditStatus() != 0) {
-            throw new BizException(400, "该商家已审核");
+            throw new BizException(10004, "该商家已审核");
         }
         merchant.setAuditStatus(auditStatus);
         merchant.setAuditReason(reason);
@@ -2854,7 +2854,7 @@ public class ShopServiceImpl implements ShopService {
     public Merchant getMerchantById(Long id) {
         Merchant m = merchantMapper.selectById(id);
         if (m == null) {
-            throw new BizException(404, "商家不存在");
+            throw new BizException(10040, "商家不存在");
         }
         return m;
     }
@@ -2874,7 +2874,7 @@ public class ShopServiceImpl implements ShopService {
     public Shop getShopById(Long id) {
         Shop shop = shopMapper.selectById(id);
         if (shop == null) {
-            throw new BizException(404, "店铺不存在");
+            throw new BizException(10040, "店铺不存在");
         }
         return shop;
     }

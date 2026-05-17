@@ -100,4 +100,83 @@ public class PlatformController {
                                      @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
         return R.ok(platformService.listRiskLogs(riskType, page, size));
     }
+
+    // ===== Dashboard =====
+    @GetMapping("/admin/dashboard/stats")
+    @Operation(summary = "获取运营看板统计")
+    public R<Map<String, Object>> dashboardStats() {
+        return R.ok(platformService.getDashboardStats());
+    }
+
+    @GetMapping("/admin/dashboard/trend")
+    @Operation(summary = "获取近N日销售趋势")
+    public R<List<Map<String, Object>>> dailyTrend(@Parameter(description = "天数") @RequestParam(defaultValue = "7") int days) {
+        return R.ok(platformService.getDailyTrend(days));
+    }
+
+    @GetMapping("/admin/dashboard/category-sales")
+    @Operation(summary = "获取分类销售占比")
+    public R<List<Map<String, Object>>> categorySales() {
+        return R.ok(platformService.getCategorySales());
+    }
+
+    @GetMapping("/admin/dashboard/status-distribution")
+    @Operation(summary = "获取订单状态分布")
+    public R<List<Map<String, Object>>> statusDistribution() {
+        return R.ok(platformService.getStatusDistribution());
+    }
+
+    @GetMapping("/admin/dashboard/pending-audit")
+    @Operation(summary = "获取待审核数量")
+    public R<Map<String, Object>> pendingAudit() {
+        return R.ok(platformService.getPendingAudit());
+    }
+
+    @GetMapping("/admin/dashboard/user-trend")
+    @Operation(summary = "获取用户增长趋势")
+    public R<List<Map<String, Object>>> userTrend(@Parameter(description = "天数") @RequestParam(defaultValue = "7") int days) {
+        return R.ok(platformService.getUserTrend(days));
+    }
+
+    // ===== Merchant Dashboard =====
+    @GetMapping("/merchant/dashboard/stats")
+    @Operation(summary = "获取商家看板统计")
+    public R<Map<String, Object>> merchantStats(@Parameter(description = "店铺ID") @RequestParam Long shopId) {
+        return R.ok(platformService.getMerchantStats(shopId));
+    }
+
+    @GetMapping("/merchant/dashboard/trend")
+    @Operation(summary = "获取商家近N日销售趋势")
+    public R<List<Map<String, Object>>> merchantDailyTrend(@Parameter(description = "店铺ID") @RequestParam Long shopId,
+                                                            @Parameter(description = "天数") @RequestParam(defaultValue = "7") int days) {
+        return R.ok(platformService.getMerchantDailyTrend(shopId, days));
+    }
+
+    @GetMapping("/merchant/dashboard/status-distribution")
+    @Operation(summary = "获取商家订单状态分布")
+    public R<List<Map<String, Object>>> merchantStatusDistribution(@Parameter(description = "店铺ID") @RequestParam Long shopId) {
+        return R.ok(platformService.getMerchantStatusDistribution(shopId));
+    }
+
+    // ===== Reports =====
+    @GetMapping("/admin/report/gmv")
+    @Operation(summary = "获取GMV报表")
+    public R<Map<String, Object>> gmvReport(@Parameter(description = "开始日期") @RequestParam String startDate,
+                                            @Parameter(description = "结束日期") @RequestParam String endDate) {
+        return R.ok(platformService.getGmvReport(startDate, endDate));
+    }
+
+    @GetMapping("/admin/report/orders")
+    @Operation(summary = "获取订单报表")
+    public R<Map<String, Object>> orderReport(@Parameter(description = "开始日期") @RequestParam String startDate,
+                                               @Parameter(description = "结束日期") @RequestParam String endDate) {
+        return R.ok(platformService.getOrderReport(startDate, endDate));
+    }
+
+    @GetMapping("/admin/report/users")
+    @Operation(summary = "获取用户报表")
+    public R<Map<String, Object>> userReport(@Parameter(description = "开始日期") @RequestParam String startDate,
+                                              @Parameter(description = "结束日期") @RequestParam String endDate) {
+        return R.ok(platformService.getUserReport(startDate, endDate));
+    }
 }

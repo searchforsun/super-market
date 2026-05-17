@@ -60,8 +60,8 @@
         v-loading="loading"
         :row-key="(row: SettlementRecord) => row.id"
       >
-        <el-table-column prop="settlementNo" label="结算单号" width="200" />
-        <el-table-column label="结算周期" width="200">
+        <el-table-column prop="settlementNo" label="结算单号" min-width="200" />
+        <el-table-column label="结算周期" min-width="200">
           <template #default="{ row }: { row: SettlementRecord }">
             {{ row.periodStart }} ~ {{ row.periodEnd }}
           </template>
@@ -77,31 +77,31 @@
             ¥{{ row.refundAmount.toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="fee" label="手续费" width="100" align="right">
+        <el-table-column prop="fee" label="手续费" width="90" align="right">
           <template #default="{ row }: { row: SettlementRecord }">
             ¥{{ row.fee.toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column label="实结金额" width="140" align="right">
+        <el-table-column label="实结金额" min-width="130" align="right">
           <template #default="{ row }: { row: SettlementRecord }">
             <PriceDisplay :price="row.netAmount" />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="120" align="center">
+        <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }: { row: SettlementRecord }">
             <el-tag v-if="row.status === 'settled'" type="success">已结算</el-tag>
             <el-tag v-else-if="row.status === 'pending'" type="warning">待结算</el-tag>
             <el-tag v-else type="info">处理中</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" align="center" fixed="right">
+        <el-table-column label="操作" width="100" align="center" fixed="right">
           <template #default="{ row }: { row: SettlementRecord }">
             <el-button link type="primary" size="small" @click="showDetail(row)">查看明细</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper">
+      <div class="pagination-wrap">
         <el-pagination
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
@@ -410,6 +410,8 @@ onMounted(() => {
 <style scoped>
 .settlement-page {
   padding: 0;
+  background: var(--color-bg, #f5f5f0);
+  min-height: 100%;
 }
 
 .header-card {
@@ -420,7 +422,7 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .stats-card {
@@ -435,11 +437,10 @@ onMounted(() => {
   margin-bottom: 0;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
-  padding: 8px 0;
+  margin-top: 16px;
 }
 
 .detail-summary {
@@ -454,7 +455,7 @@ onMounted(() => {
   text-align: right;
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   padding: 8px 0;
 }
 </style>

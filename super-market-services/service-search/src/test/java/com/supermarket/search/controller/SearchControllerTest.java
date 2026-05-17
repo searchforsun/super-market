@@ -6,8 +6,12 @@ import com.supermarket.search.entity.ProductDocument;
 import com.supermarket.search.service.SearchService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -21,8 +25,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(SearchController.class)
-@Import(GlobalExceptionHandler.class)
+@SpringBootTest(classes = {SearchController.class, SearchControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SearchControllerTest {
 
@@ -33,6 +37,13 @@ class SearchControllerTest {
     private SearchService searchService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = SearchController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldSearchProductsWhenKeywordProvided() throws Exception {
@@ -48,7 +59,7 @@ class SearchControllerTest {
         mockMvc.perform(get("/api/search/product")
                 .param("keyword", "手机"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1));
 
         verify(searchService).search(eq("手机"), isNull(), isNull(), isNull(), isNull(), eq("newest"), eq(1), eq(20));
@@ -68,7 +79,7 @@ class SearchControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(doc)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(searchService).indexProduct(any(ProductDocument.class));
@@ -90,7 +101,7 @@ class SearchControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(docs)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(searchService).bulkIndex(anyList());
@@ -104,7 +115,7 @@ class SearchControllerTest {
         // Act & Assert
         mockMvc.perform(delete("/api/search/internal/sync/100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(searchService).deleteProduct(100L);

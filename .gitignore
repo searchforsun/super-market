@@ -96,3 +96,7 @@ settings.local.json
 # === Kubernetes secrets ===
 **/secret.yaml
 !**/secret.yaml.example
+
+
+.playwright-mcp
+.remember

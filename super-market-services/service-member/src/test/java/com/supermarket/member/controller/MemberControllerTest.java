@@ -1,11 +1,17 @@
 package com.supermarket.member.controller;
 
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import com.supermarket.member.entity.Member;
 import com.supermarket.member.service.MemberService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -13,7 +19,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(MemberController.class)
+@SpringBootTest(classes = {MemberController.class, MemberControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class MemberControllerTest {
 
@@ -22,6 +29,13 @@ class MemberControllerTest {
 
     @MockBean
     private MemberService memberService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = MemberController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldGetMemberWhenValidUserId() throws Exception {
@@ -35,7 +49,7 @@ class MemberControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/member/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.userId").value(1))
                 .andExpect(jsonPath("$.data.level").value(1))
                 .andExpect(jsonPath("$.data.points").value(100));
@@ -52,7 +66,7 @@ class MemberControllerTest {
                         .param("userId", "1")
                         .param("points", "50"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(memberService).addPoints(1L, 50);
     }
@@ -67,7 +81,7 @@ class MemberControllerTest {
                         .param("userId", "1")
                         .param("points", "30"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(memberService).deductPoints(1L, 30);
     }
@@ -80,7 +94,7 @@ class MemberControllerTest {
                         .param("userId", "1")
                         .param("points", "0"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(400));
+                .andExpect(jsonPath("$.code").value(90002));
         verify(memberService, never()).deductPoints(anyLong(), anyInt());
     }
 
@@ -92,7 +106,7 @@ class MemberControllerTest {
         mockMvc.perform(post("/api/member/points/deduct")
                         .param("points", "10"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.code").value(500));
+                .andExpect(jsonPath("$.code").value(90001));
         verify(memberService, never()).deductPoints(anyLong(), anyInt());
     }
 }

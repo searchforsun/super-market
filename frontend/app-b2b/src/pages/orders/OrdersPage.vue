@@ -1,6 +1,6 @@
 <template>
   <div class="orders-page page-enter">
-    <h2>订单处理</h2>
+    <h2 class="page-title">订单处理</h2>
 
     <div class="filter-bar">
       <el-select
@@ -81,7 +81,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper" v-if="total > 0">
+    <div class="pagination-wrap" v-if="total > 0">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -202,15 +202,16 @@ onMounted(() => {
 
 <style scoped>
 .orders-page {
-  background: #fff;
-  padding: 20px;
-  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 
-.orders-page h2 {
+.page-title {
   margin: 0 0 20px;
-  font-size: 18px;
-  color: #333;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
 }
 
 .filter-bar {
@@ -220,7 +221,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
   margin-top: 20px;

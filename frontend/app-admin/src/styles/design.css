@@ -27,6 +27,20 @@
   --color-success: #059669;
   --color-warning: #d97706;
   --color-info: #2563eb;
+  --color-danger: #dc2626;
+
+  --status-pending-bg: #fff3cd;
+  --status-pending-text: #856404;
+  --status-processing-bg: #cce5ff;
+  --status-processing-text: #004085;
+  --status-completed-bg: #d4edda;
+  --status-completed-text: #155724;
+  --status-transit-bg: #d1ecf1;
+  --status-transit-text: #0c5460;
+  --status-neutral-bg: #e2e3e5;
+  --status-neutral-text: #383d41;
+  --status-danger-bg: #f8d7da;
+  --status-danger-text: #721c24;
 
   /* Spacing */
   --space-xs: 4px;
@@ -61,29 +75,44 @@
 
 /* ===== Dark Theme ===== */
 [data-theme="dark"] {
-  --color-bg: #0f172a;
-  --color-surface: #1e293b;
-  --color-surface-hover: #334155;
-  --color-border: #334155;
-  --color-border-light: #1e293b;
+  /* Midnight indigo — command center authority */
+  --color-bg: #0b1221;
+  --color-surface: #151d30;
+  --color-surface-hover: #1e2a42;
+  --color-border: #253252;
+  --color-border-light: #1a2540;
 
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-text-inverse: #0f172a;
+  --color-text-primary: #e8edf5;
+  --color-text-secondary: #8b9cc0;
+  --color-text-muted: #56668b;
+  --color-text-inverse: #0b1221;
 
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
-  --color-accent-light: #1e3a5f;
-  --color-accent-soft: #172554;
+  --color-accent: #60a5fa;
+  --color-accent-hover: #93bbfd;
+  --color-accent-light: #1a3050;
+  --color-accent-soft: #101f38;
 
   --color-success: #34d399;
   --color-warning: #fbbf24;
   --color-info: #60a5fa;
+  --color-danger: #f87171;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.3);
+  --status-pending-bg: #1e2330;
+  --status-pending-text: #fbbf24;
+  --status-processing-bg: #0d1d3a;
+  --status-processing-text: #60a5fa;
+  --status-completed-bg: #0a1f2e;
+  --status-completed-text: #34d399;
+  --status-transit-bg: #0a1f2e;
+  --status-transit-text: #38bdf8;
+  --status-neutral-bg: #1a2135;
+  --status-neutral-text: #8b9cc0;
+  --status-danger-bg: #2a1518;
+  --status-danger-text: #f87171;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* ===== Global Reset & Base ===== */

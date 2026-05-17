@@ -58,7 +58,8 @@ function doLogout() {
   font-family: var(--font-body, 'Inter', sans-serif);
 }
 .b2b-header {
-  background: var(--color-text-primary, #1a1816);
+  background: #1a1a18;
+  border-bottom: 1px solid var(--color-border, #33312c);
   padding: 0 var(--space-lg, 24px);
   position: sticky; top: 0; z-index: 100;
 }
@@ -69,10 +70,9 @@ function doLogout() {
 }
 .b2b-logo {
   display: flex; align-items: center; gap: 10px;
-  color: var(--color-text-inverse, #fff);
-  text-decoration: none; font-size: 16px; font-weight: 600;
+  color: #fff; text-decoration: none; font-size: 16px; font-weight: 600;
 }
-.b2b-logo em { font-style: normal; font-weight: 400; color: rgba(255,255,255,0.6); font-size: 13px; margin-left: 4px; }
+.b2b-logo em { font-style: normal; font-weight: 400; opacity: 0.6; font-size: 13px; margin-left: 4px; color: #fff; }
 .logo-mark {
   width: 32px; height: 32px;
   background: var(--color-accent, #c41e3a);
@@ -81,14 +81,14 @@ function doLogout() {
   font-family: var(--font-display, 'Playfair Display', serif);
   font-weight: 700; font-size: 18px;
 }
-.header-nav { display: flex; align-items: center; gap: var(--space-lg, 24px); }
+.header-nav { display: flex; align-items: center; gap: var(--space-lg, 24px); color: #fff; }
 .nav-link {
-  color: rgba(255,255,255,0.7); font-size: 13px;
-  text-decoration: none; transition: color 0.2s;
+  color: #fff; opacity: 0.7; font-size: 13px;
+  text-decoration: none; transition: opacity 0.2s;
   background: none; border: none; cursor: pointer;
 }
-.nav-link:hover { color: var(--color-text-inverse, #fff); }
-.logout-btn { color: rgba(255,255,255,0.5); padding: 0; }
+.nav-link:hover { opacity: 1; }
+.logout-btn { opacity: 0.5; padding: 0; }
 
 .b2b-body { display: flex; min-height: calc(100vh - 56px); }
 .b2b-sidebar {

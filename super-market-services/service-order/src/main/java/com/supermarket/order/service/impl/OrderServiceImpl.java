@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.inventory.InventoryDubboService;
 import com.supermarket.common.dubbo.api.order.OrderDubboService;
 import com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
@@ -26,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @DubboService(interfaceClass = OrderDubboService.class)
@@ -81,7 +84,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         for (var item : request.getItems()) {
             boolean deducted = inventoryDubboService.deduct(item.getSkuId(), item.getQuantity());
             if (!deducted) {
-                throw new BizException(400, "库存不足: skuId=" + item.getSkuId());
+                throw new BizException(ResultCode.STOCK_INSUFFICIENT, ResultCode.STOCK_INSUFFICIENT.getMessage() + ": skuId=" + item.getSkuId());
             }
         }
 
@@ -95,14 +98,14 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     public Order getByOrderNo(String orderNo) {
         Order order = getOne(new LambdaQueryWrapper<Order>().eq(Order::getOrderNo, orderNo));
-        if (order == null) throw new BizException(404, "订单不存在");
+        if (order == null) throw new BizException(ResultCode.ORDER_NOT_FOUND);
         return order;
     }
 
     @Override
     public Order getById(Long orderId) {
         Order order = super.getById(orderId);
-        if (order == null) throw new BizException(404, "订单不存在");
+        if (order == null) throw new BizException(ResultCode.ORDER_NOT_FOUND);
         return order;
     }
 
@@ -134,17 +137,31 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void cancelOrder(String orderNo, String reason) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 1) throw new BizException(400, "仅待付款订单可取消");
+        int currentStatus = order.getOrderStatus();
+        // 退款取消(status 6)支持从已付款(2)或已完成(4)发起，不恢复库存
+        boolean isRefundCancel = "退款取消".equals(reason);
+        if (isRefundCancel) {
+            if (currentStatus != 2 && currentStatus != 4)
+                throw new BizException(ResultCode.REFUND_CANCEL_FAILED);
+        } else {
+            if (currentStatus != 1)
+                throw new BizException(ResultCode.ORDER_STATUS_ERROR);
+            rollbackInventory(orderNo);
+        }
         order.setOrderStatus(5);
         updateById(order);
-        rollbackInventory(orderNo);
     }
 
     @Override
     @Transactional
     public void paySuccess(String orderNo, String payNo) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 1) throw new BizException(400, "订单状态不正确");
+        if (order.getOrderStatus() == 2)
+            throw new BizException(ResultCode.ORDER_PAY_DUPLICATE);
+        if (order.getOrderStatus() == 5)
+            throw new BizException(ResultCode.ORDER_STATUS_ERROR);
+        if (order.getOrderStatus() != 1)
+            throw new BizException(ResultCode.ORDER_STATUS_ERROR);
         order.setOrderStatus(2);
         order.setPayNo(payNo);
         order.setPaidAt(LocalDateTime.now());
@@ -155,7 +172,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void ship(String orderNo) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 2) throw new BizException(400, "仅待发货订单可发货");
+        if (order.getOrderStatus() != 2) throw new BizException(ResultCode.ORDER_STATUS_ERROR);
         order.setOrderStatus(3);
         order.setShippedAt(LocalDateTime.now());
         updateById(order);
@@ -165,7 +182,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Transactional
     public void confirmReceive(String orderNo) {
         Order order = getByOrderNo(orderNo);
-        if (order.getOrderStatus() != 3) throw new BizException(400, "仅待收货订单可确认");
+        if (order.getOrderStatus() != 3) throw new BizException(ResultCode.ORDER_STATUS_ERROR);
         order.setOrderStatus(4);
         order.setReceivedAt(LocalDateTime.now());
         updateById(order);
@@ -191,6 +208,63 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             case 6 -> cancelOrder(orderNo, "退款取消");
             default -> log.warn("未知订单状态: {}", toStatus);
         }
+    }
+
+    // -- OrderDubboService statistics --
+
+    @Override
+    public List<Map<String, Object>> getDailyTrend(int days) {
+        return getBaseMapper().selectDailyTrend(days);
+    }
+
+    @Override
+    public List<Map<String, Object>> getOrderStatusDistribution() {
+        return getBaseMapper().selectStatusDistribution();
+    }
+
+    @Override
+    public List<Map<String, Object>> getCategorySales() {
+        List<Map<String, Object>> list = orderItemMapper.selectCategorySales();
+        double total = list.stream()
+                .mapToDouble(m -> ((Number) m.getOrDefault("amount", 0)).doubleValue())
+                .sum();
+        for (Map<String, Object> m : list) {
+            double amount = ((Number) m.getOrDefault("amount", 0)).doubleValue();
+            m.put("percentage", total > 0 ? Math.round(amount / total * 10000.0) / 100.0 : 0);
+        }
+        return list;
+    }
+
+    @Override
+    public List<Map<String, Object>> getMerchantDailyTrend(Long shopId, int days) {
+        return getBaseMapper().selectMerchantDailyTrend(shopId, days);
+    }
+
+    @Override
+    public List<Map<String, Object>> getMerchantOrderStatusDistribution(Long shopId) {
+        return getBaseMapper().selectMerchantStatusDistribution(shopId);
+    }
+
+    @Override
+    public Map<String, Object> getTodayStats() {
+        Map<String, Object> stats = getBaseMapper().selectTodayStats();
+        if (stats == null || stats.get("gmv") == null) {
+            stats = new java.util.HashMap<>();
+            stats.put("gmv", 0);
+            stats.put("orderCount", 0);
+        }
+        return stats;
+    }
+
+    @Override
+    public Map<String, Object> getMerchantTodayStats(Long shopId) {
+        Map<String, Object> stats = getBaseMapper().selectMerchantTodayStats(shopId);
+        if (stats == null || stats.get("gmv") == null) {
+            stats = new java.util.HashMap<>();
+            stats.put("gmv", 0);
+            stats.put("orderCount", 0);
+        }
+        return stats;
     }
 
     private void rollbackInventory(String orderNo) {

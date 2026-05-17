@@ -94,7 +94,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper">
+    <div class="pagination-wrap">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -259,9 +259,9 @@ onMounted(() => {
 
 <style scoped>
 .inventory-page {
-  background: #fff;
+  background: var(--color-surface, #fff);
   padding: 24px;
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 .page-header {
@@ -275,14 +275,14 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .toolbar {
   margin-bottom: 16px;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
   margin-top: 20px;
@@ -299,8 +299,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f7fa;
-  color: #c0c4cc;
+  background: var(--color-surface-hover, #f5f7fa);
+  color: var(--color-text-muted, #c0c4cc);
   font-size: 12px;
 }
 
@@ -309,7 +309,7 @@ onMounted(() => {
   gap: 14px;
   align-items: flex-start;
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--color-surface-hover, #f5f7fa);
   border-radius: 6px;
   margin-bottom: 20px;
 }
@@ -323,7 +323,7 @@ onMounted(() => {
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .sku-info-text .sku-spec,

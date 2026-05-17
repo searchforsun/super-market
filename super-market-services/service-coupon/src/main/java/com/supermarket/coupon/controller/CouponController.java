@@ -30,6 +30,40 @@ public class CouponController {
         return R.ok(couponService.createTemplate(template));
     }
 
+    @GetMapping("/admin/templates")
+    @Operation(summary = "分页查询优惠券模板列表")
+    public R<Page<CouponTemplate>> adminTemplates(@Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                                   @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
+        return R.ok(couponService.listTemplates(page, size));
+    }
+
+    @PutMapping("/admin/template")
+    @Operation(summary = "更新优惠券模板")
+    public R<CouponTemplate> updateTemplate(@Parameter(description = "优惠券模板信息") @RequestBody CouponTemplate template) {
+        return R.ok(couponService.updateTemplate(template));
+    }
+
+    @PutMapping("/admin/template/status")
+    @Operation(summary = "设置优惠券模板状态")
+    public R<Boolean> setTemplateStatus(@Parameter(description = "模板ID") @RequestParam Long id,
+                                        @Parameter(description = "状态") @RequestParam Integer status) {
+        return R.ok(couponService.setTemplateStatus(id, status));
+    }
+
+    @DeleteMapping("/admin/template/{id}")
+    @Operation(summary = "删除优惠券模板")
+    public R<Void> deleteTemplate(@Parameter(description = "模板ID") @PathVariable Long id) {
+        couponService.deleteTemplate(id);
+        return R.ok();
+    }
+
+    @GetMapping("/admin/batches")
+    @Operation(summary = "分页查询发放记录")
+    public R<Page<CouponBatch>> listBatches(@Parameter(description = "页码") @RequestParam(defaultValue = "1") int page,
+                                             @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
+        return R.ok(couponService.listBatches(page, size));
+    }
+
     @PostMapping("/admin/distribute")
     @Operation(summary = "发放优惠券")
     public R<CouponBatch> distribute(@Parameter(description = "模板ID") @RequestParam Long templateId,

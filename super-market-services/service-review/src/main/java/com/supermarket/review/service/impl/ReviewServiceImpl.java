@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.review.entity.Review;
 import com.supermarket.review.mapper.ReviewMapper;
 import com.supermarket.review.service.ReviewService;
@@ -25,13 +26,13 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
     @Transactional
     public Review create(Review review) {
         if (review.getRating() < 1 || review.getRating() > 5) {
-            throw new BizException(400, "评分必须在1-5之间");
+            throw new BizException(ResultCode.REVIEW_RATING_INVALID);
         }
         if (StrUtil.isBlank(review.getOrderNo())) {
-            throw new BizException(400, "订单号不能为空");
+            throw new BizException(ResultCode.REVIEW_ORDER_REQUIRED);
         }
         if (review.getSpuId() == null) {
-            throw new BizException(400, "商品ID不能为空");
+            throw new BizException(ResultCode.REVIEW_PRODUCT_REQUIRED);
         }
         review.setStatus(1);
         save(review);
@@ -43,10 +44,10 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
     public Review append(Long reviewId, Long userId, String content, String images) {
         Review review = getById(reviewId);
         if (review == null) {
-            throw new BizException(404, "评价不存在");
+            throw new BizException(ResultCode.REVIEW_NOT_FOUND);
         }
         if (!review.getUserId().equals(userId)) {
-            throw new BizException(403, "只能追加自己的评价");
+            throw new BizException(ResultCode.REVIEW_NOT_OWNED);
         }
         review.setContent((review.getContent() != null ? review.getContent() : "")
                 + "\n【追评】" + content);
@@ -62,7 +63,7 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
     public void reply(Long reviewId, String content) {
         Review review = getById(reviewId);
         if (review == null) {
-            throw new BizException(404, "评价不存在");
+            throw new BizException(ResultCode.REVIEW_NOT_FOUND);
         }
         review.setReplyContent(content);
         review.setReplyAt(LocalDateTime.now());
@@ -73,7 +74,7 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
     public Review getById(Long reviewId) {
         Review review = super.getById(reviewId);
         if (review == null) {
-            throw new BizException(404, "评价不存在");
+            throw new BizException(ResultCode.REVIEW_NOT_FOUND);
         }
         return review;
     }
@@ -123,8 +124,11 @@ public class ReviewServiceImpl extends ServiceImpl<ReviewMapper, Review> impleme
             dist.put(i, 0L);
         }
         for (Map<String, Object> row : rows) {
-            Integer r = ((Number) row.get("rating")).intValue();
-            Long cnt = ((Number) row.get("cnt")).longValue();
+            Object rObj = row.get("rating") != null ? row.get("rating") : row.get("RATING");
+            Object cObj = row.get("cnt") != null ? row.get("cnt") : row.get("CNT");
+            if (rObj == null || cObj == null) continue;
+            Integer r = ((Number) rObj).intValue();
+            Long cnt = ((Number) cObj).longValue();
             dist.put(r, cnt);
         }
         return dist;

@@ -1,5 +1,9 @@
 <template>
-  <div class="product-detail page-enter" v-if="product">
+  <el-skeleton v-if="loading" :rows="8" animated />
+  <el-empty v-else-if="!product" description="商品不存在或已下架">
+    <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
+  </el-empty>
+  <div class="product-detail page-enter" v-else>
     <div class="detail-top">
       <div class="detail-img"><img :src="product.mainImage" /></div>
       <div class="detail-info">
@@ -49,6 +53,7 @@ const currentSku = ref<any>(null)
 const qty = ref(1)
 const reviews = ref<any[]>([])
 const ratingSummary = ref<any>(null)
+const loading = ref(true)
 
 const specGroups = computed(() => {
   const groups: Record<string, Set<string>> = {}
@@ -73,7 +78,16 @@ function onSpecSelect(name: string, value: string) {
 
 async function addToCart() {
   if (!userStore.isLoggedIn) { router.push('/login'); return }
-  await addCartApi(userStore.userId, { skuId: currentSku.value?.id || skus.value[0]?.id, quantity: qty.value })
+  const sku = currentSku.value || skus.value[0]
+  await addCartApi(userStore.userId, {
+    skuId: sku?.id,
+    spuId: product.value?.id,
+    spuName: product.value?.name,
+    skuSpec: sku?.specName,
+    skuImage: sku?.image || product.value?.mainImage,
+    price: sku?.price,
+    quantity: qty.value,
+  })
   ElMessage.success('已加入购物车')
   cartStore.fetchCount()
 }
@@ -85,11 +99,13 @@ function buyNow() {
 
 onMounted(async () => {
   const id = Number(route.params.id)
+  loading.value = true
   try {
     product.value = await getProductDetail(id)
     skus.value = await getProductSkus(id)
     if (skus.value.length) currentSku.value = skus.value[0]
   } catch { /* product load failed */ }
+  loading.value = false
   try {
     const res: any = await getReviewsBySpu(id, { page: 1, size: 5 })
     reviews.value = res.records || []

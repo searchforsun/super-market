@@ -17,11 +17,14 @@ const KEY = 'theme'
 const isDark = ref(false)
 
 function apply(t: 'light' | 'dark') {
+  const html = document.documentElement
   if (t === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark')
+    html.setAttribute('data-theme', 'dark')
+    html.classList.add('dark')
     isDark.value = true
   } else {
-    document.documentElement.removeAttribute('data-theme')
+    html.removeAttribute('data-theme')
+    html.classList.remove('dark')
     isDark.value = false
   }
 }
@@ -43,13 +46,13 @@ onMounted(() => {
   width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-md, 8px);
-  color: var(--color-text-secondary, #5c5a55);
-  background: none; border: none;
+  color: inherit; opacity: 0.7;
+  background: transparent; border: none;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: opacity 0.15s, background 0.15s;
 }
 .theme-toggle:hover {
-  color: var(--color-text-primary, #1a1a18);
-  background: var(--color-surface-hover, #f0efe8);
+  opacity: 1;
+  background: rgba(128,128,128,0.15);
 }
 </style>

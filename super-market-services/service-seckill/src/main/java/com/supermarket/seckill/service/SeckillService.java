@@ -14,7 +14,15 @@ public interface SeckillService {
 
     List<SeckillSession> listSessions();
 
+    List<SeckillSession> listAllSessions();
+
+    SeckillSession updateSession(SeckillSession session);
+
+    void deleteSession(Long id);
+
     List<SeckillProduct> listProducts(Long sessionId);
+
+    void deleteProduct(Long id);
 
     void preheat(Long seckillProductId);
 

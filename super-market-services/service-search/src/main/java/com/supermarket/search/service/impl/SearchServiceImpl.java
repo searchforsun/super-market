@@ -12,6 +12,8 @@ import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
+
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -22,6 +24,7 @@ import java.util.stream.Collectors;
 public class SearchServiceImpl implements SearchService {
 
     private final ElasticsearchOperations esOps;
+    private static final IndexCoordinates PRODUCT_INDEX = IndexCoordinates.of("product_document");
 
     @Override
     public Map<String, Object> search(String keyword, Long categoryId, String brand,
@@ -50,7 +53,7 @@ public class SearchServiceImpl implements SearchService {
                 org.springframework.data.domain.PageRequest.of(page - 1, size));
 
         try {
-            var searchHits = esOps.search(query, ProductDocument.class);
+            var searchHits = esOps.search(query, ProductDocument.class, PRODUCT_INDEX);
             List<ProductDocument> records = searchHits.getSearchHits().stream()
                     .map(SearchHit::getContent)
                     .collect(Collectors.toList());
@@ -78,7 +81,7 @@ public class SearchServiceImpl implements SearchService {
         IndexQuery indexQuery = new IndexQuery();
         indexQuery.setId(String.valueOf(doc.getSpuId()));
         indexQuery.setObject(doc);
-        esOps.index(indexQuery, esOps.getIndexCoordinatesFor(ProductDocument.class));
+        esOps.index(indexQuery, PRODUCT_INDEX);
     }
 
     @Override
@@ -88,7 +91,7 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public void deleteProduct(Long spuId) {
-        esOps.delete(String.valueOf(spuId), ProductDocument.class);
+        esOps.delete(String.valueOf(spuId), PRODUCT_INDEX);
     }
 
     @Override
@@ -99,6 +102,6 @@ public class SearchServiceImpl implements SearchService {
             q.setObject(doc);
             return q;
         }).collect(Collectors.toList());
-        esOps.bulkIndex(queries, esOps.getIndexCoordinatesFor(ProductDocument.class));
+        esOps.bulkIndex(queries, PRODUCT_INDEX);
     }
 }

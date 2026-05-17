@@ -1,9 +1,12 @@
 package com.supermarket.product.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.supermarket.common.mybatis.entity.BaseEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import java.math.BigDecimal;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -21,4 +24,9 @@ public class Spu extends BaseEntity {
     private Integer auditStatus;
     private Integer shelfStatus;
     private Integer isDeleted;
+
+    @TableField(exist = false)
+    private BigDecimal minPrice;
+    @TableField(exist = false)
+    private BigDecimal maxPrice;
 }

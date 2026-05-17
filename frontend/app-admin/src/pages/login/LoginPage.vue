@@ -72,12 +72,12 @@ async function handleLogin() {
 <style scoped>
 .login-page {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #8b5cf6 0%, #5b21b6 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
 }
 .login-card {
   background: var(--color-surface, #fff);
   padding: 48px 40px; border-radius: var(--radius-xl, 16px);
-  width: 420px; box-shadow: var(--shadow-xl, 0 24px 64px rgba(0,0,0,0.2));
+  width: 420px; box-shadow: var(--shadow-xl, 0 24px 64px rgba(15,23,42,0.15));
 }
 .login-logo {
   display: flex; align-items: center; justify-content: center;
@@ -85,33 +85,33 @@ async function handleLogin() {
 }
 .logo-mark {
   width: 40px; height: 40px;
-  background: #7c3aed; color: #fff;
-  font-family: var(--font-display, 'Playfair Display', serif);
+  background: var(--color-accent, #2563eb); color: #fff;
+  font-family: var(--font-body, 'Geist', sans-serif);
   font-size: 22px; font-weight: 700;
   border-radius: var(--radius-md, 8px);
   display: flex; align-items: center; justify-content: center;
 }
 .logo-text {
-  font-family: var(--font-display, 'Playfair Display', serif);
+  font-family: var(--font-body, 'Geist', sans-serif);
   font-size: 22px; font-weight: 600;
-  color: var(--color-text-primary, #1a1816);
+  color: var(--color-text-primary, #0f172a);
 }
 .login-heading {
-  text-align: center; font-family: var(--font-display, 'Playfair Display', serif);
+  text-align: center; font-family: var(--font-body, 'Geist', sans-serif);
   font-size: 24px; font-weight: 600; margin-bottom: var(--space-sm, 8px);
 }
 .login-sub {
   text-align: center; font-size: 14px;
-  color: var(--color-text-muted, #a09890);
+  color: var(--color-text-muted, #94a3b8);
   margin-bottom: var(--space-xl, 32px);
 }
 .login-note {
   text-align: center; font-size: 12px;
-  color: var(--color-text-muted, #a09890);
+  color: var(--color-text-muted, #94a3b8);
   margin-top: var(--space-lg, 24px);
 }
 .login-error {
-  text-align: center; font-size: 13px; color: var(--color-accent, #c41e3a);
+  text-align: center; font-size: 13px; color: #ef4444;
   margin-top: var(--space-md, 16px);
 }
 </style>

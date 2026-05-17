@@ -1,12 +1,17 @@
 package com.supermarket.inventory.controller;
 
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import com.supermarket.inventory.entity.Inventory;
-import com.supermarket.inventory.service.InventoryService;
 import com.supermarket.inventory.service.impl.InventoryServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -15,7 +20,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(InventoryController.class)
+@SpringBootTest(classes = {InventoryController.class, InventoryControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class InventoryControllerTest {
 
@@ -28,6 +34,13 @@ class InventoryControllerTest {
      */
     @MockBean
     private InventoryServiceImpl inventoryService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = InventoryController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldInitStockWhenValidParams() throws Exception {
@@ -45,7 +58,7 @@ class InventoryControllerTest {
                         .param("totalStock", "100")
                         .param("safetyStock", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.skuId").value(100))
                 .andExpect(jsonPath("$.data.totalStock").value(100));
     }
@@ -62,7 +75,7 @@ class InventoryControllerTest {
 
         mockMvc.perform(get("/api/inventory/sku/100"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.availableStock").value(30));
     }
 
@@ -71,8 +84,8 @@ class InventoryControllerTest {
         when(inventoryService.getBySkuId(999L)).thenReturn(null);
 
         mockMvc.perform(get("/api/inventory/sku/999"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(20010))
                 .andExpect(jsonPath("$.message").value("库存信息不存在"));
     }
 
@@ -84,7 +97,7 @@ class InventoryControllerTest {
                         .param("skuId", "100")
                         .param("quantity", "5"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").value(true));
     }
 
@@ -95,8 +108,8 @@ class InventoryControllerTest {
         mockMvc.perform(post("/api/inventory/deduct")
                         .param("skuId", "100")
                         .param("quantity", "999"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(400))
-                .andExpect(jsonPath("$.message").value("库存不足或扣减失败"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(20008))
+                .andExpect(jsonPath("$.message").value("库存不足"));
     }
 }

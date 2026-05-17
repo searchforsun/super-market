@@ -7,6 +7,7 @@ import com.supermarket.address.entity.Address;
 import com.supermarket.address.mapper.AddressMapper;
 import com.supermarket.address.service.AddressService;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +21,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address create(Address address) {
         List<Address> existing = listByUser(address.getUserId());
         if (existing.size() >= 20) {
-            throw new BizException(400, "收货地址最多20个");
+            throw new BizException(ResultCode.ADDRESS_LIMIT);
         }
         if (existing.isEmpty()) {
             address.setIsDefault(1);
@@ -33,7 +34,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address update(Address address) {
         Address exist = getById(address.getId());
         if (exist == null) {
-            throw new BizException(404, "地址不存在");
+            throw new BizException(ResultCode.ADDRESS_NOT_FOUND);
         }
         updateById(address);
         return getById(address.getId());
@@ -52,7 +53,7 @@ public class AddressServiceImpl extends ServiceImpl<AddressMapper, Address> impl
     public Address getById(Long addressId) {
         Address addr = super.getById(addressId);
         if (addr == null || addr.getIsDeleted() == 1) {
-            throw new BizException(404, "地址不存在");
+            throw new BizException(ResultCode.ADDRESS_NOT_FOUND);
         }
         return addr;
     }

@@ -865,7 +865,7 @@ public class R<T> implements Serializable {
     }
 
     public static <T> R<T> fail(String message) {
-        return fail(500, message);
+        return fail(90001, message);
     }
 
     public boolean isSuccess() {
@@ -894,7 +894,7 @@ public class BizException extends RuntimeException {
     }
 
     public BizException(String message) {
-        this(500, message);
+        this(900001, message);
     }
 }
 ```
@@ -1260,19 +1260,17 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public R<Void> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
             .map(FieldError::getDefaultMessage)
             .collect(Collectors.joining(", "));
-        return R.fail(400, message);
+        return R.fail(100019, message);
     }
 
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public R<Void> handleException(Exception e) {
         log.error("Unexpected error", e);
-        return R.fail(500, "系统繁忙，请稍后重试");
+        return R.fail(100020, "系统繁忙，请稍后重试");
     }
 }
 ```
@@ -1739,7 +1737,7 @@ spring:
       maximum-pool-size: 20
       idle-timeout: 30000
       max-lifetime: 1800000
-      connection-timeout: 5000
+      connection-timeout: 9000010
 
   data:
     redis:
@@ -1766,7 +1764,7 @@ dubbo:
       namespace: public
   consumer:
     check: false
-    timeout: 5000
+    timeout: 9000010
     retries: 0
 
 mybatis-plus:

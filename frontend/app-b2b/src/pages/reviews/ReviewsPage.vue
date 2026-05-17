@@ -329,15 +329,15 @@ onMounted(() => {
 
 <style scoped>
 .review-page {
-  background: #fff;
+  background: var(--color-surface, #fff);
   padding: 24px;
   border-radius: 8px;
 }
 .page-title {
-  margin: 0 0 20px 0;
+  margin: 0 0 20px;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 .filters {
   display: flex;
@@ -365,12 +365,12 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 4px;
-  background: #f5f7fa;
+  background: var(--color-surface-hover, #f5f7fa);
   flex-shrink: 0;
 }
 .cell-product-name {
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -381,7 +381,7 @@ onMounted(() => {
 .cell-content-text {
   margin: 0;
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-all;
@@ -421,7 +421,7 @@ onMounted(() => {
 }
 .reply-origin {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--color-surface-hover, #f5f7fa);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -433,17 +433,17 @@ onMounted(() => {
 }
 .reply-origin-user {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-muted, #909399);
 }
 .reply-origin-time {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--color-text-muted, #c0c4cc);
   margin-left: auto;
 }
 .reply-origin-text {
   margin: 0;
   font-size: 14px;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
@@ -476,7 +476,7 @@ onMounted(() => {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
   margin-bottom: 8px;
 }
 </style>

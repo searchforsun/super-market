@@ -6,6 +6,7 @@ import com.supermarket.category.entity.Category;
 import com.supermarket.category.mapper.CategoryMapper;
 import com.supermarket.category.service.CategoryService;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
     public void delete(Long id) {
         List<Category> children = getChildren(id);
         if (!children.isEmpty()) {
-            throw new BizException(400, "存在子类目,无法删除");
+            throw new BizException(ResultCode.CATEGORY_HAS_CHILDREN);
         }
         removeById(id);
     }
@@ -48,7 +49,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category> i
     public Category getById(Long id) {
         Category cat = super.getById(id);
         if (cat == null) {
-            throw new BizException(404, "类目不存在");
+            throw new BizException(ResultCode.CATEGORY_NOT_FOUND);
         }
         return cat;
     }

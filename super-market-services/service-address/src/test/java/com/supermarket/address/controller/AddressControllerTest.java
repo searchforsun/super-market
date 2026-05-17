@@ -3,10 +3,16 @@ package com.supermarket.address.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supermarket.address.entity.Address;
 import com.supermarket.address.service.AddressService;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -17,7 +23,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AddressController.class)
+@SpringBootTest(classes = {AddressController.class, AddressControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AddressControllerTest {
 
@@ -28,6 +35,13 @@ class AddressControllerTest {
     private AddressService addressService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = AddressController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateWhenValidBody() throws Exception {
@@ -56,7 +70,7 @@ class AddressControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(address)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(100))
                 .andExpect(jsonPath("$.data.receiverName").value("张三"));
         verify(addressService).create(any(Address.class));
@@ -82,7 +96,7 @@ class AddressControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(address)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.receiverName").value("李四"));
         verify(addressService).update(any(Address.class));
     }
@@ -96,7 +110,7 @@ class AddressControllerTest {
         mockMvc.perform(delete("/api/address/100")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(addressService).delete(100L, 1L);
     }
@@ -118,7 +132,7 @@ class AddressControllerTest {
         mockMvc.perform(get("/api/address/list")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].receiverName").value("张三"))
                 .andExpect(jsonPath("$.data[1].receiverName").value("李四"));
@@ -134,7 +148,7 @@ class AddressControllerTest {
         mockMvc.perform(put("/api/address/100/default")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(addressService).setDefault(100L, 1L);
     }

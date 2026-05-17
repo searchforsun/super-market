@@ -6,11 +6,14 @@ import com.supermarket.common.dubbo.api.order.dto.CreateOrderRequest;
 import com.supermarket.order.entity.Order;
 import com.supermarket.order.entity.OrderItem;
 import com.supermarket.order.service.OrderService;
-import com.supermarket.order.service.impl.OrderServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -23,7 +26,19 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(OrderController.class)
+/**
+ * Uses @SpringBootTest with a minimal TestConfig instead of @WebMvcTest to avoid
+ * loading the main application class which has @EnableDubbo. The @EnableDubbo
+ * annotation triggers Dubbo service export and @DubboReference resolution that
+ * cannot be disabled through auto-configuration exclusions alone.
+ * <p>
+ * The inner TestConfig uses @EnableAutoConfiguration to restore web-related
+ * auto-configurations (Jackson, MVC) that are needed for MockMvc to work,
+ * while explicitly excluding infrastructure auto-configurations (Dubbo, Nacos,
+ * DataSource, Redis, Seata, MyBatis-Plus).
+ */
+@SpringBootTest(classes = {OrderController.class, OrderControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class OrderControllerTest {
 
@@ -33,12 +48,14 @@ class OrderControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    /**
-     * Mock the concrete impl class so the mock inherits both OrderService and
-     * OrderDubboService interfaces, satisfying Dubbo's service export check.
-     */
     @MockBean
-    private OrderServiceImpl orderService;
+    private OrderService orderService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = OrderController.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldCreateOrderWhenValidRequest() throws Exception {
@@ -66,7 +83,7 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderNo").value("ORD202405160001"))
                 .andExpect(jsonPath("$.data.userId").value(1));
     }
@@ -82,7 +99,7 @@ class OrderControllerTest {
 
         mockMvc.perform(get("/api/order/ORD202405160001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.orderNo").value("ORD202405160001"))
                 .andExpect(jsonPath("$.data.orderStatus").value(1));
     }
@@ -100,7 +117,7 @@ class OrderControllerTest {
 
         mockMvc.perform(get("/api/order/list/shop/10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].orderNo").value("ORD001"));
     }
 
@@ -117,7 +134,7 @@ class OrderControllerTest {
 
         mockMvc.perform(get("/api/order/list/user/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].orderNo").value("ORD002"));
     }
 
@@ -133,7 +150,7 @@ class OrderControllerTest {
 
         mockMvc.perform(get("/api/order/ORD001/items"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].skuName").value("Test Item"))
                 .andExpect(jsonPath("$.data[0].quantity").value(2));
     }
@@ -145,7 +162,7 @@ class OrderControllerTest {
         mockMvc.perform(put("/api/order/ORD001/cancel")
                         .param("reason", "Changed my mind"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -155,7 +172,7 @@ class OrderControllerTest {
 
         mockMvc.perform(put("/api/order/ORD001/ship"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -165,7 +182,7 @@ class OrderControllerTest {
 
         mockMvc.perform(put("/api/order/ORD001/receive"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -181,7 +198,7 @@ class OrderControllerTest {
 
         mockMvc.perform(get("/api/order/admin/list"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].orderNo").value("ORD003"));
     }
 }

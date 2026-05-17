@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.order.OrderDubboService;
 import com.supermarket.common.dubbo.api.payment.PaymentDubboService;
 import com.supermarket.common.dubbo.api.payment.dto.PaymentDTO;
@@ -62,7 +63,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     @Transactional
     public Payment createPaymentEntity(String orderNo, Long userId, BigDecimal amount, Integer payMethod) {
         Payment exist = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getOrderNo, orderNo));
-        if (exist != null) throw new BizException(400, "该订单已创建支付单");
+        if (exist != null) throw new BizException(ResultCode.PAYMENT_DUPLICATE);
 
         String payNo = "PAY" + IdUtil.getSnowflakeNextId();
         Payment payment = new Payment();
@@ -79,7 +80,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     @Override
     public Payment getByPayNoEntity(String payNo) {
         Payment p = getOne(new LambdaQueryWrapper<Payment>().eq(Payment::getPayNo, payNo));
-        if (p == null) throw new BizException(404, "支付单不存在");
+        if (p == null) throw new BizException(ResultCode.PAYMENT_NOT_FOUND);
         return p;
     }
 
@@ -99,7 +100,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
 
         Payment payment = getByPayNoEntity(payNo);
         if (payment.getPayStatus() != 1) {
-            throw new BizException(400, "支付单状态不正确");
+            throw new BizException(ResultCode.PAYMENT_STATUS_ERROR);
         }
 
         payment.setPayStatus(2);
@@ -107,7 +108,11 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         payment.setPaidAt(LocalDateTime.now());
         updateById(payment);
 
-        orderDubboService.updateStatus(payment.getOrderNo(), 2);
+        try {
+            orderDubboService.updateStatus(payment.getOrderNo(), 2);
+        } catch (Exception e) {
+            throw translateDubboException(e, "支付回调通知订单失败");
+        }
 
         PaymentIdempotent idem = new PaymentIdempotent();
         idem.setRequestId(requestId);
@@ -125,7 +130,7 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
     public PaymentRefund refund(String orderNo, BigDecimal refundAmount, String reason) {
         Payment payment = getByOrderNo(orderNo);
         if (payment == null || payment.getPayStatus() != 2) {
-            throw new BizException(400, "仅已支付订单可退款");
+            throw new BizException(ResultCode.REFUND_ONLY_PAID);
         }
 
         String refundNo = "RFD" + IdUtil.getSnowflakeNextId();
@@ -147,7 +152,11 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         payment.setPayStatus(4);
         updateById(payment);
 
-        orderDubboService.updateStatus(orderNo, 6);
+        try {
+            orderDubboService.updateStatus(orderNo, 6);
+        } catch (Exception e) {
+            throw translateDubboException(e, "退款通知订单失败");
+        }
 
         return refund;
     }
@@ -182,5 +191,21 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
         dto.setThirdPayNo(p.getThirdPayNo());
         dto.setPaidAt(p.getPaidAt());
         return dto;
+    }
+
+    /**
+     * 将 Dubbo 调用异常转换为 BizException，提取远程服务的错误码和消息返回给前端
+     */
+    private BizException translateDubboException(Exception e, String context) {
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            if (cause instanceof BizException biz) {
+                log.warn("{}, 远程服务返回: code={}, message={}", context, biz.getCode(), biz.getMessage());
+                return new BizException(biz.getCode(), biz.getMessage());
+            }
+            cause = cause.getCause();
+        }
+        log.error("{}, 未知错误", context, e);
+        return new BizException(ResultCode.SYSTEM_ERROR, context + "：" + e.getMessage());
     }
 }

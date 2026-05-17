@@ -7,6 +7,7 @@ import com.supermarket.auth.mapper.RoleMapper;
 import com.supermarket.auth.mapper.UserRoleMapper;
 import com.supermarket.auth.service.AuthService;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.dubbo.api.shop.ShopDubboService;
 import com.supermarket.common.dubbo.api.user.UserDubboService;
 import com.supermarket.common.dubbo.api.user.dto.UserDTO;
@@ -50,13 +51,13 @@ public class AuthServiceImpl implements AuthService {
     public Map<String, String> login(String phone, String password) {
         UserDTO user = userDubboService.getUserByPhone(phone);
         if (user == null) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(ResultCode.USER_PASSWORD_ERROR);
         }
         if (user.getStatus() != 1) {
-            throw new BizException(403, "账号已被禁用或注销");
+            throw new BizException(ResultCode.USER_ACCOUNT_DISABLED);
         }
         if (user.getPasswordHash() == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BizException(401, "手机号或密码错误");
+            throw new BizException(ResultCode.USER_PASSWORD_ERROR);
         }
 
         // 从 DB 查询角色
@@ -95,7 +96,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public Map<String, String> refreshToken(String refreshToken) {
         if (!jwtUtil.validate(refreshToken)) {
-            throw new BizException(401, "Refresh Token 无效或已过期");
+            throw new BizException(ResultCode.TOKEN_INVALID);
         }
         Long userId = jwtUtil.getUserId(refreshToken);
 

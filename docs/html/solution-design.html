@@ -815,7 +815,7 @@ Topic: canal-sync-topic          Canal数据同步
 <h4>6.1 认证鉴权流程</h4>
 <div class="diagram flow"><div class="flow-node start">用户登录
 POST /api/auth/login</div><span class="flow-arrow">→</span><div class="flow-node ">auth-service
-校验密码(BCrypt)</div><span class="flow-arrow">→</span><div class="flow-node decision">校验通过?</div><span class="flow-arrow">→</span><div class="flow-node end">返回 401</div><span class="flow-arrow">→</span><div class="flow-node event">生成 Access Token
+校验密码(BCrypt)</div><span class="flow-arrow">→</span><div class="flow-node decision">校验通过?</div><span class="flow-arrow">→</span><div class="flow-node end">返回 20001</div><span class="flow-arrow">→</span><div class="flow-node event">生成 Access Token
 (JWT TTL=2h)
 + Refresh Token
 (TTL=7d)</div><span class="flow-arrow">→</span><div class="flow-node ">返回 Tokens</div><span class="flow-arrow">→</span><div class="flow-node ">前端存储

@@ -54,14 +54,14 @@ docs/                         # PRD, solution design, implementation plans
 - **Inter-service calls:** Services communicate via Dubbo 3.x Triple protocol. API interfaces live in `common-dubbo-api`. Service implementations register as Dubbo providers (`@EnableDubbo` + `application-dev.yml` with `dubbo.protocol.name: tri`, registry `nacos://...?group=dubbo`).
 - **Gateway routing:** Spring Cloud Gateway routes HTTP requests by path prefix (e.g., `/api/user/**` → `user-service`). The gateway validates JWT tokens via `AuthGlobalFilter` and forwards `X-User-Id` and `X-User-Roles` headers to downstream services.
 - **Service bootstrap:** Each service's `Application` class uses `scanBasePackages = {"com.supermarket.<service>", "com.supermarket.common"}` to pick up common module beans.
-- **Unified response:** All REST endpoints return `R<T>` (code, message, data, timestamp) from `common-core`.
+- **Unified response:** All REST endpoints return `R<T>` (code, message, data, timestamp) from `common-core`. Business exceptions return HTTP 200 — check the `code` field for error info. Error codes defined in `ResultCode` enum (`common-core/src/.../result/ResultCode.java`): SYSTEM 9xxxx, USER 1xxxx, PRODUCT 2xxxx, ORDER 3xxxx, MARKETING 4xxxx, SHOP 5xxxx, PLATFORM 6xxxx, FILE 7xxxx.
 - **Configuration:** Each service has 2 config files (no `application.yml`):
   - `bootstrap.yml` — service identity, Nacos discovery/config, shared-configs (common-redis/rocketmq/seata), extension-configs (rate-limit/gray-release)
   - `application-dev.yml` — datasource, Redis, Dubbo, MyBatis-Plus, logging, springdoc, management
   - Middleware host/port/credentials via `${ENV_VAR:default}` from `.env`; profile via `${SPRING_PROFILES_ACTIVE:dev}`; `spring-cloud-starter-bootstrap` inherited from parent POM
 - **Database:** Each service has its own database (vertical sharding). MyBatis-Plus with `assign_id` ID generation. Large tables (orders, products) use horizontal sharding with ShardingSphere-JDBC.
 - **Service port ranges:** User domain 9301-9304, Product domain 9311-9314, Order domain 9321-9322, Payment 9331, Shop 9341, Marketing 9351-9352, Search 9361, File/Notify 9371-9372, Platform 9381.
-
+- **Admin account:** `13800000000 123456`
 ### Environment Variables
 
 All middleware host/port/credentials in microservice YAML configs use `${VAR:default}` placeholders:

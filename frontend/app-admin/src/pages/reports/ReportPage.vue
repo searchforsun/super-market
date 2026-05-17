@@ -1,6 +1,6 @@
 <template>
   <div class="report-page page-enter">
-    <h2>数据报表</h2>
+    <h2 class="page-title">数据报表</h2>
 
     <div class="filter-bar">
       <el-date-picker
@@ -10,7 +10,7 @@
         start-placeholder="开始日期"
         end-placeholder="结束日期"
         value-format="YYYY-MM-DD"
-        style="width: 280px"
+        class="date-range-picker"
       />
       <el-button type="primary" @click="handleQuery" :loading="loading">查询</el-button>
     </div>
@@ -37,19 +37,19 @@
           empty-text="暂无数据"
         >
           <el-table-column label="日期" prop="date" width="120" />
-          <el-table-column label="GMV" width="160">
+          <el-table-column label="GMV" min-width="140">
             <template #default="{ row }">
               <PriceDisplay :price="row.gmv" />
             </template>
           </el-table-column>
           <el-table-column label="订单数" prop="orders" width="100" align="center" />
-          <el-table-column label="客单价" width="160">
+          <el-table-column label="客单价" min-width="140">
             <template #default="{ row }">
               <PriceDisplay :price="row.avgPrice" />
             </template>
           </el-table-column>
           <el-table-column label="UV" prop="uv" width="100" align="center" />
-          <el-table-column label="转化率" width="120" align="center">
+          <el-table-column label="转化率" width="110" align="center">
             <template #default="{ row }">
               {{ (row.conversionRate * 100).toFixed(2) + '%' }}
             </template>
@@ -82,7 +82,7 @@
           <el-table-column label="完成数" prop="completed" width="100" align="center" />
           <el-table-column label="取消数" prop="cancelled" width="100" align="center" />
           <el-table-column label="退款数" prop="refunds" width="100" align="center" />
-          <el-table-column label="完成率" width="180" align="center">
+          <el-table-column label="完成率" min-width="220" align="center">
             <template #default="{ row }">
               <el-progress
                 :percentage="Math.round(row.completionRate * 100)"
@@ -112,9 +112,9 @@
         >
           <el-table-column label="日期" prop="date" width="120" />
           <el-table-column label="新注册" prop="newRegistrations" width="110" align="center" />
-          <el-table-column label="登录数" prop="logins" width="110" align="center" />
-          <el-table-column label="下单用户" prop="orderingUsers" width="110" align="center" />
-          <el-table-column label="新客下单" prop="newCustomerOrders" width="110" align="center" />
+          <el-table-column label="登录数" prop="logins" min-width="110" align="center" />
+          <el-table-column label="下单用户" prop="orderingUsers" min-width="110" align="center" />
+          <el-table-column label="新客下单" prop="newCustomerOrders" min-width="110" align="center" />
         </el-table>
       </el-tab-pane>
     </el-tabs>
@@ -182,16 +182,16 @@ onMounted(() => {
 
 <style scoped>
 .report-page {
-  background: #fff;
-  padding: 20px;
-  border-radius: 4px;
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
 }
 
-.report-page h2 {
-  margin: 0 0 16px 0;
-  font-size: 18px;
+.page-title {
+  margin: 0 0 20px;
+  font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary, #303133);
 }
 
 .filter-bar {
@@ -205,10 +205,20 @@ onMounted(() => {
   margin-top: 8px;
 }
 
+.date-range-picker {
+  width: 260px;
+}
+
 .stat-cards {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  flex-wrap: wrap;
   margin-bottom: 4px;
+}
+
+@media (max-width: 1200px) {
+  .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

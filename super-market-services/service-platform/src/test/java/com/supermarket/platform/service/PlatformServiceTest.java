@@ -1,11 +1,21 @@
 package com.supermarket.platform.service;
 
+import com.supermarket.common.dubbo.api.order.OrderDubboService;
+import com.supermarket.common.dubbo.api.user.UserDubboService;
 import com.supermarket.platform.entity.Banner;
 import com.supermarket.platform.entity.RiskRule;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -13,14 +23,39 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@SpringBootTest
+@SpringBootTest(classes = {PlatformServiceTest.TestConfig.class})
 @ActiveProfiles("test")
 @Transactional
 class PlatformServiceTest {
 
+    @Configuration
+    @EnableAutoConfiguration
+    @MapperScan("com.supermarket.platform.mapper")
+    @ComponentScan(basePackages = "com.supermarket.platform",
+        excludeFilters = @ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = {com.supermarket.platform.config.DubboProviderConfig.class,
+                       com.supermarket.platform.PlatformApplication.class}))
+    static class TestConfig {
+    }
+
+    @MockBean
+    private OrderDubboService orderDubboService;
+
+    @MockBean
+    private UserDubboService userDubboService;
+
     @Autowired
     private PlatformService platformService;
+
+    @BeforeEach
+    void setUp() {
+        // Inject mocked Dubbo references since @DubboReference is not processed without @EnableDubbo
+        ReflectionTestUtils.setField(platformService, "orderDubboService", orderDubboService);
+        ReflectionTestUtils.setField(platformService, "userDubboService", userDubboService);
+    }
 
     @Test
     void shouldCreateBanner() {

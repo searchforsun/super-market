@@ -2,6 +2,7 @@ package com.supermarket.common.web.interceptor;
 
 import com.supermarket.common.core.constants.GlobalConstants;
 import com.supermarket.common.core.exception.BizException;
+import com.supermarket.common.core.result.ResultCode;
 import com.supermarket.common.web.annotation.RequireRole;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,7 +33,7 @@ public class RoleInterceptor implements HandlerInterceptor {
 
         boolean hasRole = Arrays.stream(annotation.value()).anyMatch(userRoles::contains);
         if (!hasRole) {
-            throw new BizException(403, "权限不足");
+            throw new BizException(ResultCode.FORBIDDEN);
         }
         return true;
     }

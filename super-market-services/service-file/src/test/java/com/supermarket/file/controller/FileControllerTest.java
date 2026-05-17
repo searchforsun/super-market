@@ -6,8 +6,12 @@ import com.supermarket.file.entity.FileRecord;
 import com.supermarket.file.service.FileService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -16,15 +20,14 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.ByteArrayInputStream;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(FileController.class)
-@Import(GlobalExceptionHandler.class)
+@SpringBootTest(classes = {FileController.class, FileControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class FileControllerTest {
 
@@ -33,6 +36,13 @@ class FileControllerTest {
 
     @MockBean
     private FileService fileService;
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = FileController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldUploadFileWhenFileProvided() throws Exception {
@@ -54,7 +64,7 @@ class FileControllerTest {
                 .param("bucket", "test-bucket")
                 .param("uploaderId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.fileName").value("test.txt"))
                 .andExpect(jsonPath("$.data.url").value("https://minio.example.com/test-bucket/test.txt"));
 
@@ -75,7 +85,7 @@ class FileControllerTest {
         // Act & Assert
         mockMvc.perform(get("/api/file/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.fileName").value("test.txt"));
 
         verify(fileService).getById(1L);
@@ -96,7 +106,7 @@ class FileControllerTest {
         mockMvc.perform(get("/api/file/1/download"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, org.hamcrest.Matchers.containsString("test.txt")))
-                .andExpect(content().contentType(MediaType.APPLICATION_OCTET_STREAM));
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, org.hamcrest.Matchers.startsWith(MediaType.APPLICATION_OCTET_STREAM_VALUE)));
 
         verify(fileService).getById(1L);
         verify(fileService).download(1L);
@@ -121,7 +131,7 @@ class FileControllerTest {
                 .param("page", "1")
                 .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].fileName").value("test.txt"))
                 .andExpect(jsonPath("$.data.total").value(1));
 
@@ -136,7 +146,7 @@ class FileControllerTest {
         // Act & Assert
         mockMvc.perform(delete("/api/file/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(fileService).delete(1L);

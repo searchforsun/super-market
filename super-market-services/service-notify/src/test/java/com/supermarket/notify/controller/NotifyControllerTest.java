@@ -8,8 +8,12 @@ import com.supermarket.notify.entity.NotifyTemplate;
 import com.supermarket.notify.service.NotifyService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -23,8 +27,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(NotifyController.class)
-@Import(GlobalExceptionHandler.class)
+@SpringBootTest(classes = {NotifyController.class, NotifyControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class NotifyControllerTest {
 
@@ -35,6 +39,13 @@ class NotifyControllerTest {
     private NotifyService notifyService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = NotifyController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldReturnNotifyListWhenUserIdProvided() throws Exception {
@@ -56,7 +67,7 @@ class NotifyControllerTest {
                 .param("page", "1")
                 .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.records[0].title").value("订单通知"))
                 .andExpect(jsonPath("$.data.total").value(1));
 
@@ -72,7 +83,7 @@ class NotifyControllerTest {
         mockMvc.perform(get("/api/notify/unread-count")
                 .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").value(5));
 
         verify(notifyService).unreadCount(1L);
@@ -86,7 +97,7 @@ class NotifyControllerTest {
         // Act & Assert
         mockMvc.perform(put("/api/notify/1/read"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(notifyService).markRead(1L);
@@ -101,7 +112,7 @@ class NotifyControllerTest {
         mockMvc.perform(put("/api/notify/read-all")
                 .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(notifyService).markAllRead(1L);
@@ -128,7 +139,7 @@ class NotifyControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(template)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.code").value("ORDER_SHIPPED"));
 
         verify(notifyService).createTemplate(any(NotifyTemplate.class));
@@ -151,7 +162,7 @@ class NotifyControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(params)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
 
         verify(notifyService).send(1L, "ORDER_PAID", params);

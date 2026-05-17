@@ -1,6 +1,6 @@
 <template>
   <div class="merchant-page page-enter">
-    <h2>商家审核</h2>
+    <h2 class="page-title">商家审核</h2>
 
     <div class="filter-bar">
       <el-date-picker
@@ -45,7 +45,7 @@
       </el-table-column>
     </el-table>
 
-    <div class="pagination-wrapper">
+    <div class="pagination-wrap">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="size"
@@ -234,18 +234,26 @@ async function openAudit(row: any) {
 }
 
 async function handleApprove() {
+  let confirmed = false
   try {
     await ElMessageBox.confirm('确认通过该商家的入驻申请？', '操作确认', {
       confirmButtonText: '确认通过',
       cancelButtonText: '取消',
       type: 'info',
     })
+    confirmed = true
+  } catch {
+    // cancelled
+    return
+  }
+  if (!confirmed) return
+  try {
     await auditMerchant(detail.value.id, 1)
     ElMessage.success('审核已通过')
     dialogVisible.value = false
     loadData()
   } catch {
-    // cancelled or closed
+    ElMessage.error('审核操作失败')
   }
 }
 
@@ -264,9 +272,11 @@ async function confirmReject() {
     await auditMerchant(detail.value.id, 2, reason)
     ElMessage.success('已驳回')
     dialogVisible.value = false
+    showReject.value = false
+    rejectReason.value = ''
     loadData()
   } catch {
-    // error handled by interceptor
+    ElMessage.error('驳回操作失败')
   }
 }
 
@@ -277,9 +287,16 @@ onMounted(() => {
 
 <style scoped>
 .merchant-page {
-  background: #fff;
+  background: var(--color-surface, #fff);
   padding: 24px;
-  border-radius: 4px;
+  border-radius: 8px;
+}
+
+.page-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
 }
 
 .filter-bar {
@@ -289,16 +306,16 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .audited-hint {
   text-align: center;
   padding: 12px 0;
-  color: #999;
+  color: var(--color-text-muted, #999);
   font-size: 14px;
 }
 

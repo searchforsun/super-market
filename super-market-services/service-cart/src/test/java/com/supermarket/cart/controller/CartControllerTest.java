@@ -3,10 +3,16 @@ package com.supermarket.cart.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.supermarket.cart.dto.CartItemDTO;
 import com.supermarket.cart.service.CartService;
+import com.supermarket.common.web.handler.GlobalExceptionHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,7 +24,8 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(CartController.class)
+@SpringBootTest(classes = {CartController.class, CartControllerTest.TestConfig.class})
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CartControllerTest {
 
@@ -29,6 +36,13 @@ class CartControllerTest {
     private CartService cartService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Configuration
+    @EnableAutoConfiguration
+    @ComponentScan(basePackageClasses = CartController.class)
+    @Import(GlobalExceptionHandler.class)
+    static class TestConfig {
+    }
 
     @Test
     void shouldAddItemWhenValidInput() throws Exception {
@@ -44,7 +58,7 @@ class CartControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(item)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(cartService).addItem(anyLong(), any(CartItemDTO.class));
     }
@@ -59,7 +73,7 @@ class CartControllerTest {
                         .param("userId", "1")
                         .param("quantity", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(cartService).updateQuantity(1L, 100L, 3);
     }
@@ -73,7 +87,7 @@ class CartControllerTest {
         mockMvc.perform(delete("/api/cart/item/100")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(cartService).removeItem(1L, 100L);
     }
@@ -88,7 +102,7 @@ class CartControllerTest {
                         .param("userId", "1")
                         .param("selected", "true"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(cartService).selectItem(1L, 100L, true);
     }
@@ -103,7 +117,7 @@ class CartControllerTest {
                         .param("userId", "1")
                         .param("selected", "true"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.message").value("success"));
         verify(cartService).selectAll(1L, true);
     }
@@ -129,7 +143,7 @@ class CartControllerTest {
         mockMvc.perform(get("/api/cart/list")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].spuName").value("商品1"))
                 .andExpect(jsonPath("$.data[1].spuName").value("商品2"));
@@ -145,7 +159,7 @@ class CartControllerTest {
         mockMvc.perform(get("/api/cart/count")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").value(5));
         verify(cartService).getCartCount(1L);
     }

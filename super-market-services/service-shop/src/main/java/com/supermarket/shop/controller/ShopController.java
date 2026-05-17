@@ -59,4 +59,10 @@ public class ShopController {
     public R<Shop> getByMerchant(@Parameter(description = "商家ID") @PathVariable Long merchantId) {
         return R.ok(shopService.getShopByMerchantId(merchantId));
     }
+
+    @GetMapping("/by-user/{userId}")
+    @Operation(summary = "根据用户ID查询店铺ID")
+    public R<Long> getShopIdByUserId(@Parameter(description = "用户ID") @PathVariable Long userId) {
+        return R.ok(shopService.getShopIdByUserId(userId));
+    }
 }

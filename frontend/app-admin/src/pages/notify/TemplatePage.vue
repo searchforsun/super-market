@@ -64,7 +64,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper" v-if="total > 0">
+      <div class="pagination-wrap" v-if="total > 0">
         <el-pagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
@@ -596,21 +596,27 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.template-page {
+  background: var(--color-surface, #fff);
+  padding: 24px;
+  border-radius: 8px;
+}
+
 .page-title {
-  margin: 0;
-  font-size: 22px;
+  margin: 0 0 20px;
+  font-size: 20px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--color-text-primary, #303133);
 }
 
 .table-card {
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-.pagination-wrapper {
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  padding: 16px 0 4px;
+  margin-top: 16px;
 }
 
 .no-channel {
@@ -620,7 +626,7 @@ onMounted(() => {
 
 .form-tip {
   font-size: 12px;
-  color: #999;
+  color: var(--color-text-muted, #999);
   margin-top: 4px;
   line-height: 1.4;
 }
@@ -636,8 +642,8 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--color-accent-light, #ecf5ff);
+  color: var(--color-accent, #409eff);
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
@@ -646,7 +652,7 @@ onMounted(() => {
 }
 
 .variable-tag:hover {
-  background: #d9ecff;
+  background: var(--color-accent-soft, #d9ecff);
 }
 
 .variable-label {
@@ -656,11 +662,11 @@ onMounted(() => {
 
 .no-variable {
   font-size: 13px;
-  color: #bbb;
+  color: var(--color-text-muted, #bbb);
 }
 
 .test-template-name {
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary, #333);
 }
 </style>
